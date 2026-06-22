@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LogOut } from "lucide-react";
-import { Logo } from "./Logo";
+import { Logo, WordmarkLogo } from "./Logo";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -21,8 +21,8 @@ export function TopBar({ employee }: { employee: Employee }) {
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm md:px-6">
       <Link href="/" className="flex items-center gap-2">
-        <Logo />
-        <span className="hidden font-semibold text-foreground sm:inline">IRDP</span>
+        <Logo className="sm:hidden" />
+        <WordmarkLogo className="hidden sm:block" />
       </Link>
       <div className="flex items-center gap-1">
         <NotificationBell />
