@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { startOfWeek, endOfWeek } from "date-fns";
 import {
   CalendarDays,
   Clock,
@@ -5,20 +7,17 @@ import {
   CalendarRange,
   Users,
   ClipboardList,
+  ThumbsUp,
   type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
-import { isOversight, isDeptHead, roleLabelTh } from "@/lib/rbac";
+import { isDeptHead, roleLabelTh } from "@/lib/rbac";
+import { LEAVE_LABELS_TH } from "@/lib/leave";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-
-const LEAVE_LABELS: Record<string, string> = {
-  sick: "ลาป่วย",
-  personal: "ลากิจ",
-  vacation: "ลาพักร้อน",
-};
 
 export default async function DashboardPage() {
   const employee = await getCurrentEmployee();
@@ -33,7 +32,60 @@ export default async function DashboardPage() {
     .eq("year", year);
 
   const canSeeApprovals = isDeptHead(employee.role) || employee.role === "admin";
-  const canSeeOrgSummary = isOversight(employee.role);
+  const canSeeOrgSummary = employee.role === "hr" || employee.role === "admin";
+  const isExec = employee.role === "exec";
+
+  let pendingApprovalCount = 0;
+  if (canSeeApprovals) {
+    // RLS scopes this to the dept_head's own department, or all for admin.
+    const { count } = await supabase
+      .from("leave_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "submitted");
+    pendingApprovalCount = count ?? 0;
+  }
+
+  let orgSummary: { onLeaveToday: number; submittedThisWeek: number } | null = null;
+  if (canSeeOrgSummary) {
+    const now = new Date().toISOString();
+    const { count: onLeaveToday } = await supabase
+      .from("leave_requests")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "approved")
+      .lte("start_at", now)
+      .gte("end_at", now);
+
+    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+    const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+    const { count: submittedThisWeek } = await supabase
+      .from("leave_requests")
+      .select("id", { count: "exact", head: true })
+      .gte("created_at", weekStart)
+      .lte("created_at", weekEnd);
+
+    orgSummary = { onLeaveToday: onLeaveToday ?? 0, submittedThisWeek: submittedThisWeek ?? 0 };
+  }
+
+  let pendingAckCount = 0;
+  if (isExec) {
+    const { data: approved } = await supabase
+      .from("leave_requests")
+      .select("id")
+      .eq("status", "approved");
+    const approvedIds = (approved ?? []).map((r) => r.id);
+
+    if (approvedIds.length) {
+      const { data: myAcks } = await supabase
+        .from("approvals")
+        .select("entity_id")
+        .eq("entity", "leave_requests")
+        .eq("action", "acknowledge")
+        .eq("actor_id", employee.id)
+        .in("entity_id", approvedIds);
+      const ackedIds = new Set((myAcks ?? []).map((a) => a.entity_id));
+      pendingAckCount = approvedIds.filter((id) => !ackedIds.has(id)).length;
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -57,20 +109,73 @@ export default async function DashboardPage() {
             ) : (
               balances.map((b) => (
                 <div key={b.leave_code} className="flex items-center justify-between text-sm">
-                  <span className="text-foreground">{LEAVE_LABELS[b.leave_code] ?? b.leave_code}</span>
+                  <span className="text-foreground">{LEAVE_LABELS_TH[b.leave_code] ?? b.leave_code}</span>
                   <span className="font-medium text-foreground">{b.available_days} วัน</span>
                 </div>
               ))
             )}
+            <Button asChild size="sm" variant="outline" className="mt-1 self-start">
+              <Link href="/leave">ยื่นคำขอลา</Link>
+            </Button>
           </CardContent>
         </Card>
 
-        {canSeeApprovals && <PlaceholderCard icon={ClipboardList} title="คำขอรออนุมัติ" />}
+        {canSeeApprovals && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ClipboardList className="h-4 w-4 text-primary" /> คำขอรออนุมัติ
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p className="text-2xl font-semibold text-foreground">{pendingApprovalCount}</p>
+              <Button asChild size="sm" variant="outline" className="self-start">
+                <Link href="/leave?tab=approvals">ไปที่หน้าอนุมัติ</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {isExec && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ThumbsUp className="h-4 w-4 text-primary" /> รอรับทราบ
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              <p className="text-2xl font-semibold text-foreground">{pendingAckCount}</p>
+              <Button asChild size="sm" variant="outline" className="self-start">
+                <Link href="/leave?tab=approvals">ไปที่หน้ารับทราบ</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <PlaceholderCard icon={CalendarRange} title="การจองวันนี้" />
         <PlaceholderCard icon={Package} title="ทรัพย์สินของฉัน" />
         <PlaceholderCard icon={Clock} title="OT เดือนนี้" />
         <PlaceholderCard icon={CalendarDays} title="กิจกรรมที่จะถึง" />
-        {canSeeOrgSummary && <PlaceholderCard icon={Users} title="สรุปทั้งฝ่าย/องค์กร" />}
+
+        {canSeeOrgSummary && orgSummary && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Users className="h-4 w-4 text-primary" /> สรุปทั้งฝ่าย/องค์กร
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">ลาอยู่วันนี้</span>
+                <span className="font-medium text-foreground">{orgSummary.onLeaveToday} คน</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">ยื่นคำขอสัปดาห์นี้</span>
+                <span className="font-medium text-foreground">{orgSummary.submittedThisWeek} คำขอ</span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );
