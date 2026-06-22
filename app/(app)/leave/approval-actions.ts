@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 import { notify } from "@/lib/notify";
 import { LEAVE_LABELS_TH } from "@/lib/leave";
@@ -28,7 +29,7 @@ const NOTIFY_TITLE: Record<ApprovalAction, string> = {
  * (enforce_request_rules() validates the actor is allowed to) and writes the
  * matching approvals row — two sequential awaited calls, not a single atomic
  * RPC (see Phase 1 plan: low-concurrency internal tool, not worth the extra
- * schema surface). The calendar_events sync on approve is added in step D.
+ * schema surface).
  */
 export async function decideLeaveRequest(id: string, action: ApprovalAction, note?: string) {
   const employee = await getCurrentEmployee();
@@ -40,7 +41,7 @@ export async function decideLeaveRequest(id: string, action: ApprovalAction, not
     .from("leave_requests")
     .update({ status: STATUS_MAP[action] })
     .eq("id", id)
-    .select("id, employee_id, leave_code, hours")
+    .select("id, employee_id, leave_code, hours, start_at, end_at")
     .single();
 
   if (error || !row) return { error: error?.message ?? "ดำเนินการไม่สำเร็จ" };
@@ -65,6 +66,31 @@ export async function decideLeaveRequest(id: string, action: ApprovalAction, not
   }
 
   if (action === "approve") {
+    const { data: requester } = await supabase
+      .from("employee_directory")
+      .select("id, full_name, department_id")
+      .eq("id", row.employee_id)
+      .single();
+
+    if (requester) {
+      // dept_head approving someone else's leave is neither the event owner
+      // nor can_edit() per cal_write RLS — admin client bypasses that
+      // cleanly, same pattern as lib/notify.ts. Google push (step E) hooks
+      // in right after this insert.
+      const admin = createAdminClient();
+      await admin.from("calendar_events").insert({
+        title: `ลา: ${requester.full_name}`,
+        type: "leave",
+        scope: "personal",
+        owner_id: requester.id,
+        department_id: requester.department_id,
+        start_at: row.start_at,
+        end_at: row.end_at,
+        source_module: "leave",
+        source_id: row.id,
+      });
+    }
+
     const { data: execs } = await supabase
       .from("employee_directory")
       .select("id")
