@@ -6,6 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 import { notify } from "@/lib/notify";
 import { LEAVE_LABELS_TH } from "@/lib/leave";
+import { createEvent } from "@/lib/google-calendar";
 import type { Database } from "@/lib/database.types";
 
 type ApprovalAction = "approve" | "reject" | "return" | "cancel";
@@ -75,20 +76,42 @@ export async function decideLeaveRequest(id: string, action: ApprovalAction, not
     if (requester) {
       // dept_head approving someone else's leave is neither the event owner
       // nor can_edit() per cal_write RLS — admin client bypasses that
-      // cleanly, same pattern as lib/notify.ts. Google push (step E) hooks
-      // in right after this insert.
+      // cleanly, same pattern as lib/notify.ts.
       const admin = createAdminClient();
-      await admin.from("calendar_events").insert({
-        title: `ลา: ${requester.full_name}`,
-        type: "leave",
-        scope: "personal",
-        owner_id: requester.id,
-        department_id: requester.department_id,
-        start_at: row.start_at,
-        end_at: row.end_at,
-        source_module: "leave",
-        source_id: row.id,
-      });
+      const { data: calRow } = await admin
+        .from("calendar_events")
+        .insert({
+          title: `ลา: ${requester.full_name}`,
+          type: "leave",
+          scope: "personal",
+          owner_id: requester.id,
+          department_id: requester.department_id,
+          start_at: row.start_at,
+          end_at: row.end_at,
+          source_module: "leave",
+          source_id: row.id,
+        })
+        .select("id")
+        .single();
+
+      if (calRow) {
+        const google = await createEvent({
+          title: `ลา: ${requester.full_name}`,
+          startAt: row.start_at,
+          endAt: row.end_at,
+          allDay: true,
+        });
+        if (google) {
+          await admin
+            .from("calendar_events")
+            .update({
+              google_event_id: google.id,
+              google_etag: google.etag,
+              last_synced_at: new Date().toISOString(),
+            })
+            .eq("id", calRow.id);
+        }
+      }
     }
 
     const { data: execs } = await supabase

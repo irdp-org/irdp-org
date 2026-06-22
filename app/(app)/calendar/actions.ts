@@ -5,6 +5,7 @@ import { fromZonedTime } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { canEdit } from "@/lib/rbac";
+import { createEvent, updateEvent, deleteEvent } from "@/lib/google-calendar";
 import type { Database } from "@/lib/database.types";
 
 const TZ = "Asia/Bangkok";
@@ -40,20 +41,38 @@ export async function createOrgEvent(formData: FormData) {
   if ("error" in parsed) return parsed;
 
   const supabase = await createClient();
-  const { error } = await supabase.from("calendar_events").insert({
+  const { data: row, error } = await supabase
+    .from("calendar_events")
+    .insert({
+      title: parsed.title,
+      description: parsed.description,
+      type: parsed.type,
+      scope: "org",
+      start_at: parsed.startAt,
+      end_at: parsed.endAt,
+      all_day: parsed.allDay,
+      owner_id: employee.id,
+      source_module: "manual",
+    })
+    .select("id")
+    .single();
+
+  if (error || !row) return { error: error?.message ?? "บันทึกไม่สำเร็จ" };
+
+  const google = await createEvent({
     title: parsed.title,
     description: parsed.description,
-    type: parsed.type,
-    scope: "org",
-    start_at: parsed.startAt,
-    end_at: parsed.endAt,
-    all_day: parsed.allDay,
-    owner_id: employee.id,
-    source_module: "manual",
+    startAt: parsed.startAt,
+    endAt: parsed.endAt,
+    allDay: parsed.allDay,
   });
-  // Google push happens here once lib/google-calendar.ts lands (step E).
+  if (google) {
+    await supabase
+      .from("calendar_events")
+      .update({ google_event_id: google.id, google_etag: google.etag, last_synced_at: new Date().toISOString() })
+      .eq("id", row.id);
+  }
 
-  if (error) return { error: error.message };
   revalidatePath("/calendar");
   return { ok: true };
 }
@@ -66,6 +85,12 @@ export async function updateOrgEvent(id: string, formData: FormData) {
   if ("error" in parsed) return parsed;
 
   const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("calendar_events")
+    .select("google_event_id")
+    .eq("id", id)
+    .single();
+
   const { error } = await supabase
     .from("calendar_events")
     .update({
@@ -78,9 +103,39 @@ export async function updateOrgEvent(id: string, formData: FormData) {
     })
     .eq("id", id)
     .eq("scope", "org");
-  // Google push (update) happens here once lib/google-calendar.ts lands (step E).
 
   if (error) return { error: error.message };
+
+  const eventInput = {
+    title: parsed.title,
+    description: parsed.description,
+    startAt: parsed.startAt,
+    endAt: parsed.endAt,
+    allDay: parsed.allDay,
+  };
+
+  if (existing?.google_event_id) {
+    const google = await updateEvent(existing.google_event_id, eventInput);
+    if (google) {
+      await supabase
+        .from("calendar_events")
+        .update({ google_etag: google.etag, last_synced_at: new Date().toISOString() })
+        .eq("id", id);
+    }
+  } else {
+    const google = await createEvent(eventInput);
+    if (google) {
+      await supabase
+        .from("calendar_events")
+        .update({
+          google_event_id: google.id,
+          google_etag: google.etag,
+          last_synced_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+    }
+  }
+
   revalidatePath("/calendar");
   return { ok: true };
 }
@@ -90,10 +145,19 @@ export async function deleteOrgEvent(id: string) {
   if (!employee || !canEdit(employee.role)) return { error: "unauthorized" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("calendar_events").delete().eq("id", id).eq("scope", "org");
-  // Google push (delete) happens here once lib/google-calendar.ts lands (step E).
+  const { data: existing } = await supabase
+    .from("calendar_events")
+    .select("google_event_id")
+    .eq("id", id)
+    .single();
 
+  const { error } = await supabase.from("calendar_events").delete().eq("id", id).eq("scope", "org");
   if (error) return { error: error.message };
+
+  if (existing?.google_event_id) {
+    await deleteEvent(existing.google_event_id);
+  }
+
   revalidatePath("/calendar");
   return { ok: true };
 }
