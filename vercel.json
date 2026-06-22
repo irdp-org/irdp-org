@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/calendar-sync",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 0 * * *"
     },
     {
       "path": "/api/cron/leave-reminders",

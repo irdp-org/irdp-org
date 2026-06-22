@@ -4,9 +4,11 @@ import { listEventsUpdatedSince } from "@/lib/google-calendar";
 import type { calendar_v3 } from "googleapis";
 
 // Simple time-window pull (not a stored syncToken — agreed-simple approach,
-// see Phase 1 plan). 2-hour lookback comfortably covers the 15-minute cron
-// interval even if a run or two gets missed.
-const LOOKBACK_MS = 2 * 60 * 60 * 1000;
+// see Phase 1 plan). Runs once daily (Vercel Hobby plan only allows daily
+// cron); 26h lookback gives a couple hours of buffer around the daily
+// cadence. A fully missed run would lose that day's pull-sync window —
+// acceptable given the "ง่ายๆ" simple-policy scope, but worth knowing.
+const LOOKBACK_MS = 26 * 60 * 60 * 1000;
 
 function isAuthorized(request: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
