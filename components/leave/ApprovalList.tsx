@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Check, Undo2, X, Ban, Pencil, ThumbsUp } from "lucide-react";
+import { Check, Undo2, X, Ban, Pencil, ThumbsUp, AlertTriangle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,13 +12,18 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LeaveRequestSheet } from "./LeaveRequestSheet";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
-import { decideLeaveRequest, acknowledgeLeaveRequest } from "@/app/(app)/leave/approval-actions";
+import {
+  decideLeaveRequest,
+  acknowledgeLeaveRequest,
+  adminCancelApprovedLeave,
+} from "@/app/(app)/leave/approval-actions";
 import { ClipboardList } from "lucide-react";
 import type { RoleT, RequestStatusT, LeaveCodeT } from "@/lib/database.types";
 
@@ -30,6 +35,7 @@ export type ApprovalQueueRow = {
   hours: number;
   status: RequestStatusT;
   reason: string | null;
+  exported_at: string | null;
   employee: { id: string; full_name: string; department_id: string | null };
   acknowledgements: { actor_id: string; actor_name: string; created_at: string }[];
 };
@@ -81,6 +87,59 @@ function NoteDialog({
   );
 }
 
+function CancelApprovedDialog({
+  exportedAt,
+  onConfirm,
+  disabled,
+}: {
+  exportedAt: string | null;
+  onConfirm: (reason: string) => void;
+  disabled?: boolean;
+}) {
+  const [reason, setReason] = useState("");
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button type="button" variant="destructive" size="sm" disabled={disabled}>
+          <Trash2 className="h-4 w-4" /> ยกเลิก (เฉพาะ admin/hr)
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>ยกเลิกคำขอลาที่อนุมัติแล้ว</DialogTitle>
+          <DialogDescription>
+            จะลบกิจกรรมในปฏิทินที่ sync ไว้ (รวมถึงใน Google Calendar) ด้วย
+          </DialogDescription>
+        </DialogHeader>
+        {exportedAt && (
+          <div className="flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2.5 text-sm text-foreground">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+            <span>
+              คำขอนี้ถูกส่งออกให้การเงินไปแล้วเมื่อ {format(new Date(exportedAt), "d MMM yyyy HH:mm")} —
+              การยกเลิกตอนนี้จะไม่แก้ไขข้อมูลที่ส่งไปแล้วโดยอัตโนมัติ ต้องแจ้งฝ่ายการเงินเอง
+            </span>
+          </div>
+        )}
+        <Textarea
+          placeholder="เหตุผลที่ยกเลิก (จำเป็นต้องระบุ)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={!reason.trim()}
+            onClick={() => onConfirm(reason)}
+          >
+            ยืนยันยกเลิก
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ApprovalList({
   rows,
   role,
@@ -108,9 +167,17 @@ export function ApprovalList({
     });
   }
 
+  function cancelApproved(id: string, reason: string) {
+    startTransition(async () => {
+      await adminCancelApprovedLeave(id, reason);
+      router.refresh();
+    });
+  }
+
   const canApprove = role === "dept_head" || role === "admin";
   const isHr = role === "hr";
   const isExec = role === "exec";
+  const canCancelApproved = role === "admin" || role === "hr";
 
   if (rows.length === 0) {
     return <EmptyState icon={ClipboardList} title="ไม่มีคำขอในรายการนี้" />;
@@ -167,6 +234,14 @@ export function ApprovalList({
               <Button type="button" variant="outline" size="sm" onClick={() => setEditing(r)}>
                 <Pencil className="h-4 w-4" /> แก้ไขวัน-เวลา
               </Button>
+            )}
+
+            {canCancelApproved && r.status === "approved" && (
+              <CancelApprovedDialog
+                exportedAt={r.exported_at}
+                disabled={isPending}
+                onConfirm={(reason) => cancelApproved(r.id, reason)}
+              />
             )}
 
             {isExec && r.status === "approved" && (

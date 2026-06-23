@@ -52,7 +52,7 @@ export default async function LeavePage({
     // hr/admin/exec -> everyone.
     const { data: queue } = await supabase
       .from("leave_requests")
-      .select("id, employee_id, leave_code, start_at, end_at, hours, status, reason")
+      .select("id, employee_id, leave_code, start_at, end_at, hours, status, reason, exported_at")
       .order("created_at", { ascending: false })
       .limit(100);
 
@@ -87,6 +87,7 @@ export default async function LeavePage({
       hours: r.hours,
       status: r.status,
       reason: r.reason,
+      exported_at: r.exported_at,
       employee: {
         id: r.employee_id,
         full_name: peopleById.get(r.employee_id)?.full_name ?? "—",
