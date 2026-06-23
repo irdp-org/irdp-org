@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BellRing } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -12,8 +12,45 @@ function urlBase64ToUint8Array(base64String: string) {
 }
 
 export function PushSubscribeButton() {
-  const [status, setStatus] = useState<"idle" | "loading" | "subscribed" | "error">("idle");
+  const [status, setStatus] = useState<"checking" | "idle" | "loading" | "subscribed" | "error">(
+    "checking"
+  );
   const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Browser-only APIs (Notification, serviceWorker) — must run after
+    // mount, can't be derived during render. React state alone (the old
+    // approach) resets on every navigation/reload, which is exactly the bug
+    // this is fixing: Notification.permission persists across both, and we
+    // cross-check it against an actual push_subscriptions row server-side
+    // (not just a local PushSubscription object, which could be stale if
+    // the row was ever deleted some other way) before deciding whether to
+    // show the "เปิดการแจ้งเตือน" button at all.
+    async function checkExistingSubscription() {
+      try {
+        if (
+          typeof Notification === "undefined" ||
+          Notification.permission !== "granted" ||
+          !("serviceWorker" in navigator)
+        ) {
+          setStatus("idle");
+          return;
+        }
+        const registration = await navigator.serviceWorker.ready;
+        const existing = await registration.pushManager.getSubscription();
+        if (!existing) {
+          setStatus("idle");
+          return;
+        }
+        const res = await fetch(`/api/push/subscribe?endpoint=${encodeURIComponent(existing.endpoint)}`);
+        const data = await res.json().catch(() => null);
+        setStatus(data?.subscribed ? "subscribed" : "idle");
+      } catch {
+        setStatus("idle");
+      }
+    }
+    checkExistingSubscription();
+  }, []);
 
   async function subscribe() {
     setStatus("loading");
@@ -60,21 +97,23 @@ export function PushSubscribeButton() {
           <p className="text-xs text-muted-foreground">เปิดรับการแจ้งเตือนจากระบบบนอุปกรณ์นี้</p>
         </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          onClick={subscribe}
-          disabled={status === "loading" || status === "subscribed"}
-          size="sm"
-        >
-          {status === "subscribed" ? "เปิดใช้งานแล้ว" : "เปิดการแจ้งเตือน"}
-        </Button>
-        {status === "subscribed" && (
-          <Button type="button" variant="outline" size="sm" onClick={sendTest}>
-            ส่งการแจ้งเตือนทดสอบ
+      {status !== "checking" && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            onClick={subscribe}
+            disabled={status === "loading" || status === "subscribed"}
+            size="sm"
+          >
+            {status === "subscribed" ? "เปิดใช้งานแล้ว" : "เปิดการแจ้งเตือน"}
           </Button>
-        )}
-      </div>
+          {status === "subscribed" && (
+            <Button type="button" variant="outline" size="sm" onClick={sendTest}>
+              ส่งการแจ้งเตือนทดสอบ
+            </Button>
+          )}
+        </div>
+      )}
       {message && <p className="text-xs text-muted-foreground">{message}</p>}
     </div>
   );
