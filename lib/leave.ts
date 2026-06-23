@@ -142,7 +142,7 @@ export const LEAVE_STATUS_LABELS_TH: Record<
   draft: "ฉบับร่าง",
   submitted: "รออนุมัติ",
   approved: "อนุมัติแล้ว",
-  rejected: "ตีกลับ",
-  returned: "ส่งกลับให้แก้ไข",
+  rejected: "ปฏิเสธ",
+  returned: "ตีกลับให้แก้ไข",
   cancelled: "ยกเลิกแล้ว",
 };
