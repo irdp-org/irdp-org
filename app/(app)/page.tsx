@@ -8,12 +8,14 @@ import {
   Users,
   ClipboardList,
   ThumbsUp,
+  MapPin,
   type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { isDeptHead, roleLabelTh } from "@/lib/rbac";
 import { LEAVE_LABELS_TH } from "@/lib/leave";
+import { previewWeeklyOt } from "@/lib/ot";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -37,13 +39,21 @@ export default async function DashboardPage() {
 
   let pendingApprovalCount = 0;
   if (canSeeApprovals) {
-    // RLS scopes this to the dept_head's own department, or all for admin.
-    const { count } = await supabase
-      .from("leave_requests")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "submitted");
-    pendingApprovalCount = count ?? 0;
+    // RLS scopes both to the dept_head's own department, or all for admin.
+    const [{ count: leaveCount }, { count: fieldCount }] = await Promise.all([
+      supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "submitted"),
+      supabase.from("field_requests").select("id", { count: "exact", head: true }).eq("status", "submitted"),
+    ]);
+    pendingApprovalCount = (leaveCount ?? 0) + (fieldCount ?? 0);
   }
+
+  const weeklyOt = await previewWeeklyOt(supabase, employee.id, new Date().toISOString().slice(0, 10));
+
+  const { count: myFieldRequestCount } = await supabase
+    .from("field_requests")
+    .select("id", { count: "exact", head: true })
+    .eq("employee_id", employee.id)
+    .in("status", ["submitted", "approved"]);
 
   let orgSummary: { onLeaveToday: number; submittedThisWeek: number } | null = null;
   if (canSeeOrgSummary) {
@@ -152,9 +162,45 @@ export default async function DashboardPage() {
           </Card>
         )}
 
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Clock className="h-4 w-4 text-primary" /> OT สัปดาห์นี้
+            </CardTitle>
+            {weeklyOt && (
+              <CardDescription>
+                {new Date(weeklyOt.week_start).toLocaleDateString("th-TH", { day: "numeric", month: "short" })} –{" "}
+                {new Date(weeklyOt.week_end).toLocaleDateString("th-TH", { day: "numeric", month: "short" })}
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <p className="text-2xl font-semibold text-foreground">{weeklyOt?.week_ot_hours ?? 0} ชม.</p>
+            {weeklyOt?.over_36 && (
+              <p className="text-sm text-warning">เกิน 36 ชม./สัปดาห์ — โปรดระวัง</p>
+            )}
+            <Button asChild size="sm" variant="outline" className="self-start">
+              <Link href="/field">ดูรายละเอียด</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <MapPin className="h-4 w-4 text-primary" /> คำขอนอกสถานที่/WFH ของฉัน
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            <p className="text-2xl font-semibold text-foreground">{myFieldRequestCount ?? 0}</p>
+            <Button asChild size="sm" variant="outline" className="self-start">
+              <Link href="/field">ยื่นคำขอ</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
         <PlaceholderCard icon={CalendarRange} title="การจองวันนี้" />
         <PlaceholderCard icon={Package} title="ทรัพย์สินของฉัน" />
-        <PlaceholderCard icon={Clock} title="OT เดือนนี้" />
         <PlaceholderCard icon={CalendarDays} title="กิจกรรมที่จะถึง" />
 
         {canSeeOrgSummary && orgSummary && (

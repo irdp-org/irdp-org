@@ -1,0 +1,21 @@
+name: WFH check-in reminders
+
+# Vercel Hobby plan only allows daily cron, but WFH reminders need to fire
+# near 08:30 and 17:00 Bangkok time, so this hits the same CRON_SECRET-
+# guarded route externally every 15 min instead. Requires two repository
+# secrets (Settings -> Secrets and variables -> Actions):
+#   CRON_SECRET   same value as the Vercel project's CRON_SECRET env var
+#   APP_URL       the deployed app's base URL, e.g. https://your-project.vercel.app
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call wfh-reminders cron route
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/wfh-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
