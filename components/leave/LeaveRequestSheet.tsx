@@ -26,6 +26,7 @@ type ExistingRequest = {
   id: string;
   leave_code: LeaveRequestInput["leaveCode"];
   reason: string | null;
+  returnNote?: string | null;
 };
 
 export function LeaveRequestSheet({
@@ -121,6 +122,15 @@ export function LeaveRequestSheet({
         </SheetHeader>
 
         <div className="flex flex-col gap-4 px-4 pb-4">
+          {existing?.returnNote && (
+            <div className="flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2.5 text-sm text-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
+              <span>
+                <span className="font-medium">หัวหน้าฝ่ายตีกลับพร้อมหมายเหตุ:</span> {existing.returnNote}
+              </span>
+            </div>
+          )}
+
           <div className="flex flex-col gap-1.5">
             <Label>ประเภทการลา</Label>
             <Select

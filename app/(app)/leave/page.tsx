@@ -22,6 +22,28 @@ export default async function LeavePage({
     .eq("employee_id", employee.id)
     .order("created_at", { ascending: false });
 
+  const returnedIds = (requests ?? []).filter((r) => r.status === "returned").map((r) => r.id);
+  const { data: returnNotes } = returnedIds.length
+    ? await supabase
+        .from("approvals")
+        .select("entity_id, note, created_at")
+        .eq("entity", "leave_requests")
+        .eq("action", "return")
+        .in("entity_id", returnedIds)
+        .order("created_at", { ascending: false })
+    : { data: [] };
+  // Latest note per request — results are already ordered desc, so the
+  // first one seen per entity_id wins.
+  const latestReturnNoteById = new Map<string, string | null>();
+  for (const n of returnNotes ?? []) {
+    if (!latestReturnNoteById.has(n.entity_id)) latestReturnNoteById.set(n.entity_id, n.note);
+  }
+
+  const ownRequests: OwnLeaveRequest[] = (requests ?? []).map((r) => ({
+    ...r,
+    returnNote: latestReturnNoteById.get(r.id) ?? null,
+  }));
+
   const showApprovals = CAN_SEE_APPROVALS.includes(employee.role);
   let approvalRows: ApprovalQueueRow[] = [];
 
@@ -89,7 +111,7 @@ export default async function LeavePage({
       <div className="px-4 md:px-6">
         <LeaveTabs
           defaultTab={defaultTab}
-          mine={<LeaveRequestsClient requests={(requests ?? []) as OwnLeaveRequest[]} />}
+          mine={<LeaveRequestsClient requests={ownRequests} />}
           approvals={
             showApprovals ? (
               <ApprovalList rows={approvalRows} role={employee.role} currentEmployeeId={employee.id} />

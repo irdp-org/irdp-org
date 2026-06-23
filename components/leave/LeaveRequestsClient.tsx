@@ -31,6 +31,7 @@ export type OwnLeaveRequest = {
   hours: number;
   status: "draft" | "submitted" | "approved" | "rejected" | "returned" | "cancelled";
   reason: string | null;
+  returnNote?: string | null;
 };
 
 const STATUS_VARIANT: Record<OwnLeaveRequest["status"], "default" | "secondary" | "destructive" | "outline"> = {
@@ -134,7 +135,16 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
       <LeaveRequestSheet
         open={sheetOpen}
         onOpenChange={setSheetOpen}
-        existing={editing ? { id: editing.id, leave_code: editing.leave_code, reason: editing.reason } : null}
+        existing={
+          editing
+            ? {
+                id: editing.id,
+                leave_code: editing.leave_code,
+                reason: editing.reason,
+                returnNote: editing.status === "returned" ? editing.returnNote : null,
+              }
+            : null
+        }
       />
     </div>
   );
