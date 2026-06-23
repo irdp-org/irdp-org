@@ -351,7 +351,25 @@ export interface Database {
         Relationships: [];
       };
     };
-    Functions: Record<string, never>;
+    Functions: {
+      fn_compute_ot: {
+        Args: { p_emp: string; p_date: string; p_start: string; p_end: string };
+        Returns: {
+          eligible: boolean;
+          holiday: boolean;
+          x1_hours: number;
+          x1_5_hours: number;
+          x3_hours: number;
+          ot_hours: number;
+          ot_type: OtTypeT | null;
+          break_min: number;
+        };
+      };
+      fn_weekly_ot_summary: {
+        Args: { p_emp: string; p_date: string };
+        Returns: { week_start: string; week_end: string; week_ot_hours: number; over_36: boolean };
+      };
+    };
     Enums: {
       role_t: RoleT;
       employee_status_t: EmployeeStatusT;

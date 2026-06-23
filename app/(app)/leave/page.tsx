@@ -3,7 +3,7 @@ import { getCurrentEmployee } from "@/lib/auth";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { LeaveRequestsClient, type OwnLeaveRequest } from "@/components/leave/LeaveRequestsClient";
 import { ApprovalList, type ApprovalQueueRow } from "@/components/leave/ApprovalList";
-import { LeaveTabs } from "@/components/leave/LeaveTabs";
+import { RequestTabs } from "@/components/shared/RequestTabs";
 
 const CAN_SEE_APPROVALS = ["dept_head", "hr", "admin", "exec"];
 
@@ -110,7 +110,7 @@ export default async function LeavePage({
     <div>
       <PageHeader title="ลา" description="ลาป่วย ลากิจ ลาพักร้อน" />
       <div className="px-4 md:px-6">
-        <LeaveTabs
+        <RequestTabs
           defaultTab={defaultTab}
           mine={<LeaveRequestsClient requests={ownRequests} />}
           approvals={
