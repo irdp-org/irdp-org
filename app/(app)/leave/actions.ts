@@ -86,9 +86,10 @@ export async function createLeaveRequest(formData: FormData) {
 
   const raw = {
     leaveCode: formData.get("leaveCode"),
-    dayPart: formData.get("dayPart"),
     startDate: formData.get("startDate"),
     endDate: formData.get("endDate"),
+    startTime: formData.get("startTime"),
+    endTime: formData.get("endTime"),
     reason: formData.get("reason") || undefined,
   };
   const parsed = leaveRequestSchema.safeParse(raw);
@@ -100,7 +101,8 @@ export async function createLeaveRequest(formData: FormData) {
   const { startAt, endAt } = leaveDateRangeToTimestamps(
     parsed.data.startDate,
     parsed.data.endDate,
-    parsed.data.dayPart
+    parsed.data.startTime,
+    parsed.data.endTime
   );
 
   const { data: row, error } = await supabase
@@ -154,9 +156,10 @@ export async function updateLeaveRequest(id: string, formData: FormData) {
 
   const raw = {
     leaveCode: formData.get("leaveCode"),
-    dayPart: formData.get("dayPart"),
     startDate: formData.get("startDate"),
     endDate: formData.get("endDate"),
+    startTime: formData.get("startTime"),
+    endTime: formData.get("endTime"),
     reason: formData.get("reason") || undefined,
   };
   const parsed = leaveRequestSchema.safeParse(raw);
@@ -168,7 +171,8 @@ export async function updateLeaveRequest(id: string, formData: FormData) {
   const { startAt, endAt } = leaveDateRangeToTimestamps(
     parsed.data.startDate,
     parsed.data.endDate,
-    parsed.data.dayPart
+    parsed.data.startTime,
+    parsed.data.endTime
   );
 
   // RLS (leave_update) only allows this while status is draft/returned — the

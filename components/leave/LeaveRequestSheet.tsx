@@ -17,9 +17,14 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { leaveRequestSchema, LEAVE_LABELS_TH, type LeaveRequestInput } from "@/lib/leave";
+import {
+  leaveRequestSchema,
+  LEAVE_LABELS_TH,
+  WORK_START,
+  WORK_END,
+  type LeaveRequestInput,
+} from "@/lib/leave";
 import { previewLeaveHours, createLeaveRequest, updateLeaveRequest } from "@/app/(app)/leave/actions";
 
 const MAX_CERT_FILE_BYTES = 10 * 1024 * 1024;
@@ -50,41 +55,44 @@ export function LeaveRequestSheet({
     resolver: zodResolver(leaveRequestSchema),
     defaultValues: {
       leaveCode: existing?.leave_code ?? "vacation",
-      dayPart: "full",
       startDate: "",
       endDate: "",
+      startTime: WORK_START,
+      endTime: WORK_END,
       reason: existing?.reason ?? "",
     },
   });
 
   const leaveCode = form.watch("leaveCode");
-  const dayPart = form.watch("dayPart");
   const startDate = form.watch("startDate");
   const endDate = form.watch("endDate");
+  const startTime = form.watch("startTime");
+  const endTime = form.watch("endTime");
 
+  // Keep endDate from drifting before startDate when the user edits dates
+  // out of order (multi-day ranges are now the norm, not a special mode).
   useEffect(() => {
-    if (dayPart !== "full" && startDate) {
+    if (startDate && endDate && endDate < startDate) {
       form.setValue("endDate", startDate);
     }
-  }, [dayPart, startDate, form]);
+  }, [startDate, endDate, form]);
 
   useEffect(() => {
-    if (!startDate || !endDate || !leaveCode || !dayPart) {
+    if (!startDate || !endDate || !leaveCode || !startTime || !endTime) {
       setPreview(null);
       return;
     }
     const handle = setTimeout(() => {
-      previewLeaveHours({ leaveCode, dayPart, startDate, endDate }).then((res) => {
+      previewLeaveHours({ leaveCode, startDate, endDate, startTime, endTime }).then((res) => {
         if ("error" in res && res.error) return;
         setPreview({ hours: res.hours, available: res.balance?.available_hours });
       });
     }, 350);
     return () => clearTimeout(handle);
-  }, [leaveCode, dayPart, startDate, endDate]);
+  }, [leaveCode, startDate, endDate, startTime, endTime]);
 
   const showCertHint =
     leaveCode === "sick" &&
-    dayPart === "full" &&
     startDate &&
     endDate &&
     differenceInCalendarDays(new Date(endDate), new Date(startDate)) + 1 >= 3;
@@ -94,9 +102,10 @@ export function LeaveRequestSheet({
       setFormError(null);
       const formData = new FormData();
       formData.set("leaveCode", values.leaveCode);
-      formData.set("dayPart", values.dayPart);
       formData.set("startDate", values.startDate);
       formData.set("endDate", values.endDate);
+      formData.set("startTime", values.startTime);
+      formData.set("endTime", values.endTime);
       formData.set("reason", values.reason ?? "");
       formData.set("submit", String(submit));
       const file = fileInputRef.current?.files?.[0];
@@ -157,25 +166,6 @@ export function LeaveRequestSheet({
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <Label>ระยะเวลา</Label>
-            <RadioGroup
-              value={dayPart}
-              onValueChange={(v) => form.setValue("dayPart", v as LeaveRequestInput["dayPart"])}
-              className="flex flex-col gap-2"
-            >
-              <label className="flex items-center gap-2 text-sm">
-                <RadioGroupItem value="full" /> เต็มวัน (หลายวันได้)
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <RadioGroupItem value="half_am" /> ครึ่งวันเช้า (08:30-12:00)
-              </label>
-              <label className="flex items-center gap-2 text-sm">
-                <RadioGroupItem value="half_pm" /> ครึ่งวันบ่าย (13:00-17:00)
-              </label>
-            </RadioGroup>
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>วันที่เริ่ม</Label>
@@ -183,11 +173,32 @@ export function LeaveRequestSheet({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>วันที่สิ้นสุด</Label>
-              <Input type="date" disabled={dayPart !== "full"} {...form.register("endDate")} />
+              <Input type="date" {...form.register("endDate")} />
             </div>
           </div>
           {form.formState.errors.endDate && (
             <p className="text-sm text-danger">{form.formState.errors.endDate.message}</p>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>เวลาเริ่ม{startDate !== endDate && startDate && endDate ? " (วันแรก)" : ""}</Label>
+              <Input type="time" min={WORK_START} max={WORK_END} {...form.register("startTime")} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>เวลาสิ้นสุด{startDate !== endDate && startDate && endDate ? " (วันสุดท้าย)" : ""}</Label>
+              <Input type="time" min={WORK_START} max={WORK_END} {...form.register("endTime")} />
+            </div>
+          </div>
+          {startDate && endDate && startDate !== endDate && (
+            <p className="text-xs text-muted-foreground">
+              วันระหว่างกลางถือเป็นลาเต็มวันอัตโนมัติ (7.5 ชม./วัน)
+            </p>
+          )}
+          {(form.formState.errors.startTime || form.formState.errors.endTime) && (
+            <p className="text-sm text-danger">
+              {form.formState.errors.startTime?.message ?? form.formState.errors.endTime?.message}
+            </p>
           )}
 
           {preview && (
