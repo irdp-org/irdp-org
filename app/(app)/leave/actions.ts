@@ -12,6 +12,21 @@ import {
   type LeaveRequestInput,
 } from "@/lib/leave";
 
+// Matches leave-certs' allowed_mime_types exactly (0002_storage.sql).
+const EXT_TO_MIME: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  heic: "image/heic",
+  heif: "image/heif",
+  pdf: "application/pdf",
+};
+
+function guessContentType(ext: string): string {
+  return EXT_TO_MIME[ext.toLowerCase()] ?? "application/octet-stream";
+}
+
 async function notifyDeptHeads(departmentId: string | null, title: string, body: string, link: string) {
   if (!departmentId) return;
   const supabase = await createClient();
@@ -92,7 +107,10 @@ export async function createLeaveRequest(formData: FormData) {
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${employee.id}/${row.id}.${ext}`;
     const { error: uploadError } = await supabase.storage.from("leave-certs").upload(path, file, {
-      contentType: file.type,
+      // iOS Safari can report an empty/unreliable file.type for some photo
+      // picker selections — fall back to extension-based guessing so the
+      // upload doesn't get rejected by the bucket's allowed_mime_types.
+      contentType: file.type || guessContentType(ext),
       upsert: true,
     });
     if (!uploadError) {

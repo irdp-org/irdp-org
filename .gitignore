@@ -43,6 +43,7 @@ next-env.d.ts
 
 # claude code (personal/machine-local overrides — see settings.json for shared config)
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
 
 # one-off local scripts with embedded secrets — never commit
 get-google-refresh-token.mjs

@@ -22,6 +22,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { leaveRequestSchema, LEAVE_LABELS_TH, type LeaveRequestInput } from "@/lib/leave";
 import { previewLeaveHours, createLeaveRequest, updateLeaveRequest } from "@/app/(app)/leave/actions";
 
+const MAX_CERT_FILE_BYTES = 10 * 1024 * 1024;
+
 type ExistingRequest = {
   id: string;
   leave_code: LeaveRequestInput["leaveCode"];
@@ -98,7 +100,16 @@ export function LeaveRequestSheet({
       formData.set("reason", values.reason ?? "");
       formData.set("submit", String(submit));
       const file = fileInputRef.current?.files?.[0];
-      if (file) formData.set("certFile", file);
+      if (file) {
+        // Matches leave-certs' bucket file_size_limit (10MB, 0002_storage.sql).
+        // Catching this client-side gives a clear Thai message instead of a
+        // generic network failure from the Server Action body-size limit.
+        if (file.size > MAX_CERT_FILE_BYTES) {
+          setFormError("ไฟล์แนบใหญ่เกินไป (จำกัด 10MB) กรุณาเลือกไฟล์ที่เล็กลง");
+          return;
+        }
+        formData.set("certFile", file);
+      }
 
       startTransition(async () => {
         const action = existing ? updateLeaveRequest.bind(null, existing.id) : createLeaveRequest;
