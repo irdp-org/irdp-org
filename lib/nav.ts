@@ -7,14 +7,17 @@ import {
   Package,
   Bell,
   ShieldCheck,
+  Users,
   type LucideIcon,
 } from "lucide-react";
+import type { RoleT } from "@/lib/database.types";
 
 export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
-  adminOnly?: boolean;
+  // Omit for "everyone"; otherwise only these roles see the entry.
+  roles?: RoleT[];
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -25,9 +28,14 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/calendar", label: "ปฏิทิน", icon: CalendarRange },
   { href: "/assets", label: "ทรัพย์สิน", icon: Package },
   { href: "/notifications", label: "การแจ้งเตือน", icon: Bell },
-  { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, adminOnly: true },
+  { href: "/admin/employees", label: "จัดการพนักงาน", icon: Users, roles: ["admin", "hr"] },
+  { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, roles: ["admin"] },
 ];
 
 // Primary tabs shown directly in the mobile bottom bar (iOS-style, keep ≤5
 // slots including "เพิ่มเติม"); everything else lives behind that sheet.
 export const PRIMARY_TAB_HREFS = ["/", "/leave", "/field", "/booking"];
+
+export function isNavItemVisible(item: NavItem, role: RoleT): boolean {
+  return !item.roles || item.roles.includes(role);
+}

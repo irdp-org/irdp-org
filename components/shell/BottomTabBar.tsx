@@ -5,9 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS, PRIMARY_TAB_HREFS } from "@/lib/nav";
+import { NAV_ITEMS, PRIMARY_TAB_HREFS, isNavItemVisible } from "@/lib/nav";
 import type { RoleT } from "@/lib/database.types";
-import { isAdmin } from "@/lib/rbac";
 import {
   Sheet,
   SheetContent,
@@ -22,7 +21,7 @@ export function BottomTabBar({ role }: { role: RoleT }) {
 
   const primary = NAV_ITEMS.filter((item) => PRIMARY_TAB_HREFS.includes(item.href));
   const moreItems = NAV_ITEMS.filter(
-    (item) => !PRIMARY_TAB_HREFS.includes(item.href) && (!item.adminOnly || isAdmin(role))
+    (item) => !PRIMARY_TAB_HREFS.includes(item.href) && isNavItemVisible(item, role)
   );
 
   return (
