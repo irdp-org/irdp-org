@@ -19,24 +19,26 @@ function initialsOf(fullName: string) {
 
 export function TopBar({ employee }: { employee: Employee }) {
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b border-border bg-background/95 px-4 backdrop-blur-sm md:px-6">
-      <Link href="/" className="flex items-center gap-2">
-        <Logo className="sm:hidden" />
-        <WordmarkLogo className="hidden sm:block" />
-      </Link>
-      <div className="flex items-center gap-1">
-        <NotificationBell />
-        <Avatar size="sm">
-          {employee.avatar_url && (
-            <AvatarImage src={employee.avatar_url} alt={employee.full_name} />
-          )}
-          <AvatarFallback>{initialsOf(employee.full_name)}</AvatarFallback>
-        </Avatar>
-        <form action={signOutAction}>
-          <Button type="submit" variant="ghost" size="icon" aria-label="ออกจากระบบ">
-            <LogOut className="h-4 w-4" />
-          </Button>
-        </form>
+    <header className="sticky top-0 z-40 border-b border-border bg-background/95 pt-[env(safe-area-inset-top)] backdrop-blur-sm">
+      <div className="flex h-14 items-center justify-between px-4 md:px-6">
+        <Link href="/" className="flex items-center gap-2">
+          <Logo className="sm:hidden" />
+          <WordmarkLogo className="hidden sm:block" />
+        </Link>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <Avatar size="sm">
+            {employee.avatar_url && (
+              <AvatarImage src={employee.avatar_url} alt={employee.full_name} />
+            )}
+            <AvatarFallback>{initialsOf(employee.full_name)}</AvatarFallback>
+          </Avatar>
+          <form action={signOutAction}>
+            <Button type="submit" variant="ghost" size="icon" aria-label="ออกจากระบบ">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </form>
+        </div>
       </div>
     </header>
   );
