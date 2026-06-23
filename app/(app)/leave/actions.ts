@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentEmployee } from "@/lib/auth";
+import { getCurrentEmployee, type Employee } from "@/lib/auth";
 import { notify } from "@/lib/notify";
 import {
   computeLeaveHours,
@@ -27,13 +27,30 @@ function guessContentType(ext: string): string {
   return EXT_TO_MIME[ext.toLowerCase()] ?? "application/octet-stream";
 }
 
-async function notifyDeptHeads(departmentId: string | null, title: string, body: string, link: string) {
-  if (!departmentId) return;
+// admin/hr have no dept_head above them — nobody would ever be found by the
+// normal department_id+dept_head lookup, so their own submissions silently
+// reached zero recipients. Instead, notify all execs directly as an FYI;
+// the approval mechanics are unchanged (admin can still self-approve; hr
+// cannot approve anything per enforce_request_rules(), so an admin or exec
+// approves hr's own leave — already mechanically possible today).
+async function notifySubmission(submitter: Employee, title: string, body: string, link: string) {
   const supabase = await createClient();
+
+  if (submitter.role === "admin" || submitter.role === "hr") {
+    const { data: execs } = await supabase.from("employee_directory").select("id").eq("role", "exec");
+    await Promise.allSettled(
+      (execs ?? []).map((e) =>
+        notify({ userId: e.id, type: "leave_submitted_no_head", title, body, link })
+      )
+    );
+    return;
+  }
+
+  if (!submitter.department_id) return;
   const { data: heads } = await supabase
     .from("employee_directory")
     .select("id")
-    .eq("department_id", departmentId)
+    .eq("department_id", submitter.department_id)
     .eq("role", "dept_head");
 
   await Promise.allSettled(
@@ -119,8 +136,8 @@ export async function createLeaveRequest(formData: FormData) {
   }
 
   if (submit) {
-    await notifyDeptHeads(
-      employee.department_id,
+    await notifySubmission(
+      employee,
       "มีคำขอลาใหม่รออนุมัติ",
       `${employee.full_name} ยื่นขอ${LEAVE_LABELS_TH[parsed.data.leaveCode]} ${hours} ชม.`,
       "/leave?tab=approvals"
@@ -171,8 +188,8 @@ export async function updateLeaveRequest(id: string, formData: FormData) {
   if (error) return { error: error.message };
 
   if (submit) {
-    await notifyDeptHeads(
-      employee.department_id,
+    await notifySubmission(
+      employee,
       "มีคำขอลาแก้ไขแล้วรออนุมัติ",
       `${employee.full_name} ยื่นขอ${LEAVE_LABELS_TH[parsed.data.leaveCode]} ${hours} ชม. อีกครั้ง`,
       "/leave?tab=approvals"
