@@ -5,6 +5,9 @@
 //   npx supabase login && npx supabase link --project-ref <ref>
 //   npx supabase gen types typescript --linked > lib/database.types.ts
 
+// employees.education jsonb shape (0005_phase1_5.sql)
+export type EducationEntry = { degree: string; institution: string; year: string };
+
 export type RoleT = "employee" | "dept_head" | "hr" | "admin" | "exec";
 export type EmployeeStatusT = "active" | "inactive" | "pending";
 export type LeaveCodeT = "sick" | "personal" | "vacation";
@@ -55,6 +58,7 @@ export interface Database {
           address: string | null;
           avatar_url: string | null;
           status: EmployeeStatusT;
+          education: EducationEntry[];
           created_at: string;
           updated_at: string;
         },
@@ -72,6 +76,7 @@ export interface Database {
           address?: string | null;
           avatar_url?: string | null;
           status?: EmployeeStatusT;
+          education?: EducationEntry[];
         }
       >;
       attachments: TableShape<{
