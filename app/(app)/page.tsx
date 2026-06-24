@@ -76,6 +76,17 @@ export default async function DashboardPage() {
     .eq("employee_id", employee.id)
     .in("status", ["submitted", "approved"]);
 
+  // My assets summary
+  const { data: myAssignments } = await supabase
+    .from("asset_assignments")
+    .select("id, status")
+    .eq("employee_id", employee.id)
+    .in("status", ["pending_accept", "accepted"]);
+  const myAssetStats = {
+    pending: (myAssignments ?? []).filter((a) => a.status === "pending_accept").length,
+    accepted: (myAssignments ?? []).filter((a) => a.status === "accepted").length,
+  };
+
   // Driver card: check if current employee is a vehicle driver
   const { data: myVehicle } = await supabase
     .from("vehicles")
@@ -295,7 +306,28 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         )}
-        <PlaceholderCard icon={Package} title="ทรัพย์สินของฉัน" />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Package className="h-4 w-4 text-primary" /> ทรัพย์สินของฉัน
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-1 text-sm">
+            {myAssetStats.pending > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-warning">รอยืนยัน</span>
+                <span className="font-medium text-warning">{myAssetStats.pending} ชิ้น</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">ครอบครองอยู่</span>
+              <span className="font-medium text-foreground">{myAssetStats.accepted} ชิ้น</span>
+            </div>
+            <Button asChild size="sm" variant="outline" className="mt-1 self-start">
+              <Link href="/assets">ดูทรัพย์สิน</Link>
+            </Button>
+          </CardContent>
+        </Card>
         <PlaceholderCard icon={CalendarDays} title="กิจกรรมที่จะถึง" />
 
         {canSeeOrgSummary && orgSummary && (

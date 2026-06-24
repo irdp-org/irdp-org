@@ -1,0 +1,20 @@
+name: License expiry reminders
+
+# Fires once daily at 09:00 Bangkok (02:00 UTC).
+# Notifies admin(s) of software licenses expiring within 30 days.
+# Requires the same repository secrets as wfh-reminders.yml:
+#   CRON_SECRET   same value as Vercel CRON_SECRET env var
+#   APP_URL       deployed app base URL, e.g. https://your-project.vercel.app
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call license-expiry cron route
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/license-expiry" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"

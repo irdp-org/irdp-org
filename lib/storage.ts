@@ -22,3 +22,7 @@ export async function getSignedAvatarUrl(path: string | null): Promise<string | 
 export async function getSignedCheckinPhotoUrl(path: string | null): Promise<string | null> {
   return getSignedUrl("checkin-photos", path);
 }
+
+export async function getSignedAssetDocUrl(path: string | null, ttl = DEFAULT_SIGNED_URL_TTL): Promise<string | null> {
+  return getSignedUrl("asset-docs", path, ttl);
+}

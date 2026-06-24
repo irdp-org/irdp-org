@@ -31,6 +31,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/notifications", label: "การแจ้งเตือน", icon: Bell },
   { href: "/admin/employees", label: "จัดการพนักงาน", icon: Users, roles: ["admin", "hr"] },
   { href: "/admin/work-locations", label: "สถานที่ทำงาน", icon: Map, roles: ["admin", "hr"] },
+  { href: "/admin/assets", label: "คลังทรัพย์สิน", icon: Package, roles: ["admin", "hr", "exec", "dept_head"] },
   { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, roles: ["admin"] },
 ];
 

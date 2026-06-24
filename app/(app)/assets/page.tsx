@@ -1,17 +1,31 @@
-import { Package } from "lucide-react";
+import { getCurrentEmployee } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { EmptyState } from "@/components/shell/EmptyState";
+import { MyAssetsClient, type MyAssignment } from "@/components/assets/MyAssetsClient";
 
-export default function AssetsPage() {
+export default async function AssetsPage() {
+  const employee = await getCurrentEmployee();
+  if (!employee) return null;
+
+  const supabase = await createClient();
+
+  const { data: assignments } = await supabase
+    .from("asset_assignments")
+    .select(
+      "id, asset_id, assigned_at, accepted_at, status, asset:assets(id, asset_tag, category, name, brand, model, serial)"
+    )
+    .eq("employee_id", employee.id)
+    .in("status", ["pending_accept", "accepted"])
+    .order("assigned_at", { ascending: false });
+
   return (
-    <div>
-      <PageHeader title="ทรัพย์สิน" description="ทรัพย์สิน/อุปกรณ์สำนักงานที่รับผิดชอบ" />
+    <div className="flex flex-col gap-4 pb-6">
+      <PageHeader
+        title="ทรัพย์สินของฉัน"
+        description="ทรัพย์สินที่ได้รับมอบหมายจากองค์กร"
+      />
       <div className="px-4 md:px-6">
-        <EmptyState
-          icon={Package}
-          title="เร็วๆ นี้"
-          description="โมดูลนี้จะเปิดใช้งานในเฟสถัดไป"
-        />
+        <MyAssetsClient assignments={(assignments ?? []) as unknown as MyAssignment[]} />
       </div>
     </div>
   );
