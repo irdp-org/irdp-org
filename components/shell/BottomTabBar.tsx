@@ -37,11 +37,11 @@ export function BottomTabBar({ role }: { role: RoleT }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex min-h-11 flex-col items-center justify-center gap-0.5 py-2 text-[11px]",
+                "flex min-h-[60px] flex-col items-center justify-center gap-1 py-2 text-xs",
                 active ? "text-primary" : "text-muted-foreground"
               )}
             >
-              <item.icon className="h-5 w-5" strokeWidth={active ? 2.25 : 1.75} />
+              <item.icon className="h-6 w-6" strokeWidth={active ? 2.25 : 1.75} />
               {item.label}
             </Link>
           );
@@ -50,9 +50,9 @@ export function BottomTabBar({ role }: { role: RoleT }) {
           <SheetTrigger asChild>
             <button
               type="button"
-              className="flex min-h-11 flex-col items-center justify-center gap-0.5 py-2 text-[11px] text-muted-foreground"
+              className="flex min-h-[60px] flex-col items-center justify-center gap-1 py-2 text-xs text-muted-foreground"
             >
-              <MoreHorizontal className="h-5 w-5" strokeWidth={1.75} />
+              <MoreHorizontal className="h-6 w-6" strokeWidth={1.75} />
               เพิ่มเติม
             </button>
           </SheetTrigger>
@@ -66,9 +66,9 @@ export function BottomTabBar({ role }: { role: RoleT }) {
                   key={item.href}
                   href={item.href}
                   onClick={() => setOpen(false)}
-                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-surface py-4 text-xs text-foreground"
+                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-surface py-5 text-sm text-foreground"
                 >
-                  <item.icon className="h-5 w-5" strokeWidth={1.75} />
+                  <item.icon className="h-6 w-6" strokeWidth={1.75} />
                   {item.label}
                 </Link>
               ))}

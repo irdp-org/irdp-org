@@ -37,7 +37,7 @@ const TYPE_DOT: Record<CalendarEventRow["type"], string> = {
   merit: "bg-accent",
   activity: "bg-success",
   leave: "bg-warning",
-  booking: "bg-muted",
+  booking: "bg-accent",
 };
 
 const TYPE_LABEL_TH: Record<CalendarEventRow["type"], string> = {
@@ -136,15 +136,19 @@ export function MonthView({ month, events }: { month: Date; events: CalendarEven
               <p className="text-sm text-muted-foreground">ไม่มีกิจกรรม</p>
             ) : (
               selectedEvents.map((ev) => (
-                <div key={ev.id} className="flex items-start gap-2 rounded-lg bg-surface px-3 py-2 text-sm">
-                  <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", TYPE_DOT[ev.type])} />
-                  <div>
-                    <p className="font-medium text-foreground">{ev.title}</p>
+                <div key={ev.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-3 text-sm">
+                  <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", TYPE_DOT[ev.type])} />
+                  <div className="flex flex-col gap-0.5 min-w-0">
+                    <p className="font-semibold text-foreground">{ev.title}</p>
                     <p className="text-xs text-muted-foreground">
                       {TYPE_LABEL_TH[ev.type]}
-                      {!ev.all_day && ` · ${format(new Date(ev.start_at), "HH:mm")}`}
+                      {ev.all_day
+                        ? " · ทั้งวัน"
+                        : ` · ${format(new Date(ev.start_at), "HH:mm")}${ev.end_at ? `–${format(new Date(ev.end_at), "HH:mm")}` : ""}`}
                     </p>
-                    {ev.description && <p className="text-xs text-muted-foreground">{ev.description}</p>}
+                    {ev.description && (
+                      <p className="text-xs text-foreground/70 mt-0.5">{ev.description}</p>
+                    )}
                   </div>
                 </div>
               ))

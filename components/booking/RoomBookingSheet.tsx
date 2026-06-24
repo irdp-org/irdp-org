@@ -73,23 +73,25 @@ export function RoomBookingSheet({ open, onOpenChange, rooms, defaultRoomId }: P
         </SheetHeader>
 
         <div className="flex flex-col gap-4 px-4 pb-4">
-          {/* Room selector */}
-          <div className="flex flex-col gap-1.5">
-            <Label>ห้องประชุม</Label>
-            <Select value={roomId} onValueChange={setRoomId}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="เลือกห้อง" />
-              </SelectTrigger>
-              <SelectContent>
-                {rooms.map((r) => (
-                  <SelectItem key={r.id} value={r.id}>
-                    {r.name}
-                    {r.size === "small" ? " (เล็ก)" : r.size === "large" ? " (ใหญ่)" : ""}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* Room selector — hidden when room was already chosen from the tab button */}
+          {!defaultRoomId && (
+            <div className="flex flex-col gap-1.5">
+              <Label>ห้องประชุม</Label>
+              <Select value={roomId} onValueChange={setRoomId}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="เลือกห้อง" />
+                </SelectTrigger>
+                <SelectContent>
+                  {rooms.map((r) => (
+                    <SelectItem key={r.id} value={r.id}>
+                      {r.name}
+                      {r.size === "small" ? " (เล็ก)" : r.size === "large" ? " (ใหญ่)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label>วันที่</Label>

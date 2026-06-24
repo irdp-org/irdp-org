@@ -165,6 +165,11 @@ export async function updateLeaveRequest(id: string, formData: FormData) {
   const parsed = leaveRequestSchema.safeParse(raw);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "ข้อมูลไม่ถูกต้อง" };
 
+  const today2 = new Date().toISOString().slice(0, 10);
+  if (parsed.data.startDate < today2 && employee.role !== "hr" && employee.role !== "admin") {
+    return { error: "ไม่สามารถยื่นลาย้อนหลังได้ กรุณาเลือกวันที่ตั้งแต่วันนี้เป็นต้นไป" };
+  }
+
   const submit = formData.get("submit") === "true";
   const supabase = await createClient();
   const hours = await computeLeaveHours(supabase, parsed.data);

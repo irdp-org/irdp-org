@@ -169,15 +169,36 @@ export function LeaveRequestSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>วันที่เริ่ม</Label>
-              <Input type="date" {...form.register("startDate")} />
+              <Input type="date" min={new Date().toISOString().slice(0, 10)} {...form.register("startDate")} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>วันที่สิ้นสุด</Label>
-              <Input type="date" {...form.register("endDate")} />
+              <Input type="date" min={startDate || new Date().toISOString().slice(0, 10)} {...form.register("endDate")} />
             </div>
           </div>
           {form.formState.errors.endDate && (
             <p className="text-sm text-danger">{form.formState.errors.endDate.message}</p>
+          )}
+
+          {/* Quick presets — only useful for single-day leave */}
+          {startDate && startDate === endDate && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground active:bg-border"
+                onClick={() => { form.setValue("startTime", "08:30"); form.setValue("endTime", "17:00"); }}
+              >เต็มวัน</button>
+              <button
+                type="button"
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground active:bg-border"
+                onClick={() => { form.setValue("startTime", "08:30"); form.setValue("endTime", "12:00"); }}
+              >ครึ่งวันเช้า</button>
+              <button
+                type="button"
+                className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs text-foreground active:bg-border"
+                onClick={() => { form.setValue("startTime", "13:00"); form.setValue("endTime", "17:00"); }}
+              >ครึ่งวันบ่าย</button>
+            </div>
           )}
 
           <div className="grid grid-cols-2 gap-3">

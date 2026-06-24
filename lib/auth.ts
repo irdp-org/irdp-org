@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
 
@@ -11,8 +12,11 @@ const EMPLOYEE_COLUMNS =
  * `user_id = auth.uid()`). Returns null when there's no session, or when HR
  * hasn't provisioned an `employees` row for this person yet (pending state —
  * see CLAUDE.md §7).
+ *
+ * Wrapped in React `cache()` so that multiple Server Components in the same
+ * render tree share a single DB round-trip per request.
  */
-export async function getCurrentEmployee(): Promise<Employee | null> {
+export const getCurrentEmployee = cache(async (): Promise<Employee | null> => {
   const supabase = await createClient();
   const { data: claimsData } = await supabase.auth.getClaims();
   if (!claimsData?.claims) return null;
@@ -25,4 +29,4 @@ export async function getCurrentEmployee(): Promise<Employee | null> {
 
   if (error || !data) return null;
   return data as Employee;
-}
+});

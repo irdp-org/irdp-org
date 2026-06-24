@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
+import { getSignedUrl } from "@/lib/storage";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { LeaveRequestsClient, type OwnLeaveRequest } from "@/components/leave/LeaveRequestsClient";
 import { ApprovalList, type ApprovalQueueRow } from "@/components/leave/ApprovalList";
@@ -18,7 +19,7 @@ export default async function LeavePage({
   const supabase = await createClient();
   const { data: requests } = await supabase
     .from("leave_requests")
-    .select("id, leave_code, start_at, end_at, hours, status, reason")
+    .select("id, leave_code, start_at, end_at, hours, status, reason, cert_url")
     .eq("employee_id", employee.id)
     .order("created_at", { ascending: false });
 
@@ -39,8 +40,13 @@ export default async function LeavePage({
     if (!latestReturnNoteById.has(n.entity_id)) latestReturnNoteById.set(n.entity_id, n.note);
   }
 
-  const ownRequests: OwnLeaveRequest[] = (requests ?? []).map((r) => ({
+  const certSignedUrls = await Promise.all(
+    (requests ?? []).map((r) => getSignedUrl("leave-certs", r.cert_url))
+  );
+
+  const ownRequests: OwnLeaveRequest[] = (requests ?? []).map((r, i) => ({
     ...r,
+    cert_url: certSignedUrls[i],
     returnNote: latestReturnNoteById.get(r.id) ?? null,
   }));
 

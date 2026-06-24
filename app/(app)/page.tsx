@@ -27,11 +27,16 @@ export default async function DashboardPage() {
 
   const supabase = await createClient();
   const year = new Date().getFullYear();
-  const { data: balances } = await supabase
-    .from("leave_balance_view")
-    .select("leave_code, available_days, available_hours")
-    .eq("employee_id", employee.id)
-    .eq("year", year);
+  const [{ data: balances }, { data: dept }] = await Promise.all([
+    supabase
+      .from("leave_balance_view")
+      .select("leave_code, available_days, available_hours")
+      .eq("employee_id", employee.id)
+      .eq("year", year),
+    employee.department_id
+      ? supabase.from("departments").select("name").eq("id", employee.department_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
   const canSeeApprovals = isDeptHead(employee.role) || employee.role === "admin";
   const canSeeOrgSummary = employee.role === "hr" || employee.role === "admin";
@@ -204,8 +209,8 @@ export default async function DashboardPage() {
   return (
     <div className="flex flex-col gap-4 pb-6">
       <PageHeader
-        title="หน้าหลัก"
-        description={`สวัสดี ${employee.full_name} (${roleLabelTh[employee.role]})`}
+        title={`สวัสดี ${employee.full_name}`}
+        description={[employee.position, dept?.name].filter(Boolean).join(" · ") || roleLabelTh[employee.role]}
       />
       <div className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 md:px-6 lg:grid-cols-3">
         <Card>
