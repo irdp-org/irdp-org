@@ -11,6 +11,8 @@ import {
   Map,
   BarChart2,
   ScanLine,
+  Megaphone,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -35,6 +37,8 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/admin/employees", label: "จัดการพนักงาน", icon: Users, roles: ["admin", "hr"] },
   { href: "/admin/work-locations", label: "สถานที่ทำงาน", icon: Map, roles: ["admin", "hr"] },
   { href: "/admin/assets", label: "คลังทรัพย์สิน", icon: Package, roles: ["admin", "hr", "exec", "dept_head"] },
+  { href: "/announcements", label: "ข่าวสาร", icon: Megaphone },
+  { href: "/org", label: "ข้อมูลองค์กร", icon: Building2 },
   { href: "/reports", label: "รีพอร์ต", icon: BarChart2, roles: ["admin", "hr", "exec"] },
   { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, roles: ["admin"] },
 ];

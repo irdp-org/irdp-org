@@ -26,3 +26,7 @@ export async function getSignedCheckinPhotoUrl(path: string | null): Promise<str
 export async function getSignedAssetDocUrl(path: string | null, ttl = DEFAULT_SIGNED_URL_TTL): Promise<string | null> {
   return getSignedUrl("asset-docs", path, ttl);
 }
+
+export async function getSignedOrgDocUrl(path: string | null, ttl = 60 * 60 * 24): Promise<string | null> {
+  return getSignedUrl("org-docs", path, ttl);
+}

@@ -321,6 +321,36 @@ export interface Database {
         status: AssignStatusT;
         created_at: string;
       }>;
+      org_documents: TableShape<{
+        id: string;
+        title: string;
+        description: string | null;
+        category: string;
+        storage_path: string;
+        file_size_bytes: number | null;
+        sort_order: number;
+        uploaded_by: string | null;
+        created_at: string;
+      }>;
+      announcements: TableShape<{
+        id: string;
+        title: string;
+        body: string;
+        cover_url: string | null;
+        category: string;
+        is_published: boolean;
+        notify_push: boolean;
+        created_by: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
+      announcement_comments: TableShape<{
+        id: string;
+        announcement_id: string;
+        employee_id: string;
+        body: string;
+        created_at: string;
+      }>;
     };
     Views: {
       employee_directory: {
