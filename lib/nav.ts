@@ -9,6 +9,7 @@ import {
   ShieldCheck,
   Users,
   Map,
+  BarChart2,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -32,6 +33,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/admin/employees", label: "จัดการพนักงาน", icon: Users, roles: ["admin", "hr"] },
   { href: "/admin/work-locations", label: "สถานที่ทำงาน", icon: Map, roles: ["admin", "hr"] },
   { href: "/admin/assets", label: "คลังทรัพย์สิน", icon: Package, roles: ["admin", "hr", "exec", "dept_head"] },
+  { href: "/reports", label: "รีพอร์ต", icon: BarChart2, roles: ["admin", "hr", "exec"] },
   { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, roles: ["admin"] },
 ];
 
