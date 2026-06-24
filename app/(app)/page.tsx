@@ -4,13 +4,13 @@ import {
   CalendarDays,
   Clock,
   Package,
-  CalendarRange,
   Users,
   ClipboardList,
   ThumbsUp,
   MapPin,
   Bus,
-  type LucideIcon,
+  BarChart2,
+  ShieldCheck,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
@@ -18,7 +18,6 @@ import { isDeptHead, roleLabelTh } from "@/lib/rbac";
 import { LEAVE_LABELS_TH } from "@/lib/leave";
 import { previewWeeklyOt } from "@/lib/ot";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { EmptyState } from "@/components/shell/EmptyState";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
@@ -142,24 +141,65 @@ export default async function DashboardPage() {
 
   let pendingAckCount = 0;
   if (isExec) {
-    const { data: approved } = await supabase
-      .from("leave_requests")
-      .select("id")
-      .eq("status", "approved");
-    const approvedIds = (approved ?? []).map((r) => r.id);
+    const [{ data: approvedLeave }, { data: approvedField }] = await Promise.all([
+      supabase.from("leave_requests").select("id").eq("status", "approved"),
+      supabase.from("field_requests").select("id").eq("status", "approved"),
+    ]);
+    const leaveIds = (approvedLeave ?? []).map((r) => r.id);
+    const fieldIds = (approvedField ?? []).map((r) => r.id);
 
-    if (approvedIds.length) {
-      const { data: myAcks } = await supabase
-        .from("approvals")
-        .select("entity_id")
-        .eq("entity", "leave_requests")
-        .eq("action", "acknowledge")
-        .eq("actor_id", employee.id)
-        .in("entity_id", approvedIds);
-      const ackedIds = new Set((myAcks ?? []).map((a) => a.entity_id));
-      pendingAckCount = approvedIds.filter((id) => !ackedIds.has(id)).length;
-    }
+    const [leaveAcks, fieldAcks] = await Promise.all([
+      leaveIds.length
+        ? supabase
+            .from("approvals")
+            .select("entity_id")
+            .eq("entity", "leave_requests")
+            .eq("action", "acknowledge")
+            .eq("actor_id", employee.id)
+            .in("entity_id", leaveIds)
+        : Promise.resolve({ data: [] }),
+      fieldIds.length
+        ? supabase
+            .from("approvals")
+            .select("entity_id")
+            .eq("entity", "field_requests")
+            .eq("action", "acknowledge")
+            .eq("actor_id", employee.id)
+            .in("entity_id", fieldIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const ackedLeave = new Set((leaveAcks.data ?? []).map((a) => a.entity_id));
+    const ackedField = new Set((fieldAcks.data ?? []).map((a) => a.entity_id));
+    pendingAckCount =
+      leaveIds.filter((id) => !ackedLeave.has(id)).length +
+      fieldIds.filter((id) => !ackedField.has(id)).length;
   }
+
+  // Admin stats
+  let adminStats: { activeEmployees: number; overdueAssets: number } | null = null;
+  if (employee.role === "admin") {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const [{ count: empCount }, { count: overdueCount }] = await Promise.all([
+      supabase.from("employee_directory").select("id", { count: "exact", head: true }).eq("status", "active"),
+      supabase
+        .from("asset_assignments")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pending_accept")
+        .lte("assigned_at", sevenDaysAgo),
+    ]);
+    adminStats = { activeEmployees: empCount ?? 0, overdueAssets: overdueCount ?? 0 };
+  }
+
+  // Upcoming calendar events (next 7 days, RLS-scoped per role)
+  const next7 = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: upcomingEvents } = await supabase
+    .from("calendar_events")
+    .select("id, title, type, start_at, end_at")
+    .gte("start_at", new Date().toISOString())
+    .lte("start_at", next7)
+    .order("start_at")
+    .limit(5);
 
   return (
     <div className="flex flex-col gap-4 pb-6">
@@ -328,8 +368,69 @@ export default async function DashboardPage() {
             </Button>
           </CardContent>
         </Card>
-        <PlaceholderCard icon={CalendarDays} title="กิจกรรมที่จะถึง" />
+        {/* Upcoming events card (C-4) */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <CalendarDays className="h-4 w-4 text-primary" /> กิจกรรมที่จะถึง
+            </CardTitle>
+            <CardDescription>7 วันข้างหน้า</CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-1.5">
+            {!upcomingEvents?.length ? (
+              <p className="text-sm text-muted-foreground">ไม่มีกิจกรรมในช่วงนี้</p>
+            ) : (
+              upcomingEvents.map((ev) => (
+                <div key={ev.id} className="flex items-start gap-2 text-sm">
+                  <span className="mt-0.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                  <div className="flex flex-col gap-0 min-w-0">
+                    <span className="truncate font-medium text-foreground">{ev.title}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(ev.start_at).toLocaleDateString("th-TH", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        timeZone: "Asia/Bangkok",
+                      })}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+            <Button asChild size="sm" variant="outline" className="mt-1 self-start">
+              <Link href="/calendar">ดูปฏิทิน</Link>
+            </Button>
+          </CardContent>
+        </Card>
 
+        {/* Admin stats card (C-3) */}
+        {adminStats && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <ShieldCheck className="h-4 w-4 text-primary" /> สถิติระบบ
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">พนักงาน (active)</span>
+                <span className="font-medium text-foreground">{adminStats.activeEmployees} คน</span>
+              </div>
+              {adminStats.overdueAssets > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-warning">ทรัพย์สินรอยืนยัน {">"} 7 วัน</span>
+                  <span className="font-medium text-warning">{adminStats.overdueAssets} ชิ้น</span>
+                </div>
+              )}
+              <Button asChild size="sm" variant="outline" className="mt-1 self-start">
+                <Link href="/admin/assets">ดูคลังทรัพย์สิน</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Org summary (C-2: add /reports link) */}
         {canSeeOrgSummary && orgSummary && (
           <Card>
             <CardHeader>
@@ -346,6 +447,11 @@ export default async function DashboardPage() {
                 <span className="text-muted-foreground">ยื่นคำขอสัปดาห์นี้</span>
                 <span className="font-medium text-foreground">{orgSummary.submittedThisWeek} คำขอ</span>
               </div>
+              <Button asChild size="sm" variant="outline" className="mt-1 self-start">
+                <Link href="/reports">
+                  <BarChart2 className="h-4 w-4" /> ดูรีพอร์ต
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         )}
@@ -354,17 +460,3 @@ export default async function DashboardPage() {
   );
 }
 
-function PlaceholderCard({ icon: Icon, title }: { icon: LucideIcon; title: string }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Icon className="h-4 w-4 text-primary" /> {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <EmptyState title="เร็วๆ นี้" />
-      </CardContent>
-    </Card>
-  );
-}
