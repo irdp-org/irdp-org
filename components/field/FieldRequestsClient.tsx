@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, X, MapPin, Sunrise, Sunset, Check } from "lucide-react";
+import { Plus, Pencil, X, MapPin, Sunrise, Sunset, Check, Info, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -202,6 +202,30 @@ export function FieldRequestsClient({
                     )}
                   </div>
                 </div>
+
+                {/* Hint: waiting for approval */}
+                {(r.status === "submitted" || r.status === "draft") && r.type !== "ot" && (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Info className="h-3.5 w-3.5 shrink-0" />
+                    รอการอนุมัติ — ปุ่มเช็คอินจะปรากฏหลังอนุมัติในวันปฏิบัติงาน
+                  </p>
+                )}
+
+                {/* Hint: approved but not today */}
+                {r.status === "approved" && !r.is_today && r.type !== "ot" && (
+                  <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Calendar className="h-3.5 w-3.5 shrink-0" />
+                    อนุมัติแล้ว — เช็คอินได้ในวันที่ {format(new Date(r.work_date), "d MMM yyyy")}
+                  </p>
+                )}
+
+                {/* Hint: approved + today but location has no GPS coords */}
+                {canCheckin && r.type === "offsite" && (r.location_lat == null || r.location_lng == null) && (
+                  <p className="flex items-center gap-1.5 text-xs text-warning">
+                    <Info className="h-3.5 w-3.5 shrink-0" />
+                    สถานที่ยังไม่มีพิกัด GPS กรุณาแจ้ง admin ตั้งค่าพิกัดให้สถานที่นี้ก่อน
+                  </p>
+                )}
 
                 {canCheckin && r.type === "offsite" && r.location_lat != null && r.location_lng != null && (
                   <div className="flex flex-wrap items-center gap-2">
