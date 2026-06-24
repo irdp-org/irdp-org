@@ -1,3 +1,5 @@
+export const revalidate = 120;
+
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";

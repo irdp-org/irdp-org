@@ -1,3 +1,5 @@
+export const revalidate = 60; // employee list changes infrequently
+
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";

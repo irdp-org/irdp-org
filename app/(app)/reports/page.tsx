@@ -1,3 +1,5 @@
+export const revalidate = 300; // reports data: refresh every 5 min
+
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
