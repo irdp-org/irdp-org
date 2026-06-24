@@ -65,15 +65,15 @@ export default async function FieldPage({
   let approvalRows: FieldApprovalQueueRow[] = [];
 
   if (showApprovals) {
-    // RLS already scopes this correctly: dept_head -> own department,
-    // hr/admin/exec -> everyone.
+    // RLS scopes: dept_head -> own department, hr/admin/exec -> everyone.
+    // Limit 500 to avoid missing records in orgs with many requests.
     const { data: queue } = await supabase
       .from("field_requests")
       .select(
         "id, employee_id, type, location_id, work_date, planned_start, planned_end, ot_hours, pay_x1_hours, pay_x15_hours, pay_x3_hours, status, reason, exported_at"
       )
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(500);
 
     const requestRows = queue ?? [];
     const approvedIds = requestRows.filter((r) => r.status === "approved").map((r) => r.id);

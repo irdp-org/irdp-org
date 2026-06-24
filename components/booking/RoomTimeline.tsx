@@ -104,9 +104,10 @@ export function RoomTimeline({ rooms, bookings, selectedDate, onDateChange }: Pr
         </Button>
       </div>
 
-      {/* Timeline grid */}
-      <div className="overflow-x-auto rounded-2xl border border-border bg-white">
-        <div className="min-w-[540px]">
+      {/* Timeline grid — overflow-x-auto must be on a block with explicit width
+          so the scroll is contained to this element and not the page body. */}
+      <div className="w-full overflow-x-auto rounded-2xl border border-border bg-white">
+        <div className="min-w-[480px]">
           {/* Hour ruler */}
           <div className="flex border-b border-border">
             {/* Room label column */}

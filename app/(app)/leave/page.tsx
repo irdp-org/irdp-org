@@ -54,13 +54,13 @@ export default async function LeavePage({
   let approvalRows: ApprovalQueueRow[] = [];
 
   if (showApprovals) {
-    // RLS already scopes this correctly: dept_head -> own department,
-    // hr/admin/exec -> everyone.
+    // RLS scopes: dept_head -> own department, hr/admin/exec -> everyone.
+    // Limit 500 to avoid missing records in orgs with many requests.
     const { data: queue } = await supabase
       .from("leave_requests")
       .select("id, employee_id, leave_code, start_at, end_at, hours, status, reason, exported_at")
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(500);
 
     const requestRows = queue ?? [];
     const approvedIds = requestRows.filter((r) => r.status === "approved").map((r) => r.id);

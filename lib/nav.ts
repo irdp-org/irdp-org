@@ -10,6 +10,7 @@ import {
   Users,
   Map,
   BarChart2,
+  ScanLine,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -25,6 +26,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "หน้าหลัก", icon: Home },
   { href: "/leave", label: "ลา", icon: CalendarDays },
+  { href: "/checkin", label: "เช็คอิน", icon: ScanLine },
   { href: "/field", label: "นอกสถานที่/OT", icon: MapPin },
   { href: "/booking", label: "จอง", icon: CalendarPlus },
   { href: "/calendar", label: "ปฏิทิน", icon: CalendarRange },
@@ -39,7 +41,8 @@ export const NAV_ITEMS: NavItem[] = [
 
 // Primary tabs shown directly in the mobile bottom bar (iOS-style, keep ≤5
 // slots including "เพิ่มเติม"); everything else lives behind that sheet.
-export const PRIMARY_TAB_HREFS = ["/", "/leave", "/field", "/booking"];
+// 4 primary slots + "เพิ่มเติม" = 5 tabs total in the bottom bar
+export const PRIMARY_TAB_HREFS = ["/", "/leave", "/checkin", "/booking"];
 
 export function isNavItemVisible(item: NavItem, role: RoleT): boolean {
   return !item.roles || item.roles.includes(role);
