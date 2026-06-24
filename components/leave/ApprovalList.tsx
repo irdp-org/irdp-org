@@ -24,6 +24,7 @@ import {
   acknowledgeLeaveRequest,
   adminCancelApprovedLeave,
 } from "@/app/(app)/leave/approval-actions";
+import { LeaveExportPanel } from "./LeaveExportPanel";
 import { ClipboardList } from "lucide-react";
 import type { RoleT, RequestStatusT, LeaveCodeT } from "@/lib/database.types";
 
@@ -178,13 +179,16 @@ export function ApprovalList({
   const isHr = role === "hr";
   const isExec = role === "exec";
   const canCancelApproved = role === "admin" || role === "hr";
+  const canExport = role === "hr" || role === "admin";
 
   if (rows.length === 0) {
     return <EmptyState icon={ClipboardList} title="ไม่มีคำขอในรายการนี้" />;
   }
 
   return (
-    <ul className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
+      {canExport && <LeaveExportPanel rows={rows} />}
+      <ul className="flex flex-col gap-2">
       {rows.map((r) => {
         const iAcknowledged = r.acknowledgements.some((a) => a.actor_id === currentEmployeeId);
         return (
@@ -278,5 +282,6 @@ export function ApprovalList({
         />
       )}
     </ul>
+    </div>
   );
 }

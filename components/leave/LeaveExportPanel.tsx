@@ -5,29 +5,26 @@ import { useRouter } from "next/navigation";
 import { Download } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
-import { FIELD_TYPE_LABELS_TH } from "@/lib/ot";
 import { buildCsv, triggerDownload } from "@/lib/export-csv";
-import { markExported } from "@/app/(app)/field/approval-actions";
-import type { FieldApprovalQueueRow } from "./FieldApprovalList";
+import { markLeaveExported } from "@/app/(app)/leave/approval-actions";
+import { LEAVE_LABELS_TH } from "@/lib/leave";
+import type { ApprovalQueueRow } from "./ApprovalList";
 
-function buildExportCsv(rows: FieldApprovalQueueRow[]): string {
+function buildExportCsv(rows: ApprovalQueueRow[]): string {
   return buildCsv(
-    ["พนักงาน", "ประเภท", "วันที่", "เวลาเข้า", "เวลาออก", "OT รวม", "x1", "x1.5", "x3"],
+    ["พนักงาน", "ประเภทลา", "วันที่เริ่ม", "วันที่สิ้นสุด", "จำนวน (ชม.)", "เหตุผล"],
     rows.map((r) => [
       r.employee.full_name,
-      FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type,
-      r.work_date,
-      r.planned_start ? format(new Date(r.planned_start), "HH:mm") : "",
-      r.planned_end ? format(new Date(r.planned_end), "HH:mm") : "",
-      r.ot_hours ?? 0,
-      r.pay_x1_hours,
-      r.pay_x15_hours,
-      r.pay_x3_hours,
+      LEAVE_LABELS_TH[r.leave_code] ?? r.leave_code,
+      format(new Date(r.start_at), "yyyy-MM-dd"),
+      format(new Date(r.end_at), "yyyy-MM-dd"),
+      r.hours,
+      r.reason ?? "",
     ])
   );
 }
 
-export function ExportPanel({ rows }: { rows: FieldApprovalQueueRow[] }) {
+export function LeaveExportPanel({ rows }: { rows: ApprovalQueueRow[] }) {
   const router = useRouter();
   const exportable = rows.filter((r) => r.status === "approved" && !r.exported_at);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -50,13 +47,13 @@ export function ExportPanel({ rows }: { rows: FieldApprovalQueueRow[] }) {
     if (!ids.length) return;
     setError(null);
     startTransition(async () => {
-      const res = await markExported(ids);
+      const res = await markLeaveExported(ids);
       if ("error" in res && res.error) {
         setError(res.error);
         return;
       }
       const selectedRows = rows.filter((r) => selected.has(r.id));
-      triggerDownload(`field-export-${format(new Date(), "yyyy-MM-dd")}.csv`, buildExportCsv(selectedRows));
+      triggerDownload(`leave-export-${format(new Date(), "yyyy-MM-dd")}.csv`, buildExportCsv(selectedRows));
       setSelected(new Set());
       router.refresh();
     });
@@ -75,8 +72,8 @@ export function ExportPanel({ rows }: { rows: FieldApprovalQueueRow[] }) {
               className="h-4 w-4"
             />
             <span className="text-foreground">
-              {r.employee.full_name} · {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type} ·{" "}
-              {r.work_date}
+              {r.employee.full_name} · {LEAVE_LABELS_TH[r.leave_code] ?? r.leave_code} ·{" "}
+              {format(new Date(r.start_at), "d MMM")} · {r.hours} ชม.
             </span>
           </li>
         ))}

@@ -201,6 +201,25 @@ export async function adminCancelApprovedLeave(id: string, reason: string) {
   return { ok: true };
 }
 
+export async function markLeaveExported(ids: string[]) {
+  const employee = await getCurrentEmployee();
+  if (!employee || (employee.role !== "admin" && employee.role !== "hr")) {
+    return { error: "unauthorized" };
+  }
+  if (!ids.length) return { error: "ไม่มีรายการที่เลือก" };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("leave_requests")
+    .update({ exported_at: new Date().toISOString() })
+    .in("id", ids)
+    .eq("status", "approved");
+
+  if (error) return { error: error.message };
+  revalidatePath("/leave");
+  return { ok: true };
+}
+
 export async function acknowledgeLeaveRequest(id: string) {
   const employee = await getCurrentEmployee();
   if (!employee || employee.role !== "exec") return { error: "unauthorized" };
