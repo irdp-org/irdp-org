@@ -9,6 +9,7 @@ import {
   ClipboardList,
   ThumbsUp,
   MapPin,
+  Bus,
   type LucideIcon,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
@@ -49,11 +50,63 @@ export default async function DashboardPage() {
 
   const weeklyOt = await previewWeeklyOt(supabase, employee.id, new Date().toISOString().slice(0, 10));
 
+  // Today's bookings (visible to everyone per RLS)
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+  const [{ count: vanTodayCount }, { count: roomTodayCount }] = await Promise.all([
+    supabase
+      .from("van_bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "booked")
+      .gte("start_at", todayStart.toISOString())
+      .lte("start_at", todayEnd.toISOString()),
+    supabase
+      .from("room_bookings")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "booked")
+      .gte("start_at", todayStart.toISOString())
+      .lte("start_at", todayEnd.toISOString()),
+  ]);
+
   const { count: myFieldRequestCount } = await supabase
     .from("field_requests")
     .select("id", { count: "exact", head: true })
     .eq("employee_id", employee.id)
     .in("status", ["submitted", "approved"]);
+
+  // Driver card: check if current employee is a vehicle driver
+  const { data: myVehicle } = await supabase
+    .from("vehicles")
+    .select("id, name")
+    .eq("driver_id", employee.id)
+    .eq("active", true)
+    .maybeSingle();
+
+  let driverTodayCount = 0;
+  let driverWeekCount = 0;
+  if (myVehicle) {
+    const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+    const [{ count: dToday }, { count: dWeek }] = await Promise.all([
+      supabase
+        .from("van_bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("vehicle_id", myVehicle.id)
+        .eq("status", "booked")
+        .gte("start_at", todayStart.toISOString())
+        .lte("start_at", todayEnd.toISOString()),
+      supabase
+        .from("van_bookings")
+        .select("id", { count: "exact", head: true })
+        .eq("vehicle_id", myVehicle.id)
+        .eq("status", "booked")
+        .gte("end_at", new Date().toISOString())
+        .lte("start_at", weekEnd),
+    ]);
+    driverTodayCount = dToday ?? 0;
+    driverWeekCount = dWeek ?? 0;
+  }
 
   let orgSummary: { onLeaveToday: number; submittedThisWeek: number } | null = null;
   if (canSeeOrgSummary) {
@@ -199,7 +252,49 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <PlaceholderCard icon={CalendarRange} title="การจองวันนี้" />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Bus className="h-4 w-4 text-primary" /> การจองวันนี้
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-1 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">รถตู้</span>
+              <span className="font-medium text-foreground">{vanTodayCount ?? 0} คัน</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">ห้องประชุม</span>
+              <span className="font-medium text-foreground">{roomTodayCount ?? 0} รายการ</span>
+            </div>
+            <Button asChild size="sm" variant="outline" className="mt-1 self-start">
+              <Link href="/booking">ดูปฏิทินจอง</Link>
+            </Button>
+          </CardContent>
+        </Card>
+        {myVehicle && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Bus className="h-4 w-4 text-primary" /> งานขับรถของฉัน
+              </CardTitle>
+              <CardDescription>{myVehicle.name}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-1 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">วันนี้</span>
+                <span className="font-medium text-foreground">{driverTodayCount} เที่ยว</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">สัปดาห์นี้</span>
+                <span className="font-medium text-foreground">{driverWeekCount} เที่ยว</span>
+              </div>
+              <Button asChild size="sm" variant="outline" className="mt-1 self-start">
+                <Link href="/booking">ดูปฏิทินรถ</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        )}
         <PlaceholderCard icon={Package} title="ทรัพย์สินของฉัน" />
         <PlaceholderCard icon={CalendarDays} title="กิจกรรมที่จะถึง" />
 
