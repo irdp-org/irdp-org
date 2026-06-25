@@ -16,7 +16,7 @@ import {
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/lib/database.types";
 
@@ -126,14 +126,14 @@ export function MonthView({ month, events }: { month: Date; events: CalendarEven
         })}
       </div>
 
-      <Sheet open={!!selectedDay} onOpenChange={(open) => !open && setSelectedDay(null)}>
-        <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl">
-          <SheetHeader>
-            <SheetTitle>{selectedDay && format(selectedDay, "d MMMM yyyy")}</SheetTitle>
-          </SheetHeader>
-          <div className="flex flex-col gap-2 px-4 pb-4">
+      <Dialog open={!!selectedDay} onOpenChange={(open) => !open && setSelectedDay(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{selectedDay && format(selectedDay, "d MMMM yyyy")}</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 py-1">
             {selectedEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">ไม่มีกิจกรรม</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">ไม่มีกิจกรรมในวันนี้</p>
             ) : (
               selectedEvents.map((ev) => (
                 <div key={ev.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-3 text-sm">
@@ -154,8 +154,8 @@ export function MonthView({ month, events }: { month: Date; events: CalendarEven
               ))
             )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
