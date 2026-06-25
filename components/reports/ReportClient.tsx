@@ -1,6 +1,6 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { Download, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -145,9 +145,18 @@ export function ReportClient({ from, to, data, departments = [], employees = [],
           )}
         </div>
 
-        <Button type="submit" className="gap-2 self-start">
-          <Search className="h-4 w-4" /> ดูรายงาน
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" className="gap-2">
+            <Search className="h-4 w-4" /> ดูรายงาน
+          </Button>
+          <a
+            href={`/reports/export?from=${from}&to=${to}${currentDept ? `&dept=${currentDept}` : ""}${currentPerson ? `&person=${currentPerson}` : ""}`}
+            download
+            className="inline-flex items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground shadow-sm hover:bg-secondary/80 transition-colors"
+          >
+            <Download className="h-4 w-4" /> ดาวน์โหลด CSV
+          </a>
+        </div>
       </form>
 
       {/* Summary row */}
