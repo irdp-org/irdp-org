@@ -1,10 +1,7 @@
 "use client";
 
-import { useRouter, usePathname } from "next/navigation";
-import { useState } from "react";
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export type DeptStat = { name: string; value: number };
@@ -78,45 +75,35 @@ type Props = {
 };
 
 export function ReportClient({ from, to, data }: Props) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [fromVal, setFromVal] = useState(from);
-  const [toVal, setToVal] = useState(to);
-
-  function handleSearch() {
-    const params = new URLSearchParams({ from: fromVal, to: toVal });
-    router.push(`${pathname}?${params.toString()}`);
-  }
-
   const assetTotal =
     data.assets.in_stock + data.assets.assigned + data.assets.broken + data.assets.disposed;
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Period selector */}
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+      {/* Period selector — native GET form works reliably on all mobile browsers */}
+      <form method="GET" className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface px-4 py-3">
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">ตั้งแต่วันที่</label>
-          <Input
+          <input
             type="date"
-            value={fromVal}
-            onChange={(e) => setFromVal(e.target.value)}
-            className="w-40"
+            name="from"
+            defaultValue={from}
+            className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">ถึงวันที่</label>
-          <Input
+          <input
             type="date"
-            value={toVal}
-            onChange={(e) => setToVal(e.target.value)}
-            className="w-40"
+            name="to"
+            defaultValue={to}
+            className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
-        <Button onClick={handleSearch} className="gap-2">
+        <Button type="submit" className="gap-2">
           <Search className="h-4 w-4" /> ดูรายงาน
         </Button>
-      </div>
+      </form>
 
       {/* Summary row */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

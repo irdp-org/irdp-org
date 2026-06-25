@@ -16,6 +16,8 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LeaveRequestSheet } from "./LeaveRequestSheet";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
@@ -145,14 +147,18 @@ export function ApprovalList({
   rows,
   role,
   currentEmployeeId,
+  departments = [],
 }: {
   rows: ApprovalQueueRow[];
   role: RoleT;
   currentEmployeeId: string;
+  departments?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<ApprovalQueueRow | null>(null);
+  const [nameFilter, setNameFilter] = useState("");
+  const [deptFilter, setDeptFilter] = useState("all");
 
   function decide(id: string, action: "approve" | "reject" | "return" | "cancel", note?: string) {
     startTransition(async () => {
@@ -181,15 +187,46 @@ export function ApprovalList({
   const canCancelApproved = role === "admin" || role === "hr";
   const canExport = role === "hr" || role === "admin";
 
+  const filtered = rows.filter((r) => {
+    const matchName = !nameFilter || r.employee.full_name.toLowerCase().includes(nameFilter.toLowerCase());
+    const matchDept = deptFilter === "all" || r.employee.department_id === deptFilter;
+    return matchName && matchDept;
+  });
+
   if (rows.length === 0) {
     return <EmptyState icon={ClipboardList} title="ไม่มีคำขอในรายการนี้" />;
   }
 
   return (
     <div className="flex flex-col gap-3">
-      {canExport && <LeaveExportPanel rows={rows} />}
+      {/* Filter bar */}
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-3 py-3 sm:flex-row sm:items-center">
+        <Input
+          placeholder="ค้นหาชื่อพนักงาน..."
+          value={nameFilter}
+          onChange={(e) => setNameFilter(e.target.value)}
+          className="h-9 text-sm"
+        />
+        {departments.length > 0 && (
+          <Select value={deptFilter} onValueChange={setDeptFilter}>
+            <SelectTrigger className="h-9 w-full sm:w-44 text-sm">
+              <SelectValue placeholder="ทุกฝ่าย" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">ทุกฝ่าย</SelectItem>
+              {departments.map((d) => (
+                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+      {canExport && <LeaveExportPanel rows={filtered} />}
+      {filtered.length === 0 && (
+        <EmptyState icon={ClipboardList} title="ไม่พบรายการที่ตรงกับตัวกรอง" />
+      )}
       <ul className="flex flex-col gap-2">
-      {rows.map((r) => {
+      {filtered.map((r) => {
         const iAcknowledged = r.acknowledgements.some((a) => a.actor_id === currentEmployeeId);
         return (
           <li key={r.id} className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-3">

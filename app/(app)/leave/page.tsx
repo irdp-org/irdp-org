@@ -52,8 +52,12 @@ export default async function LeavePage({
 
   const showApprovals = CAN_SEE_APPROVALS.includes(employee.role);
   let approvalRows: ApprovalQueueRow[] = [];
+  let departments: { id: string; name: string }[] = [];
 
   if (showApprovals) {
+    const { data: depts } = await supabase.from("departments").select("id, name").order("name");
+    departments = depts ?? [];
+
     // RLS scopes: dept_head -> own department, hr/admin/exec -> everyone.
     // Limit 500 to avoid missing records in orgs with many requests.
     const { data: queue } = await supabase
@@ -121,7 +125,7 @@ export default async function LeavePage({
           mine={<LeaveRequestsClient requests={ownRequests} />}
           approvals={
             showApprovals ? (
-              <ApprovalList rows={approvalRows} role={employee.role} currentEmployeeId={employee.id} />
+              <ApprovalList rows={approvalRows} role={employee.role} currentEmployeeId={employee.id} departments={departments} />
             ) : null
           }
         />

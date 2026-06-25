@@ -49,6 +49,7 @@ export interface Database {
           user_id: string | null;
           email: string;
           full_name: string;
+          nickname: string | null;
           department_id: string | null;
           role: RoleT;
           position: string | null;
@@ -67,6 +68,7 @@ export interface Database {
           user_id?: string | null;
           email: string;
           full_name: string;
+          nickname?: string | null;
           department_id?: string | null;
           role?: RoleT;
           position?: string | null;
@@ -357,11 +359,15 @@ export interface Database {
         Row: {
           id: string;
           full_name: string;
+          nickname: string | null;
           department_id: string | null;
           position: string | null;
           avatar_url: string | null;
           role: RoleT;
           status: EmployeeStatusT;
+          phone: string | null;
+          email: string;
+          birthdate: string | null;
         };
         Relationships: [];
       };

@@ -190,7 +190,7 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
               <SheetHeader>
                 <SheetTitle>{LEAVE_LABELS_TH[detailItem.leave_code]}</SheetTitle>
               </SheetHeader>
-              <div className="flex flex-col gap-3 px-4 pb-6 text-sm">
+              <div className="flex flex-col gap-3 px-4 py-6 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">สถานะ</span>
                   <Badge variant={STATUS_VARIANT[detailItem.status]}>{LEAVE_STATUS_LABELS_TH[detailItem.status]}</Badge>

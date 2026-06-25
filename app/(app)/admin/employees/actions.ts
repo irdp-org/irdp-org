@@ -12,6 +12,7 @@ const employeeSchema = z.object({
     .email("อีเมลไม่ถูกต้อง")
     .refine((e) => e.toLowerCase().endsWith("@irdp.org"), "ต้องเป็นอีเมล @irdp.org เท่านั้น"),
   fullName: z.string().min(1, "กรุณากรอกชื่อ-นามสกุล"),
+  nickname: z.string().optional(),
   departmentId: z.string().min(1, "กรุณาเลือกฝ่าย"),
   role: z.enum(["employee", "dept_head", "hr", "admin", "exec"]),
   position: z.string().optional(),
@@ -25,6 +26,7 @@ function parseForm(formData: FormData) {
   return employeeSchema.safeParse({
     email: formData.get("email"),
     fullName: formData.get("fullName"),
+    nickname: formData.get("nickname") || undefined,
     departmentId: formData.get("departmentId"),
     role: formData.get("role"),
     position: formData.get("position") || undefined,
@@ -47,6 +49,7 @@ export async function createEmployee(formData: FormData) {
   const { error } = await supabase.from("employees").insert({
     email: parsed.data.email.toLowerCase(),
     full_name: parsed.data.fullName,
+    nickname: parsed.data.nickname || null,
     department_id: parsed.data.departmentId,
     role: parsed.data.role,
     position: parsed.data.position || null,
@@ -74,6 +77,7 @@ export async function updateEmployee(id: string, formData: FormData) {
     .from("employees")
     .update({
       full_name: parsed.data.fullName,
+      nickname: parsed.data.nickname || null,
       department_id: parsed.data.departmentId,
       role: parsed.data.role,
       position: parsed.data.position || null,

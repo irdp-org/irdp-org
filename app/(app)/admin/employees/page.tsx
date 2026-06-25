@@ -15,7 +15,7 @@ export default async function EmployeesAdminPage() {
   const [{ data: employees }, { data: departments }] = await Promise.all([
     supabase
       .from("employees")
-      .select("id, email, full_name, department_id, role, position, status, hire_date, phone, birthdate")
+      .select("id, email, full_name, nickname, department_id, role, position, status, hire_date, phone, birthdate")
       .order("full_name"),
     supabase.from("departments").select("id, name").order("name"),
   ]);

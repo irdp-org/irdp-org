@@ -47,7 +47,11 @@ export function EmployeeSheet({
     const formData = new FormData(formRef.current);
     formData.set("departmentId", departmentId);
     formData.set("role", role);
-    if (existing) formData.set("status", status);
+    if (existing) {
+      formData.set("status", status);
+      // email input is disabled (visual only) — re-inject the value so schema passes
+      formData.set("email", existing.email ?? "");
+    }
 
     startTransition(async () => {
       const action = existing ? updateEmployee.bind(null, existing.id) : createEmployee;
@@ -82,6 +86,11 @@ export function EmployeeSheet({
           <div className="flex flex-col gap-1.5">
             <Label>ชื่อ-นามสกุล</Label>
             <Input name="fullName" defaultValue={existing?.full_name} required />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>ชื่อเล่น</Label>
+            <Input name="nickname" defaultValue={existing?.nickname ?? ""} placeholder="ไม่บังคับ" />
           </div>
 
           <div className="flex flex-col gap-1.5">
