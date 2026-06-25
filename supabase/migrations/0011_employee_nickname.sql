@@ -4,7 +4,10 @@
 alter table employees add column if not exists nickname text;
 
 -- Expand view to include contact fields shown in the employee directory
-create or replace view employee_directory as
+-- Must drop first because PostgreSQL doesn't allow reordering/inserting columns via CREATE OR REPLACE
+drop view if exists employee_directory;
+
+create view employee_directory as
   select
     id,
     full_name,
