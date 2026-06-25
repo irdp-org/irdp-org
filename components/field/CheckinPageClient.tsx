@@ -96,7 +96,8 @@ function WfhCheckinCard({ req }: { req: CheckinRequest }) {
           <Button
             variant={hasMorning ? "default" : "outline"}
             className="h-auto py-3 text-sm"
-            disabled={isPending}
+            disabled={isPending || !hasMorning}
+            title={!hasMorning ? "กรุณาเช็คอินเช้าก่อน" : undefined}
             onClick={() => checkin("wfh_evening")}
           >
             <Clock className="h-4 w-4" />
@@ -170,7 +171,7 @@ function OffsiteCheckinCard({ req }: { req: CheckinRequest }) {
             <CheckCircle2 className="h-4 w-4" />
             เช็คเอ้าท์แล้ว
           </div>
-        ) : canCheckin ? (
+        ) : canCheckin && hasIn ? (
           <CheckinDialog
             fieldRequestId={req.id}
             kind="out"
@@ -181,7 +182,12 @@ function OffsiteCheckinCard({ req }: { req: CheckinRequest }) {
             requiredPhotos={req.location_required_photos ?? 1}
           />
         ) : (
-          <Button variant="outline" disabled className="h-auto py-3 text-sm">
+          <Button
+            variant="outline"
+            disabled
+            className="h-auto py-3 text-sm"
+            title={!hasIn ? "กรุณาเช็คอินก่อน" : undefined}
+          >
             เช็คเอ้าท์
           </Button>
         )}

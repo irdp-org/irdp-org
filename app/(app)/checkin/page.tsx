@@ -39,13 +39,14 @@ export default async function CheckinPage() {
   const supabase = await createClient();
   const today = todayBangkok();
 
-  // Today's approved field_requests for this employee
+  // Today's approved offsite/wfh requests — OT excluded (no GPS check-in needed)
   const { data: requests } = await supabase
     .from("field_requests")
     .select("id, type, location_id, work_date, planned_start, planned_end, status, reason")
     .eq("employee_id", employee.id)
     .eq("work_date", today)
     .eq("status", "approved")
+    .in("type", ["offsite", "wfh"])
     .order("planned_start");
 
   // Fetch location details for offsite requests
