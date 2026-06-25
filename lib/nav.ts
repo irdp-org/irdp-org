@@ -14,6 +14,7 @@ import {
   Megaphone,
   Building2,
   BookUser,
+  ScrollText,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -42,6 +43,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/directory", label: "สมุดรายชื่อ", icon: BookUser },
   { href: "/org", label: "ข้อมูลองค์กร", icon: Building2 },
   { href: "/reports", label: "รีพอร์ต", icon: BarChart2, roles: ["admin", "hr", "exec"] },
+  { href: "/admin/logs", label: "บันทึกกิจกรรม", icon: ScrollText, roles: ["admin", "hr"] },
   { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, roles: ["admin"] },
 ];
 

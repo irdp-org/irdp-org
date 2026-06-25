@@ -16,6 +16,7 @@ import {
   UpcomingEventsCard,
   AdminStatsCard,
   OrgSummaryCard,
+  TenureCard,
 } from "./dashboard-cards";
 
 export default async function DashboardPage() {
@@ -36,6 +37,10 @@ export default async function DashboardPage() {
       />
 
       <div className="grid grid-cols-1 gap-4 px-4 sm:grid-cols-2 md:px-6 lg:grid-cols-3">
+        <Suspense fallback={<CardSkeleton />}>
+          <TenureCard />
+        </Suspense>
+
         <Suspense fallback={<CardSkeleton rows={3} />}>
           <LeaveBalanceCard />
         </Suspense>

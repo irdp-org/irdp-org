@@ -8,7 +8,7 @@ import Link from "next/link";
 import { startOfWeek, endOfWeek } from "date-fns";
 import {
   CalendarDays, Clock, Package, Users, ClipboardList,
-  ThumbsUp, MapPin, Bus, BarChart2, ShieldCheck,
+  ThumbsUp, MapPin, Bus, BarChart2, ShieldCheck, Briefcase,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
@@ -383,6 +383,44 @@ export async function AdminStatsCard() {
         <Button asChild size="sm" variant="outline" className="mt-1 self-start">
           <Link href="/admin/assets">ดูคลังทรัพย์สิน</Link>
         </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Tenure Card ─────────────────────────────────────────────────────────────
+export async function TenureCard() {
+  const employee = await getCurrentEmployee();
+  if (!employee || !employee.hire_date) return null;
+
+  const hire = new Date(employee.hire_date);
+  const now = new Date();
+  const totalMonths =
+    (now.getFullYear() - hire.getFullYear()) * 12 + (now.getMonth() - hire.getMonth());
+  const years = Math.floor(totalMonths / 12);
+  const months = totalMonths % 12;
+
+  const hireTh = hire.toLocaleDateString("th-TH", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const tenureLabel =
+    years > 0
+      ? `${years} ปี ${months > 0 ? `${months} เดือน` : ""}`
+      : `${months} เดือน`;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Briefcase className="h-4 w-4 text-primary" /> อายุงาน
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1 text-sm">
+        <p className="text-2xl font-semibold text-foreground">{tenureLabel.trim()}</p>
+        <p className="text-xs text-muted-foreground">เริ่มปฏิบัติงาน {hireTh}</p>
       </CardContent>
     </Card>
   );

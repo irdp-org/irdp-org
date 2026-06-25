@@ -132,23 +132,77 @@ export default async function OrgPage() {
           <div className="px-4 py-4 flex flex-col gap-3 text-sm text-muted-foreground leading-relaxed">
             <p>
               มูลนิธิสถาบันวิจัยและพัฒนาองค์กรภาครัฐ (IRDP) ก่อตั้งเมื่อวันที่ 30 เมษายน 2555
-              จดทะเบียนเป็นมูลนิธิถูกต้องตามกฎหมาย มีวัตถุประสงค์ในการส่งเสริมการวิจัย
-              พัฒนา และให้คำปรึกษาแก่หน่วยงานภาครัฐและรัฐวิสาหกิจ
+              จดทะเบียนเป็นมูลนิธิถูกต้องตามกฎหมาย
             </p>
             <p>
               IRDP ได้รับการจดทะเบียนเป็น <strong className="text-foreground">ศูนย์ที่ปรึกษาไทย</strong> กับกระทรวงการคลัง
               ทำให้มีสถานะเป็นที่ปรึกษาที่ได้รับการรับรองสำหรับโครงการภาครัฐ
             </p>
             <p>
-              ภารกิจหลักครอบคลุม: การให้คำปรึกษาด้านการบริหารจัดการองค์กร
-              การฝึกอบรมบุคลากร การวิจัยเชิงนโยบาย และการพัฒนาระบบการทำงาน
-              ให้แก่หน่วยงานของรัฐทั่วประเทศ
-            </p>
-            <p>
               ได้รับยกเว้นภาษีเงินได้และภาษีมูลค่าเพิ่ม ตามประกาศกระทรวงการคลัง
               เนื่องจากเป็นองค์กรสาธารณประโยชน์
             </p>
           </div>
+        </div>
+
+        {/* พันธกิจ */}
+        <div className="rounded-2xl border border-border bg-white overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-surface">
+            <p className="text-sm font-semibold text-foreground">พันธกิจ</p>
+          </div>
+          <div className="px-4 py-4 text-sm text-muted-foreground leading-relaxed">
+            <p>
+              มูลนิธิฯ มุ่งมั่นส่งเสริม สนับสนุน และพัฒนาองค์กรภาครัฐและรัฐวิสาหกิจให้มีสมรรถนะสูง
+              ด้วยการวิจัย การให้คำปรึกษา และการพัฒนาบุคลากร เพื่อยกระดับประสิทธิภาพการบริการสาธารณะ
+              และสร้างคุณค่าที่ยั่งยืนให้แก่สังคมและประเทศชาติ
+            </p>
+          </div>
+        </div>
+
+        {/* ภารกิจ */}
+        <div className="rounded-2xl border border-border bg-white overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-surface">
+            <p className="text-sm font-semibold text-foreground">ภารกิจหลัก</p>
+          </div>
+          <ul className="divide-y divide-border">
+            {[
+              { no: "1", text: "ให้คำปรึกษาและให้คำแนะนำด้านการบริหารจัดการและพัฒนาองค์กรภาครัฐและรัฐวิสาหกิจ" },
+              { no: "2", text: "ดำเนินการวิจัยและพัฒนาองค์ความรู้ด้านการบริหารจัดการภาครัฐ" },
+              { no: "3", text: "ฝึกอบรมและพัฒนาบุคลากรของหน่วยงานภาครัฐและรัฐวิสาหกิจ" },
+              { no: "4", text: "จัดทำและเผยแพร่ผลงานวิชาการ รายงาน และสื่อความรู้ด้านการพัฒนาองค์กรภาครัฐ" },
+              { no: "5", text: "ส่งเสริมความร่วมมือระหว่างหน่วยงานภาครัฐและภาคเอกชนในการพัฒนาองค์กร" },
+            ].map(({ no, text }) => (
+              <li key={no} className="flex items-start gap-3 px-4 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  {no}
+                </span>
+                <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* วัตถุประสงค์ */}
+        <div className="rounded-2xl border border-border bg-white overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-surface">
+            <p className="text-sm font-semibold text-foreground">วัตถุประสงค์</p>
+          </div>
+          <ul className="divide-y divide-border">
+            {[
+              { no: "1", text: "เพื่อส่งเสริมและสนับสนุนการวิจัยและพัฒนาองค์กรภาครัฐและรัฐวิสาหกิจให้มีประสิทธิภาพและประสิทธิผลสูงขึ้น" },
+              { no: "2", text: "เพื่อเสริมสร้างขีดความสามารถและสมรรถนะของบุคลากรภาครัฐในการบริหารจัดการองค์กรอย่างมืออาชีพ" },
+              { no: "3", text: "เพื่อพัฒนาองค์ความรู้และนวัตกรรมด้านการบริหารจัดการภาครัฐที่สามารถนำไปประยุกต์ใช้ได้จริง" },
+              { no: "4", text: "เพื่อเป็นศูนย์กลางการแลกเปลี่ยนเรียนรู้และเครือข่ายความร่วมมือระหว่างหน่วยงานภาครัฐทั้งในและต่างประเทศ" },
+              { no: "5", text: "เพื่อดำเนินกิจกรรมสาธารณประโยชน์โดยไม่มุ่งหวังผลกำไร และเป็นองค์กรที่มีธรรมาภิบาล" },
+            ].map(({ no, text }) => (
+              <li key={no} className="flex items-start gap-3 px-4 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
+                  {no}
+                </span>
+                <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
+              </li>
+            ))}
+          </ul>
         </div>
 
         {/* เอกสารสำคัญ */}
