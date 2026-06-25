@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { DoorOpen, Plus, X, LayoutList, CalendarRange } from "lucide-react";
+import { DoorOpen, Plus, X, Trash2, LayoutList, CalendarRange } from "lucide-react";
 import { format, isToday, isTomorrow } from "date-fns";
 import { th } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -21,7 +21,7 @@ import {
 import { EmptyState } from "@/components/shell/EmptyState";
 import { RoomBookingSheet, type RoomOption } from "./RoomBookingSheet";
 import { RoomTimeline, type TimelineBooking } from "./RoomTimeline";
-import { cancelRoomBooking } from "@/app/(app)/booking/actions";
+import { cancelRoomBooking, adminDeleteRoomBooking } from "@/app/(app)/booking/actions";
 
 export type RoomBookingRow = {
   id: string;
@@ -91,6 +91,13 @@ export function RoomBookingClient({ bookings, rooms, currentEmployeeId, canEdit 
   function handleCancel(id: string) {
     startTransition(async () => {
       await cancelRoomBooking(id);
+      router.refresh();
+    });
+  }
+
+  function handleAdminDelete(id: string) {
+    startTransition(async () => {
+      await adminDeleteRoomBooking(id);
       router.refresh();
     });
   }
@@ -218,38 +225,54 @@ export function RoomBookingClient({ bookings, rooms, currentEmployeeId, canEdit 
                           <p className="text-xs text-muted-foreground">จองโดย {b.requester_name}</p>
                         </div>
 
-                        {cancellable && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                className="ml-2 shrink-0 text-muted-foreground hover:text-danger"
-                                disabled={isPending}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  ต้องการยกเลิกการจอง{room?.name ? `ห้อง${room.name}` : "ห้องประชุม"}
-                                  {b.title ? ` "${b.title}"` : ""} ใช่หรือไม่?
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>ไม่</AlertDialogCancel>
-                                <AlertDialogAction
-                                  className="bg-danger hover:bg-danger/90"
-                                  onClick={() => handleCancel(b.id)}
-                                >
-                                  ยกเลิกการจอง
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
+                        <div className="ml-2 flex shrink-0 items-center gap-1">
+                          {cancellable && b.status === "booked" && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    ต้องการยกเลิกการจอง{room?.name ? `ห้อง${room.name}` : "ห้องประชุม"}{b.title ? ` "${b.title}"` : ""} ใช่หรือไม่?
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>ไม่</AlertDialogCancel>
+                                  <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleCancel(b.id)}>
+                                    ยกเลิกการจอง
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                          {canEdit && (
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>ลบรายการจองห้องประชุม</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    ลบรายการนี้ออกจากระบบถาวร ไม่สามารถกู้คืนได้
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                                  <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleAdminDelete(b.id)}>
+                                    ลบถาวร
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          )}
+                        </div>
                       </li>
                     );
                   })}

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { Check, Undo2, X, Ban, Pencil, ThumbsUp, AlertTriangle, Trash2 } from "lucide-react";
+import { Check, Undo2, X, Ban, Pencil, ThumbsUp, AlertTriangle, Trash2, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -25,6 +25,7 @@ import {
   decideLeaveRequest,
   acknowledgeLeaveRequest,
   adminCancelApprovedLeave,
+  adminDeleteLeaveRequest,
 } from "@/app/(app)/leave/approval-actions";
 import { LeaveExportPanel } from "./LeaveExportPanel";
 import { ClipboardList } from "lucide-react";
@@ -181,6 +182,13 @@ export function ApprovalList({
     });
   }
 
+  function hardDelete(id: string) {
+    startTransition(async () => {
+      await adminDeleteLeaveRequest(id);
+      router.refresh();
+    });
+  }
+
   const canApprove = role === "dept_head" || role === "admin";
   const isHr = role === "hr";
   const isExec = role === "exec";
@@ -306,6 +314,30 @@ export function ApprovalList({
                   </ul>
                 )}
               </div>
+            )}
+
+            {canCancelApproved && (
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="ghost" size="sm" disabled={isPending} className="self-start text-danger hover:text-danger">
+                    <Trash className="h-4 w-4" /> ลบรายการนี้
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>ลบคำขอลาถาวร</DialogTitle>
+                    <DialogDescription>
+                      ลบคำขอลาของ {r.employee.full_name} ({LEAVE_LABELS_TH[r.leave_code]} {r.hours} ชม.) ออกจากระบบถาวร ไม่สามารถกู้คืนได้
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogTrigger asChild><Button variant="outline">ยกเลิก</Button></DialogTrigger>
+                    <Button variant="destructive" disabled={isPending} onClick={() => hardDelete(r.id)}>
+                      ลบถาวร
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             )}
           </li>
         );

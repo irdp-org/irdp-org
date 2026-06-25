@@ -391,6 +391,39 @@ export async function cancelRoomBooking(id: string) {
   return { ok: true };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin hard-delete (admin/hr only — bypasses status, removes record entirely)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function adminDeleteVanBooking(id: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee || !["admin", "hr"].includes(employee.role)) return { error: "unauthorized" };
+
+  await deleteVanFromGoogle(id);
+
+  const admin = createAdminClient();
+  await admin.from("van_passengers").delete().eq("booking_id", id);
+  const { error } = await admin.from("van_bookings").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+export async function adminDeleteRoomBooking(id: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee || !["admin", "hr"].includes(employee.role)) return { error: "unauthorized" };
+
+  await deleteRoomFromGoogle(id);
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("room_bookings").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
 export async function updateRoomBooking(id: string, formData: FormData) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "unauthorized" };

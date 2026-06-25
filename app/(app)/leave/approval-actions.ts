@@ -201,6 +201,41 @@ export async function adminCancelApprovedLeave(id: string, reason: string) {
   return { ok: true };
 }
 
+/**
+ * Hard-delete a leave request — admin/hr only, any status.
+ * Also removes calendar event (DB + Google).
+ */
+export async function adminDeleteLeaveRequest(id: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee || (employee.role !== "admin" && employee.role !== "hr")) {
+    return { error: "unauthorized" };
+  }
+
+  const admin = createAdminClient();
+
+  // Clean up calendar event first
+  const { data: calRow } = await admin
+    .from("calendar_events")
+    .select("id, google_event_id")
+    .eq("source_module", "leave")
+    .eq("source_id", id)
+    .maybeSingle();
+
+  if (calRow) {
+    await admin.from("calendar_events").delete().eq("id", calRow.id);
+    if (calRow.google_event_id) await deleteEvent(calRow.google_event_id);
+  }
+
+  // Delete related approvals and the request itself
+  await admin.from("approvals").delete().eq("entity", "leave_requests").eq("entity_id", id);
+  const { error } = await admin.from("leave_requests").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/leave");
+  revalidatePath("/calendar");
+  return { ok: true };
+}
+
 export async function markLeaveExported(ids: string[]) {
   const employee = await getCurrentEmployee();
   if (!employee || (employee.role !== "admin" && employee.role !== "hr")) {

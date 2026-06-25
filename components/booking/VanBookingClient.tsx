@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bus, Plus, X, MapPin, Users } from "lucide-react";
+import { Bus, Plus, X, Trash2, MapPin, Users } from "lucide-react";
 import { format, isToday, isTomorrow } from "date-fns";
 import { th } from "date-fns/locale";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { VanBookingSheet, type EmployeeOption } from "./VanBookingSheet";
-import { cancelVanBooking } from "@/app/(app)/booking/actions";
+import { cancelVanBooking, adminDeleteVanBooking } from "@/app/(app)/booking/actions";
 
 export type VanBookingRow = {
   id: string;
@@ -94,6 +94,13 @@ export function VanBookingClient({
   function handleCancel(id: string) {
     startTransition(async () => {
       await cancelVanBooking(id);
+      router.refresh();
+    });
+  }
+
+  function handleAdminDelete(id: string) {
+    startTransition(async () => {
+      await adminDeleteVanBooking(id);
       router.refresh();
     });
   }
@@ -191,37 +198,54 @@ export function VanBookingClient({
                         )}
                       </div>
 
-                      {cancellable && (
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="ml-2 shrink-0 text-muted-foreground hover:text-danger"
-                              disabled={isPending}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                ต้องการยกเลิกการจองรถตู้{b.destination ? ` ไป${b.destination}` : ""} ใช่หรือไม่?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>ไม่</AlertDialogCancel>
-                              <AlertDialogAction
-                                className="bg-danger hover:bg-danger/90"
-                                onClick={() => handleCancel(b.id)}
-                              >
-                                ยกเลิกการจอง
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      )}
+                      <div className="ml-2 flex shrink-0 items-center gap-1">
+                        {cancellable && b.status === "booked" && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  ต้องการยกเลิกการจองรถตู้{b.destination ? ` ไป${b.destination}` : ""} ใช่หรือไม่?
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>ไม่</AlertDialogCancel>
+                                <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleCancel(b.id)}>
+                                  ยกเลิกการจอง
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                        {canEdit && (
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>ลบรายการจองรถตู้</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  ลบรายการนี้ออกจากระบบถาวร ไม่สามารถกู้คืนได้
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                                <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleAdminDelete(b.id)}>
+                                  ลบถาวร
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        )}
+                      </div>
                     </li>
                   );
                 })}
