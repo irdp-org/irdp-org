@@ -395,10 +395,20 @@ export async function TenureCard() {
 
   const hire = new Date(employee.hire_date);
   const now = new Date();
-  const totalMonths =
-    (now.getFullYear() - hire.getFullYear()) * 12 + (now.getMonth() - hire.getMonth());
-  const years = Math.floor(totalMonths / 12);
-  const months = totalMonths % 12;
+
+  let years = now.getFullYear() - hire.getFullYear();
+  let months = now.getMonth() - hire.getMonth();
+  let days = now.getDate() - hire.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    days += prevMonth.getDate();
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
 
   const hireTh = hire.toLocaleDateString("th-TH", {
     year: "numeric",
@@ -406,10 +416,10 @@ export async function TenureCard() {
     day: "numeric",
   });
 
-  const tenureLabel =
-    years > 0
-      ? `${years} ปี ${months > 0 ? `${months} เดือน` : ""}`
-      : `${months} เดือน`;
+  const parts: string[] = [];
+  if (years > 0) parts.push(`${years} ปี`);
+  if (months > 0) parts.push(`${months} เดือน`);
+  if (days > 0 || parts.length === 0) parts.push(`${days} วัน`);
 
   return (
     <Card>
@@ -419,7 +429,7 @@ export async function TenureCard() {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-1 text-sm">
-        <p className="text-2xl font-semibold text-foreground">{tenureLabel.trim()}</p>
+        <p className="text-xl font-semibold text-foreground">{parts.join(" ")}</p>
         <p className="text-xs text-muted-foreground">เริ่มปฏิบัติงาน {hireTh}</p>
       </CardContent>
     </Card>

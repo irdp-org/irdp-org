@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 import { canEdit } from "@/lib/rbac";
 
@@ -90,5 +91,28 @@ export async function updateEmployee(id: string, formData: FormData) {
 
   if (error) return { error: error.message };
   revalidatePath("/admin/employees");
+  return { ok: true };
+}
+
+/**
+ * Force-recompute leave balances for a specific employee and year.
+ * Needed when hire_date is edited — the DB trigger (migration 0014) handles
+ * future edits automatically; this action provides a manual escape hatch for
+ * existing rows that were set before the trigger existed.
+ */
+export async function recomputeLeaveBalance(employeeId: string, year?: number) {
+  const actor = await getCurrentEmployee();
+  if (!actor || (actor.role !== "admin" && actor.role !== "hr")) {
+    return { error: "unauthorized" };
+  }
+  const targetYear = year ?? new Date().getFullYear();
+  const admin = createAdminClient();
+  const { error } = await admin.rpc("fn_recompute_leave_balance", {
+    p_emp: employeeId,
+    p_year: targetYear,
+  });
+  if (error) return { error: error.message };
+  revalidatePath("/admin/employees");
+  revalidatePath("/leave");
   return { ok: true };
 }

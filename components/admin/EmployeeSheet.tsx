@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { roleLabelTh } from "@/lib/rbac";
-import { createEmployee, updateEmployee } from "@/app/(app)/admin/employees/actions";
+import { createEmployee, updateEmployee, recomputeLeaveBalance } from "@/app/(app)/admin/employees/actions";
 import type { RoleT } from "@/lib/database.types";
 import type { EmployeeRow } from "./EmployeeListClient";
 
@@ -153,10 +153,28 @@ export function EmployeeSheet({
 
           {error && <p className="text-sm text-danger">{error}</p>}
 
-          <SheetFooter className="px-0">
+          <SheetFooter className="flex flex-col gap-2 px-0">
             <Button type="submit" disabled={isPending} className="w-full">
               บันทึก
             </Button>
+            {existing && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={isPending}
+                className="w-full text-xs"
+                onClick={() => {
+                  startTransition(async () => {
+                    const res = await recomputeLeaveBalance(existing.id);
+                    if (res && "error" in res) setError(res.error ?? "เกิดข้อผิดพลาด");
+                    else { setError(null); router.refresh(); }
+                  });
+                }}
+              >
+                คำนวณวันลาพักร้อนใหม่ (ปีนี้)
+              </Button>
+            )}
           </SheetFooter>
         </form>
       </SheetContent>

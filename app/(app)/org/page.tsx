@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Image from "next/image";
 import { MapPin, Phone, Mail, Globe, Building2, FileText, ExternalLink, CreditCard } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
@@ -59,10 +60,15 @@ export default async function OrgPage() {
       <div className="px-4 md:px-6 flex flex-col gap-4">
 
         {/* Hero */}
-        <div className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-primary/10 px-6 py-6 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-white text-xl font-bold shadow-md">
-            IR
-          </div>
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-gradient-to-br from-primary/5 to-primary/10 px-6 py-6 text-center">
+          <Image
+            src="/logo/LOGO_IRDP_FULL_ENG.jpg"
+            alt="IRDP Logo"
+            width={220}
+            height={100}
+            className="object-contain"
+            priority
+          />
           <h1 className="text-base font-bold text-foreground leading-snug">
             มูลนิธิสถาบันวิจัยและพัฒนาองค์กรภาครัฐ
           </h1>
@@ -113,8 +119,8 @@ export default async function OrgPage() {
             <p className="text-sm font-semibold text-foreground">บัญชีธนาคารสำหรับเบิกค่าใช้จ่าย</p>
           </div>
           <div className="flex items-center gap-4 px-4 py-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#1a5276] text-white text-xs font-bold">
-              KTB
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white border border-border overflow-hidden">
+              <Image src="/logo/ktb.svg" alt="KTB" width={44} height={44} className="object-contain" />
             </div>
             <div>
               <p className="text-sm font-semibold text-foreground">มูลนิธิสถาบันวิจัยและพัฒนาองค์กรภาครัฐ</p>
