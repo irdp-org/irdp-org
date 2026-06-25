@@ -1,9 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { getSignedAvatarUrl } from "@/lib/storage";
+import { getAvatarUrl } from "@/lib/storage";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300; // employees change infrequently; 5-min cache
 
 function birthdayDisplay(birthdate: string | null): string {
   if (!birthdate) return "";
@@ -31,8 +31,8 @@ export default async function DirectoryPage() {
   const { data: depts } = await admin.from("departments").select("id, name").in("id", deptIds);
   const deptMap = new Map((depts ?? []).map((d) => [d.id, d.name]));
 
-  // Batch signed avatar URLs
-  const avatarUrls = await Promise.all(rows.map((e) => getSignedAvatarUrl(e.avatar_url)));
+  // Public bucket — sync URL construction, zero API calls
+  const avatarUrls = rows.map((e) => getAvatarUrl(e.avatar_url));
 
   return (
     <div>

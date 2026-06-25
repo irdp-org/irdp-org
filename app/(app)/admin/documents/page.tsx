@@ -5,7 +5,7 @@ import { canEdit } from "@/lib/rbac";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { OrgDocumentsClient } from "@/components/admin/OrgDocumentsClient";
 
-export const revalidate = 0;
+export const revalidate = 120; // server actions call revalidatePath on mutation
 
 const CATEGORY_LABELS: Record<string, string> = {
   regulation: "ระเบียบ",

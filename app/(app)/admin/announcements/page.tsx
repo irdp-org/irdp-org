@@ -5,7 +5,7 @@ import { canEdit } from "@/lib/rbac";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { AnnouncementsAdminClient } from "@/components/admin/AnnouncementsAdminClient";
 
-export const revalidate = 0;
+export const revalidate = 60; // server actions call revalidatePath on mutation
 
 export type AdminAnnouncement = {
   id: string;
