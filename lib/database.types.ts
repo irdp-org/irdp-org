@@ -408,6 +408,10 @@ export interface Database {
         Args: { p_emp: string; p_date: string };
         Returns: { week_start: string; week_end: string; week_ot_hours: number; over_36: boolean };
       };
+      fn_recompute_leave_balance: {
+        Args: { p_emp: string; p_year: number };
+        Returns: undefined;
+      };
     };
     Enums: {
       role_t: RoleT;
