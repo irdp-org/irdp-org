@@ -54,6 +54,7 @@ export interface Database {
           role: RoleT;
           position: string | null;
           phone: string | null;
+          desk_phone: string | null;
           birthdate: string | null;
           hire_date: string | null;
           address: string | null;
@@ -73,6 +74,7 @@ export interface Database {
           role?: RoleT;
           position?: string | null;
           phone?: string | null;
+          desk_phone?: string | null;
           birthdate?: string | null;
           hire_date?: string | null;
           address?: string | null;
@@ -366,6 +368,7 @@ export interface Database {
           role: RoleT;
           status: EmployeeStatusT;
           phone: string | null;
+          desk_phone: string | null;
           email: string;
           birthdate: string | null;
         };

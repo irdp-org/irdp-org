@@ -5,7 +5,7 @@ import type { Database } from "@/lib/database.types";
 export type Employee = Database["public"]["Tables"]["employees"]["Row"];
 
 const EMPLOYEE_COLUMNS =
-  "id, user_id, email, full_name, department_id, role, position, avatar_url, status, hire_date, address, phone, birthdate, education";
+  "id, user_id, email, full_name, department_id, role, position, avatar_url, status, hire_date, address, phone, desk_phone, birthdate, education";
 
 /**
  * Resolves the signed-in user's `employees` row (RLS already scopes this to

@@ -22,12 +22,12 @@ function monthRange() {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; dept?: string; person?: string }>;
 }) {
   const employee = await getCurrentEmployee();
   if (!employee || !ALLOWED.includes(employee.role)) redirect("/");
 
-  const { from: fromParam, to: toParam } = await searchParams;
+  const { from: fromParam, to: toParam, dept: deptParam, person: personParam } = await searchParams;
   const defaults = monthRange();
   const from = fromParam ?? defaults.from;
   const to = toParam ?? defaults.to;
@@ -74,10 +74,9 @@ export default async function ReportsPage({
       .lte("start_at", toTs),
     supabase.from("assets").select("status"),
     supabase.from("departments").select("id, name").order("name"),
-    supabase.from("employee_directory").select("id, department_id").eq("status", "active"),
+    supabase.from("employee_directory").select("id, full_name, department_id").eq("status", "active").order("full_name"),
   ]);
 
-  // Build employee → dept map
   const empDeptMap = new Map<string, string>(
     (employees ?? []).map((e) => [e.id, e.department_id ?? ""])
   );
@@ -85,12 +84,30 @@ export default async function ReportsPage({
     (departments ?? []).map((d) => [d.id, d.name])
   );
 
+  // Apply dept/person filter to raw rows before aggregation
+  const filterEmpIds = new Set<string>();
+  if (deptParam) {
+    for (const [empId, deptId] of empDeptMap.entries()) {
+      if (deptId === deptParam) filterEmpIds.add(empId);
+    }
+  } else if (personParam) {
+    filterEmpIds.add(personParam);
+  }
+
+  const filteredLeave = filterEmpIds.size > 0
+    ? (leaveRows ?? []).filter((r) => filterEmpIds.has(r.employee_id))
+    : (leaveRows ?? []);
+
+  const filteredField = filterEmpIds.size > 0
+    ? (fieldRows ?? []).filter((r) => filterEmpIds.has(r.employee_id))
+    : (fieldRows ?? []);
+
   // ── Leave aggregation ─────────────────────────────────────────────────────
   const leaveByTypeMap = new Map<string, number>();
   const leaveByDeptMap = new Map<string, number>();
   let totalLeaveHours = 0;
 
-  for (const r of leaveRows ?? []) {
+  for (const r of filteredLeave) {
     const h = r.hours ?? 0;
     totalLeaveHours += h;
     leaveByTypeMap.set(r.leave_code, (leaveByTypeMap.get(r.leave_code) ?? 0) + h);
@@ -112,7 +129,7 @@ export default async function ReportsPage({
   let totalOtHours = 0;
   const otTotals = { x1: 0, x15: 0, x3: 0 };
 
-  for (const r of fieldRows ?? []) {
+  for (const r of filteredField) {
     const x1 = r.pay_x1_hours ?? 0;
     const x15 = r.pay_x15_hours ?? 0;
     const x3 = r.pay_x3_hours ?? 0;
@@ -148,11 +165,27 @@ export default async function ReportsPage({
     totalOtHours: Math.round(totalOtHours * 10) / 10,
   };
 
+  const employeeList = (employees ?? []).map((e) => ({
+    id: e.id,
+    full_name: e.full_name,
+    department_id: e.department_id ?? "",
+  }));
+
+  const departmentList = (departments ?? []).map((d) => ({ id: d.id, name: d.name }));
+
   return (
     <div className="flex flex-col gap-4 pb-6">
       <PageHeader title="รีพอร์ต" description="สรุปข้อมูลข้ามโมดูล" />
       <div className="px-4 md:px-6">
-        <ReportClient from={from} to={to} data={data} />
+        <ReportClient
+          from={from}
+          to={to}
+          data={data}
+          departments={departmentList}
+          employees={employeeList}
+          currentDept={deptParam ?? ""}
+          currentPerson={personParam ?? ""}
+        />
       </div>
     </div>
   );

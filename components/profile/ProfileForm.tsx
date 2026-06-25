@@ -128,6 +128,10 @@ export function ProfileForm({
               <Input name="phone" defaultValue={employee.phone ?? ""} />
             </div>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>เบอร์โต๊ะ (ภายใน)</Label>
+            <Input name="deskPhone" placeholder="เช่น 02-XXX-XXXX ต่อ 101" defaultValue={employee.desk_phone ?? ""} />
+          </div>
         </CardContent>
       </Card>
 

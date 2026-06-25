@@ -72,35 +72,80 @@ type Props = {
   from: string;
   to: string;
   data: ReportData;
+  departments?: { id: string; name: string }[];
+  employees?: { id: string; full_name: string; department_id: string }[];
+  currentDept?: string;
+  currentPerson?: string;
 };
 
-export function ReportClient({ from, to, data }: Props) {
+export function ReportClient({ from, to, data, departments = [], employees = [], currentDept = "", currentPerson = "" }: Props) {
   const assetTotal =
     data.assets.in_stock + data.assets.assigned + data.assets.broken + data.assets.disposed;
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Period selector — native GET form works reliably on all mobile browsers */}
-      <form method="GET" className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-surface px-4 py-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">ตั้งแต่วันที่</label>
-          <input
-            type="date"
-            name="from"
-            defaultValue={from}
-            className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+      {/* Filters — native GET form for reliable mobile behavior */}
+      <form method="GET" className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-3">
+        {/* Date range */}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">ตั้งแต่วันที่</label>
+            <input
+              type="date"
+              name="from"
+              defaultValue={from}
+              className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-medium text-muted-foreground">ถึงวันที่</label>
+            <input
+              type="date"
+              name="to"
+              defaultValue={to}
+              className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
         </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-medium text-muted-foreground">ถึงวันที่</label>
-          <input
-            type="date"
-            name="to"
-            defaultValue={to}
-            className="w-40 rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+
+        {/* Scope — dept / person / org */}
+        <div className="flex flex-wrap gap-2">
+          {/* dept filter */}
+          {departments.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">รายฝ่าย</label>
+              <select
+                name="dept"
+                defaultValue={currentDept}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">ทั้งองค์กร</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* person filter */}
+          {employees.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">รายคน</label>
+              <select
+                name="person"
+                defaultValue={currentPerson}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">ทุกคน</option>
+                {employees.map((e) => (
+                  <option key={e.id} value={e.id}>{e.full_name}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
-        <Button type="submit" className="gap-2">
+
+        <Button type="submit" className="gap-2 self-start">
           <Search className="h-4 w-4" /> ดูรายงาน
         </Button>
       </form>

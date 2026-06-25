@@ -30,6 +30,7 @@ const profileSchema = z.object({
   address: z.string().optional(),
   birthdate: z.string().optional(),
   phone: z.string().optional(),
+  deskPhone: z.string().optional(),
   education: z.array(educationEntrySchema),
 });
 
@@ -57,6 +58,7 @@ export async function updateProfile(formData: FormData) {
     address: formData.get("address") || undefined,
     birthdate: formData.get("birthdate") || undefined,
     phone: formData.get("phone") || undefined,
+    deskPhone: formData.get("deskPhone") || undefined,
     education,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "ข้อมูลไม่ถูกต้อง" };
@@ -84,6 +86,7 @@ export async function updateProfile(formData: FormData) {
       address: parsed.data.address || null,
       birthdate: parsed.data.birthdate || null,
       phone: parsed.data.phone || null,
+      desk_phone: parsed.data.deskPhone || null,
       education: parsed.data.education,
       ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
     })

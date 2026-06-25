@@ -17,7 +17,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LeaveRequestSheet } from "./LeaveRequestSheet";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
@@ -182,15 +187,15 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
         </ul>
       )}
 
-      {/* Detail sheet */}
-      <Sheet open={!!detailItem} onOpenChange={(open) => !open && setDetailItem(null)}>
-        <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
+      {/* Detail dialog — full-screen on mobile, centered on desktop */}
+      <Dialog open={!!detailItem} onOpenChange={(open) => !open && setDetailItem(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           {detailItem && (
             <>
-              <SheetHeader>
-                <SheetTitle>{LEAVE_LABELS_TH[detailItem.leave_code]}</SheetTitle>
-              </SheetHeader>
-              <div className="flex flex-col gap-3 px-4 py-6 text-sm">
+              <DialogHeader>
+                <DialogTitle>{LEAVE_LABELS_TH[detailItem.leave_code]}</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 py-2 text-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">สถานะ</span>
                   <Badge variant={STATUS_VARIANT[detailItem.status]}>{LEAVE_STATUS_LABELS_TH[detailItem.status]}</Badge>
@@ -243,8 +248,8 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
               </div>
             </>
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
 
       <LeaveRequestSheet
         open={sheetOpen}
