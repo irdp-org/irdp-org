@@ -15,6 +15,7 @@ import {
   Building2,
   BookUser,
   ScrollText,
+  GraduationCap,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -25,6 +26,8 @@ export type NavItem = {
   icon: LucideIcon;
   // Omit for "everyone"; otherwise only these roles see the entry.
   roles?: RoleT[];
+  // If true, visible only to admin role OR employees in the training dept.
+  trainingAccess?: boolean;
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -45,6 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/reports", label: "รีพอร์ต", icon: BarChart2, roles: ["admin", "hr", "exec"] },
   { href: "/admin/logs", label: "บันทึกกิจกรรม", icon: ScrollText, roles: ["admin", "hr"] },
   { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, roles: ["admin"] },
+  { href: "/training", label: "ระบบอบรม (TMS)", icon: GraduationCap, trainingAccess: true },
 ];
 
 // Primary tabs shown directly in the mobile bottom bar (iOS-style, keep ≤5
@@ -52,6 +56,7 @@ export const NAV_ITEMS: NavItem[] = [
 // 4 primary slots + "เพิ่มเติม" = 5 tabs total in the bottom bar
 export const PRIMARY_TAB_HREFS = ["/", "/leave", "/checkin", "/booking"];
 
-export function isNavItemVisible(item: NavItem, role: RoleT): boolean {
+export function isNavItemVisible(item: NavItem, role: RoleT, isTrainingDept = false): boolean {
+  if (item.trainingAccess) return role === "admin" || isTrainingDept;
   return !item.roles || item.roles.includes(role);
 }

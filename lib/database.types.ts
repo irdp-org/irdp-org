@@ -325,6 +325,63 @@ export interface Database {
         status: AssignStatusT;
         created_at: string;
       }>;
+      training_courses: TableShape<
+        {
+          id: string;
+          name_th: string;
+          name_en: string | null;
+          open_date: string | null;
+          close_date: string | null;
+          location: string | null;
+          training_dates: string | null;
+          description: string | null;
+          target_group: string | null;
+          objectives: string | null;
+          logo_url: string | null;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          name_th: string;
+          name_en?: string | null;
+          open_date?: string | null;
+          close_date?: string | null;
+          location?: string | null;
+          training_dates?: string | null;
+          description?: string | null;
+          target_group?: string | null;
+          objectives?: string | null;
+          logo_url?: string | null;
+          created_by?: string | null;
+        }
+      >;
+      training_participants: TableShape<
+        {
+          id: string;
+          course_id: string;
+          first_name: string;
+          last_name: string;
+          position: string | null;
+          organization: string | null;
+          phone: string | null;
+          email: string | null;
+          note: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          course_id: string;
+          first_name: string;
+          last_name: string;
+          position?: string | null;
+          organization?: string | null;
+          phone?: string | null;
+          email?: string | null;
+          note?: string | null;
+        }
+      >;
       org_documents: TableShape<{
         id: string;
         title: string;
