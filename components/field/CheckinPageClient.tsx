@@ -1,11 +1,18 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { MapPin, Home, Clock, CheckCircle2 } from "lucide-react";
+import { MapPin, Home, Clock, CheckCircle2, LocateFixed, AlertTriangle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CheckinDialog } from "./CheckinDialog";
-import { checkInWfh } from "@/app/(app)/field/checkin-actions";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { selfCheckIn, checkInOffsite, checkInWfhGps } from "@/app/(app)/field/checkin-actions";
 
 export type CheckinRequest = {
   id: string;
@@ -14,6 +21,7 @@ export type CheckinRequest = {
   planned_start: string | null;
   planned_end: string | null;
   reason: string | null;
+  status: string;
   location_id: string | null;
   location_name: string | null;
   location_lat: number | null;
@@ -21,6 +29,17 @@ export type CheckinRequest = {
   location_radius_m: number | null;
   location_required_photos: number | null;
   checkins: { kind: string; happened_at: string }[];
+};
+
+type LocationOption = { id: string; name: string };
+
+const TYPE_META: Record<
+  "offsite" | "wfh" | "ot",
+  { label: string; icon: typeof MapPin; color: string; bg: string }
+> = {
+  offsite: { label: "ปฏิบัติงานนอกสถานที่", icon: MapPin, color: "text-orange-600", bg: "bg-orange-100" },
+  ot: { label: "ปฏิบัติงานนอกเวลา (OT)", icon: Clock, color: "text-purple-600", bg: "bg-purple-100" },
+  wfh: { label: "ทำงานที่บ้าน (WFH)", icon: Home, color: "text-blue-600", bg: "bg-blue-100" },
 };
 
 function formatTime(iso: string): string {
@@ -32,179 +51,347 @@ function formatTime(iso: string): string {
   });
 }
 
-function typeLabel(type: string) {
-  if (type === "wfh") return "ทำงานที่บ้าน (WFH)";
-  if (type === "offsite") return "ปฏิบัติงานนอกสถานที่";
-  return "OT";
+// ── GPS hook ──────────────────────────────────────────────────────────────────
+function useGeo() {
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function request() {
+    if (!("geolocation" in navigator)) {
+      setError("เบราว์เซอร์นี้ไม่รองรับ GPS");
+      return;
+    }
+    setLocating(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocating(false);
+      },
+      (err) => {
+        setError(err.message || "ขอตำแหน่ง GPS ไม่สำเร็จ");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }
+
+  function reset() {
+    setCoords(null);
+    setError(null);
+  }
+
+  return { coords, locating, error, request, reset };
 }
 
-function WfhCheckinCard({ req }: { req: CheckinRequest }) {
+function GpsButton({ coords, locating, error, onRequest }: {
+  coords: { lat: number; lng: number } | null;
+  locating: boolean;
+  error: string | null;
+  onRequest: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Button type="button" variant={coords ? "outline" : "default"} onClick={onRequest} disabled={locating}>
+        <LocateFixed className="h-4 w-4" />
+        {locating ? "กำลังขอตำแหน่ง..." : coords ? "ขอตำแหน่งใหม่" : "ขอตำแหน่ง GPS"}
+      </Button>
+      {coords && (
+        <p className="flex items-center gap-1 text-xs text-success">
+          <CheckCircle2 className="h-3.5 w-3.5" /> ได้พิกัดแล้ว
+        </p>
+      )}
+      {error && <p className="text-xs text-danger">{error}</p>}
+    </div>
+  );
+}
+
+// ── New check-in flow (create + check in) ─────────────────────────────────────
+function NewCheckinDialog({ locations }: { locations: LocationOption[] }) {
   const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<"offsite" | "wfh" | "ot" | null>(null);
+  const [locationId, setLocationId] = useState("");
+  const [note, setNote] = useState("");
+  const geo = useGeo();
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  const hasMorning = req.checkins.some((c) => c.kind === "wfh_morning");
-  const hasEvening = req.checkins.some((c) => c.kind === "wfh_evening");
+  function reset() {
+    setType(null);
+    setLocationId("");
+    setNote("");
+    geo.reset();
+    setError(null);
+  }
 
-  function checkin(kind: "wfh_morning" | "wfh_evening") {
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!type) return;
+    if (!geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
+    if ((type === "offsite" || type === "ot") && !locationId) { setError("กรุณาเลือกสถานที่"); return; }
+    setError(null);
+
+    const fd = new FormData(e.currentTarget);
+    fd.set("type", type);
+    fd.set("note", note);
+    fd.set("lat", String(geo.coords.lat));
+    fd.set("lng", String(geo.coords.lng));
+    if (type !== "wfh") fd.set("locationId", locationId);
+
     startTransition(async () => {
-      await checkInWfh(req.id, kind);
+      const res = await selfCheckIn(fd);
+      if ("error" in res && res.error) { setError(res.error); return; }
+      setOpen(false);
+      reset();
       router.refresh();
     });
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100">
-          <Home className="h-5 w-5 text-blue-600" />
-        </div>
-        <div className="flex-1">
-          <p className="font-semibold text-foreground">ทำงานที่บ้าน (WFH)</p>
-          {req.planned_start && req.planned_end && (
-            <p className="text-xs text-muted-foreground">
-              {formatTime(req.planned_start)} – {formatTime(req.planned_end)}
-            </p>
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+      <Button type="button" className="w-full h-14 text-base" onClick={() => setOpen(true)}>
+        <Plus className="h-5 w-5" /> เช็คอินใหม่
+      </Button>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{type ? TYPE_META[type].label : "เลือกประเภทการปฏิบัติงาน"}</DialogTitle>
+          <DialogDescription>
+            {type ? "ขอตำแหน่ง GPS แล้วบันทึกเช็คอิน" : "เลือกว่าคุณกำลังจะทำงานแบบใด"}
+          </DialogDescription>
+        </DialogHeader>
+
+        {/* Step 1: choose type */}
+        {!type && (
+          <div className="flex flex-col gap-2">
+            {(["offsite", "ot", "wfh"] as const).map((t) => {
+              const m = TYPE_META[t];
+              return (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setType(t)}
+                  className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left hover:bg-border/20"
+                >
+                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${m.bg}`}>
+                    <m.icon className={`h-5 w-5 ${m.color}`} />
+                  </div>
+                  <span className="text-sm font-medium text-foreground">{m.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Step 2: per-type form */}
+        {type && (
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {(type === "offsite" || type === "ot") && (
+              <div className="flex flex-col gap-1.5">
+                <Label>สถานที่ *</Label>
+                <select
+                  value={locationId}
+                  onChange={(e) => setLocationId(e.target.value)}
+                  className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">— เลือกสถานที่ —</option>
+                  {locations.map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <GpsButton coords={geo.coords} locating={geo.locating} error={geo.error} onRequest={geo.request} />
+
+            {type === "offsite" && (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label>เซลฟี่</Label>
+                  <input type="file" name="selfie" accept="image/*" capture="user" className="text-sm" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>รูปหน้างาน</Label>
+                  <input type="file" name="photos" accept="image/*" capture="environment" className="text-sm" />
+                </div>
+              </>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <Label>หมายเหตุ{type === "wfh" ? " *" : ""}</Label>
+              <textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                placeholder="รายละเอียดงาน..."
+                className="rounded-lg border border-input bg-background px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            </div>
+
+            {error && <p className="text-sm text-danger">{error}</p>}
+
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" onClick={() => setType(null)} disabled={isPending}>
+                ย้อนกลับ
+              </Button>
+              <Button type="submit" className="flex-1" disabled={isPending || !geo.coords}>
+                {isPending ? "กำลังบันทึก..." : "บันทึกเช็คอิน"}
+              </Button>
+            </div>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── In/Out dialog for an existing (pre-created) record ────────────────────────
+function CheckDialog({ req, kind }: { req: CheckinRequest; kind: "in" | "out" }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const geo = useGeo();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const label = kind === "in" ? "เช็คอิน" : "เช็คเอาท์";
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
+    setError(null);
+
+    startTransition(async () => {
+      let res;
+      if (req.type === "wfh") {
+        res = await checkInWfhGps(req.id, kind, geo.coords!.lat, geo.coords!.lng);
+      } else {
+        const fd = new FormData(e.currentTarget);
+        fd.set("fieldRequestId", req.id);
+        fd.set("kind", kind);
+        fd.set("lat", String(geo.coords!.lat));
+        fd.set("lng", String(geo.coords!.lng));
+        res = await checkInOffsite(fd);
+      }
+      if (res && "error" in res && res.error) { setError(res.error); return; }
+      setOpen(false);
+      geo.reset();
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { geo.reset(); setError(null); } }}>
+      <Button
+        type="button"
+        variant={kind === "in" ? "default" : "default"}
+        className="h-auto py-3 text-sm"
+        onClick={() => setOpen(true)}
+      >
+        <Clock className="h-4 w-4" /> {label}
+      </Button>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{label}</DialogTitle>
+          <DialogDescription>{TYPE_META[req.type].label}{req.location_name ? ` · ${req.location_name}` : ""}</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <GpsButton coords={geo.coords} locating={geo.locating} error={geo.error} onRequest={geo.request} />
+          {req.type === "offsite" && (
+            <>
+              {kind === "in" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>เซลฟี่</Label>
+                  <input type="file" name="selfie" accept="image/*" capture="user" className="text-sm" />
+                </div>
+              )}
+              <div className="flex flex-col gap-1.5">
+                <Label>รูปหน้างาน{kind === "out" ? " (ถ้ามี)" : ""}</Label>
+                <input type="file" name="photos" accept="image/*" capture="environment" className="text-sm" />
+              </div>
+            </>
           )}
-          {req.reason && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{req.reason}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
+          <Button type="submit" disabled={isPending || !geo.coords}>
+            {isPending ? "กำลังบันทึก..." : `บันทึก${label}`}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Today's record card ───────────────────────────────────────────────────────
+function RecordCard({ req }: { req: CheckinRequest }) {
+  const m = TYPE_META[req.type];
+  const inCi = req.checkins.find((c) => c.kind === "in");
+  const outCi = req.checkins.find((c) => c.kind === "out");
+  const locked = req.status === "approved";
+
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm">
+      <div className="flex items-start gap-3">
+        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${m.bg}`}>
+          <m.icon className={`h-5 w-5 ${m.color}`} />
         </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-foreground">{m.label}</p>
+          {req.location_name && <p className="text-xs text-muted-foreground">{req.location_name}</p>}
+          {req.reason && <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{req.reason}</p>}
+        </div>
+        {locked && <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-semibold text-green-700">อนุมัติแล้ว</span>}
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        {hasMorning ? (
+        {/* Check-in */}
+        {inCi ? (
           <div className="flex items-center justify-center gap-1.5 rounded-xl bg-green-50 px-3 py-3 text-sm font-medium text-green-700">
             <CheckCircle2 className="h-4 w-4" />
-            เช็คอินเช้าแล้ว
+            เช็คอิน {formatTime(inCi.happened_at)}
+          </div>
+        ) : locked ? (
+          <div className="flex items-center justify-center rounded-xl bg-surface px-3 py-3 text-sm text-muted-foreground">
+            ยังไม่เช็คอิน
           </div>
         ) : (
-          <Button
-            variant="default"
-            className="h-auto py-3 text-sm"
-            disabled={isPending}
-            onClick={() => checkin("wfh_morning")}
-          >
-            <Clock className="h-4 w-4" />
-            เช็คอินเช้า
-          </Button>
+          <CheckDialog req={req} kind="in" />
         )}
 
-        {hasEvening ? (
+        {/* Check-out */}
+        {outCi ? (
           <div className="flex items-center justify-center gap-1.5 rounded-xl bg-green-50 px-3 py-3 text-sm font-medium text-green-700">
             <CheckCircle2 className="h-4 w-4" />
-            เช็คเอ้าท์แล้ว
+            เช็คเอาท์ {formatTime(outCi.happened_at)}
+          </div>
+        ) : locked || !inCi ? (
+          <div className="flex items-center justify-center rounded-xl bg-surface px-3 py-3 text-sm text-muted-foreground">
+            {locked ? "ปิดแล้ว" : "รอเช็คอินก่อน"}
           </div>
         ) : (
-          <Button
-            variant={hasMorning ? "default" : "outline"}
-            className="h-auto py-3 text-sm"
-            disabled={isPending || !hasMorning}
-            title={!hasMorning ? "กรุณาเช็คอินเช้าก่อน" : undefined}
-            onClick={() => checkin("wfh_evening")}
-          >
-            <Clock className="h-4 w-4" />
-            เช็คเอ้าท์เย็น
-          </Button>
+          <CheckDialog req={req} kind="out" />
         )}
       </div>
     </div>
   );
 }
 
-function OffsiteCheckinCard({ req }: { req: CheckinRequest }) {
-  const hasIn = req.checkins.some((c) => c.kind === "in");
-  const hasOut = req.checkins.some((c) => c.kind === "out");
-
-  const canCheckin =
-    req.location_lat !== null &&
-    req.location_lng !== null &&
-    req.location_radius_m !== null;
-
+export function CheckinPageClient({
+  requests,
+  locations,
+}: {
+  requests: CheckinRequest[];
+  locations: LocationOption[];
+}) {
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border border-border bg-white p-4 shadow-sm">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-100">
-          <MapPin className="h-5 w-5 text-orange-600" />
+    <div className="flex flex-col gap-4">
+      <NewCheckinDialog locations={locations} />
+
+      {requests.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <p className="text-sm font-medium text-muted-foreground">รายการวันนี้</p>
+          {requests.map((req) => (
+            <RecordCard key={req.id} req={req} />
+          ))}
         </div>
-        <div className="flex-1">
-          <p className="font-semibold text-foreground">ปฏิบัติงานนอกสถานที่</p>
-          {req.location_name && (
-            <p className="text-xs text-muted-foreground">{req.location_name}</p>
-          )}
-          {req.planned_start && req.planned_end && (
-            <p className="text-xs text-muted-foreground">
-              {formatTime(req.planned_start)} – {formatTime(req.planned_end)}
-            </p>
-          )}
-          {req.reason && <p className="mt-1 text-xs text-muted-foreground line-clamp-2">{req.reason}</p>}
-        </div>
-      </div>
-
-      {!canCheckin && (
-        <p className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-foreground">
-          สถานที่ยังไม่มีพิกัด GPS — กรุณาแจ้ง admin เพื่อตั้งค่า
-        </p>
-      )}
-
-      <div className="grid grid-cols-2 gap-2">
-        {hasIn ? (
-          <div className="flex items-center justify-center gap-1.5 rounded-xl bg-green-50 px-3 py-3 text-sm font-medium text-green-700">
-            <CheckCircle2 className="h-4 w-4" />
-            เช็คอินแล้ว
-          </div>
-        ) : canCheckin ? (
-          <CheckinDialog
-            fieldRequestId={req.id}
-            kind="in"
-            label="เช็คอิน"
-            locationLat={req.location_lat!}
-            locationLng={req.location_lng!}
-            radiusM={req.location_radius_m!}
-            requiredPhotos={req.location_required_photos ?? 1}
-          />
-        ) : (
-          <Button variant="default" disabled className="h-auto py-3 text-sm">
-            เช็คอิน
-          </Button>
-        )}
-
-        {hasOut ? (
-          <div className="flex items-center justify-center gap-1.5 rounded-xl bg-green-50 px-3 py-3 text-sm font-medium text-green-700">
-            <CheckCircle2 className="h-4 w-4" />
-            เช็คเอ้าท์แล้ว
-          </div>
-        ) : canCheckin && hasIn ? (
-          <CheckinDialog
-            fieldRequestId={req.id}
-            kind="out"
-            label="เช็คเอ้าท์"
-            locationLat={req.location_lat!}
-            locationLng={req.location_lng!}
-            radiusM={req.location_radius_m!}
-            requiredPhotos={req.location_required_photos ?? 1}
-          />
-        ) : (
-          <Button
-            variant="outline"
-            disabled
-            className="h-auto py-3 text-sm"
-            title={!hasIn ? "กรุณาเช็คอินก่อน" : undefined}
-          >
-            เช็คเอ้าท์
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function CheckinPageClient({ requests }: { requests: CheckinRequest[] }) {
-  return (
-    <div className="flex flex-col gap-3">
-      {requests.map((req) =>
-        req.type === "wfh" ? (
-          <WfhCheckinCard key={req.id} req={req} />
-        ) : (
-          <OffsiteCheckinCard key={req.id} req={req} />
-        )
       )}
     </div>
   );

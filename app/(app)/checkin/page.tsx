@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { format } from "date-fns";
-import { MapPin, Home, Clock, ArrowRight } from "lucide-react";
+import { Clock, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { PageHeader } from "@/components/shell/PageHeader";
@@ -39,32 +39,23 @@ export default async function CheckinPage() {
   const supabase = await createClient();
   const today = todayBangkok();
 
-  // Today's approved offsite/wfh requests — OT excluded (no GPS check-in needed)
+  // Today's own records (self-service): any type, not cancelled/rejected.
   const { data: requests } = await supabase
     .from("field_requests")
     .select("id, type, location_id, work_date, planned_start, planned_end, status, reason")
     .eq("employee_id", employee.id)
     .eq("work_date", today)
-    .eq("status", "approved")
-    .in("type", ["offsite", "wfh"])
-    .order("planned_start");
+    .in("status", ["draft", "submitted", "returned", "approved"])
+    .order("created_at");
 
-  // Fetch location details for offsite requests
-  const locationIds = [
-    ...new Set(
-      (requests ?? [])
-        .filter((r) => r.type === "offsite" && r.location_id)
-        .map((r) => r.location_id as string)
-    ),
-  ];
-  const { data: locations } =
-    locationIds.length > 0
-      ? await supabase
-          .from("work_locations")
-          .select("id, name, lat, lng, radius_m, required_photos")
-          .in("id", locationIds)
-      : { data: [] };
+  // All active locations (for the picker + offsite/ot check-in details)
+  const { data: locations } = await supabase
+    .from("work_locations")
+    .select("id, name, lat, lng, radius_m, required_photos")
+    .eq("active", true)
+    .order("name");
   const locationById = new Map((locations ?? []).map((l) => [l.id, l]));
+  const locationOptions = (locations ?? []).map((l) => ({ id: l.id, name: l.name }));
 
   // Fetch existing check-ins
   const requestIds = (requests ?? []).map((r) => r.id);
@@ -90,9 +81,10 @@ export default async function CheckinPage() {
       location_lng: loc?.lng ?? null,
       location_radius_m: loc?.radius_m ?? null,
       location_required_photos: loc?.required_photos ?? null,
+      status: r.status,
       checkins: (checkins ?? [])
         .filter((c) => c.field_request_id === r.id)
-        .map((c) => ({ kind: c.kind as "in" | "out", happened_at: c.happened_at })),
+        .map((c) => ({ kind: c.kind as string, happened_at: c.happened_at })),
     };
   });
 
@@ -111,21 +103,7 @@ export default async function CheckinPage() {
           <p className="mt-1 text-sm text-muted-foreground">{dateDisplay}</p>
         </div>
 
-        {enriched.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-surface py-10 text-center">
-            <MapPin className="h-8 w-8 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-foreground">ไม่มีงานนอกสถานที่หรือ WFH ที่อนุมัติวันนี้</p>
-            <p className="text-xs text-muted-foreground">ยื่นคำขอออกนอกสถานที่ หรือ WFH ก่อนเพื่อให้ระบบเปิดปุ่มเช็คอิน</p>
-            <Link
-              href="/field"
-              className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-primary"
-            >
-              ไปยื่นคำขอ <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-        ) : (
-          <CheckinPageClient requests={enriched} />
-        )}
+        <CheckinPageClient requests={enriched} locations={locationOptions} />
 
         {/* Link to full field page */}
         <div className="text-center">
