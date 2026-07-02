@@ -17,6 +17,7 @@ import {
   ScrollText,
   GraduationCap,
   QrCode,
+  Receipt,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -38,6 +39,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/checkin", label: "เช็คอิน", icon: ScanLine },
   { href: "/field", label: "นอกสถานที่/OT", icon: MapPin },
   { href: "/booking", label: "จอง", icon: CalendarPlus },
+  { href: "/travel-expense", label: "เบิกค่าเดินทาง", icon: Receipt },
   { href: "/calendar", label: "ปฏิทิน", icon: CalendarRange },
   { href: "/assets", label: "ทรัพย์สิน", icon: Package },
   { href: "/notifications", label: "การแจ้งเตือน", icon: Bell },

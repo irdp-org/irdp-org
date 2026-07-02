@@ -409,6 +409,55 @@ export interface Database {
           note?: string | null;
         }
       >;
+      travel_expense_claims: TableShape<
+        {
+          id: string;
+          employee_id: string;
+          title: string | null;
+          status: RequestStatusT;
+          approver_id: string | null;
+          decided_at: string | null;
+          total_amount: number;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          employee_id: string;
+          title?: string | null;
+          status?: RequestStatusT;
+          approver_id?: string | null;
+          decided_at?: string | null;
+          total_amount?: number;
+        }
+      >;
+      travel_expense_items: TableShape<
+        {
+          id: string;
+          claim_id: string;
+          travel_date: string;
+          from_location: string | null;
+          to_location: string | null;
+          mode: string;
+          km: number | null;
+          amount: number;
+          note: string | null;
+          sort_order: number;
+          created_at: string;
+        },
+        {
+          id?: string;
+          claim_id: string;
+          travel_date: string;
+          from_location?: string | null;
+          to_location?: string | null;
+          mode: string;
+          km?: number | null;
+          amount?: number;
+          note?: string | null;
+          sort_order?: number;
+        }
+      >;
       org_documents: TableShape<{
         id: string;
         title: string;
