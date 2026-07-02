@@ -147,6 +147,9 @@ export async function createVanBooking(formData: FormData) {
   const destination = String(formData.get("destination") ?? "").trim();
   const purpose = String(formData.get("purpose") ?? "").trim() || null;
   const passengerIds = formData.getAll("passengerIds").map(String);
+  const hasTollway = formData.get("hasTollway") === "true";
+  const hasFuel = formData.get("hasFuel") === "true";
+  const otherExpense = String(formData.get("otherExpense") ?? "").trim() || null;
 
   if (!vehicleId || !date || !startTime || !endTime)
     return { error: "กรุณากรอกข้อมูลให้ครบ" };
@@ -180,6 +183,9 @@ export async function createVanBooking(formData: FormData) {
       purpose,
       start_at: startAt,
       end_at: endAt,
+      has_tollway: hasTollway,
+      has_fuel: hasFuel,
+      other_expense: otherExpense,
     })
     .select("id")
     .single();
@@ -329,6 +335,7 @@ export async function createRoomBooking(formData: FormData) {
   const startTime = String(formData.get("startTime") ?? "");
   const endTime = String(formData.get("endTime") ?? "");
   const title = String(formData.get("title") ?? "").trim() || null;
+  const equipment = formData.getAll("equipment").map(String).filter(Boolean);
 
   if (!roomId || !date || !startTime || !endTime)
     return { error: "กรุณากรอกข้อมูลให้ครบ" };
@@ -358,6 +365,7 @@ export async function createRoomBooking(formData: FormData) {
       title,
       start_at: startAt,
       end_at: endAt,
+      equipment,
     })
     .select("id")
     .single();

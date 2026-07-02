@@ -11,6 +11,16 @@ import { createRoomBooking } from "@/app/(app)/booking/actions";
 
 export type RoomOption = { id: string; name: string; size: string | null };
 
+export const ROOM_EQUIPMENT = [
+  "โน้ตบุ๊ค",
+  "เครื่องเสียง",
+  "ไมโครโฟน",
+  "โปรเจกเตอร์",
+  "ประชุมออนไลน์",
+  "บันทึกวิดีโอ",
+  "บันทึกเสียง",
+];
+
 type Props = {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -30,6 +40,11 @@ export function RoomBookingSheet({ open, onOpenChange, rooms, defaultRoomId }: P
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
   const [title, setTitle] = useState("");
+  const [equipment, setEquipment] = useState<string[]>([]);
+
+  function toggleEquip(item: string) {
+    setEquipment((prev) => (prev.includes(item) ? prev.filter((x) => x !== item) : [...prev, item]));
+  }
 
   function reset() {
     setRoomId(defaultRoomId ?? rooms[0]?.id ?? "");
@@ -37,6 +52,7 @@ export function RoomBookingSheet({ open, onOpenChange, rooms, defaultRoomId }: P
     setStartTime("09:00");
     setEndTime("10:00");
     setTitle("");
+    setEquipment([]);
     setFormError(null);
   }
 
@@ -53,6 +69,7 @@ export function RoomBookingSheet({ open, onOpenChange, rooms, defaultRoomId }: P
     fd.set("startTime", startTime);
     fd.set("endTime", endTime);
     fd.set("title", title);
+    equipment.forEach((x) => fd.append("equipment", x));
 
     startTransition(async () => {
       const res = await createRoomBooking(fd);
@@ -121,6 +138,24 @@ export function RoomBookingSheet({ open, onOpenChange, rooms, defaultRoomId }: P
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
+          </div>
+
+          {/* Equipment (item 8) */}
+          <div className="flex flex-col gap-2">
+            <Label>อุปกรณ์ที่ใช้ในห้องประชุม</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {ROOM_EQUIPMENT.map((item) => (
+                <label key={item} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={equipment.includes(item)}
+                    onChange={() => toggleEquip(item)}
+                    className="accent-primary h-4 w-4"
+                  />
+                  {item}
+                </label>
+              ))}
+            </div>
           </div>
 
           {formError && (

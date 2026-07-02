@@ -39,13 +39,13 @@ export default async function BookingPage({
     supabase.from("rooms").select("id, name, size").eq("active", true).order("name"),
     supabase
       .from("van_bookings")
-      .select("id, vehicle_id, requester_id, driver_id, destination, purpose, start_at, end_at, status")
+      .select("id, vehicle_id, requester_id, driver_id, destination, purpose, start_at, end_at, status, has_tollway, has_fuel, other_expense")
       .eq("status", "booked")
       .gte("end_at", now)
       .order("start_at"),
     supabase
       .from("room_bookings")
-      .select("id, room_id, requester_id, title, start_at, end_at, status")
+      .select("id, room_id, requester_id, title, start_at, end_at, status, equipment")
       .eq("status", "booked")
       .gte("end_at", now)
       .order("start_at"),
@@ -108,6 +108,9 @@ export default async function BookingPage({
     start_at: b.start_at,
     end_at: b.end_at,
     status: b.status as "booked" | "cancelled",
+    has_tollway: b.has_tollway,
+    has_fuel: b.has_fuel,
+    other_expense: b.other_expense,
     passengers: passengersByBooking.get(b.id) ?? [],
   }));
 
@@ -127,6 +130,7 @@ export default async function BookingPage({
     start_at: b.start_at,
     end_at: b.end_at,
     status: b.status as "booked" | "cancelled",
+    equipment: b.equipment ?? [],
   }));
 
   // ── Employee picker for van passengers ────────────────────────────────────

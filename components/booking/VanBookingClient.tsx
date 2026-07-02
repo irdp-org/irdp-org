@@ -32,6 +32,9 @@ export type VanBookingRow = {
   start_at: string;
   end_at: string;
   status: "booked" | "cancelled";
+  has_tollway: boolean;
+  has_fuel: boolean;
+  other_expense: string | null;
   passengers: { employee_id: string; full_name: string }[];
 };
 
@@ -195,6 +198,13 @@ export function VanBookingClient({
                             <Users className="h-3 w-3 shrink-0" />
                             {b.passengers.map((p) => p.full_name).join(", ")}
                           </p>
+                        )}
+                        {(b.has_tollway || b.has_fuel || b.other_expense) && (
+                          <div className="flex flex-wrap gap-1 pt-0.5">
+                            {b.has_tollway && <Badge variant="outline" className="text-[10px]">ค่าทางด่วน</Badge>}
+                            {b.has_fuel && <Badge variant="outline" className="text-[10px]">ค่าน้ำมัน</Badge>}
+                            {b.other_expense && <Badge variant="outline" className="text-[10px]">{b.other_expense}</Badge>}
+                          </div>
                         )}
                       </div>
 

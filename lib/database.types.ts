@@ -253,6 +253,9 @@ export interface Database {
         start_at: string;
         end_at: string;
         status: BookingStatusT;
+        has_tollway: boolean;
+        has_fuel: boolean;
+        other_expense: string | null;
         created_at: string;
         updated_at: string;
       }>;
@@ -274,6 +277,7 @@ export interface Database {
         start_at: string;
         end_at: string;
         status: BookingStatusT;
+        equipment: string[];
         created_at: string;
         updated_at: string;
       }>;

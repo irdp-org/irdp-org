@@ -32,6 +32,7 @@ export type RoomBookingRow = {
   start_at: string;
   end_at: string;
   status: "booked" | "cancelled";
+  equipment: string[];
 };
 
 type Props = {
@@ -223,6 +224,13 @@ export function RoomBookingClient({ bookings, rooms, currentEmployeeId, canEdit 
                             {timeRange(b.start_at, b.end_at)} · {room?.name ?? "—"}
                           </p>
                           <p className="text-xs text-muted-foreground">จองโดย {b.requester_name}</p>
+                          {b.equipment.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {b.equipment.map((eq) => (
+                                <Badge key={eq} variant="outline" className="text-[10px]">{eq}</Badge>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         <div className="ml-2 flex shrink-0 items-center gap-1">

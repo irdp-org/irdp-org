@@ -35,6 +35,10 @@ export function VanBookingSheet({ open, onOpenChange, vehicleId, employees, curr
   const [purpose, setPurpose] = useState("");
   const [passengerIds, setPassengerIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
+  const [hasTollway, setHasTollway] = useState(false);
+  const [hasFuel, setHasFuel] = useState(false);
+  const [hasOther, setHasOther] = useState(false);
+  const [otherExpense, setOtherExpense] = useState("");
 
   const filtered = employees.filter(
     (e) =>
@@ -57,6 +61,10 @@ export function VanBookingSheet({ open, onOpenChange, vehicleId, employees, curr
     setPurpose("");
     setPassengerIds([]);
     setSearch("");
+    setHasTollway(false);
+    setHasFuel(false);
+    setHasOther(false);
+    setOtherExpense("");
     setFormError(null);
   }
 
@@ -75,6 +83,9 @@ export function VanBookingSheet({ open, onOpenChange, vehicleId, employees, curr
     fd.set("endTime", endTime);
     fd.set("destination", destination);
     fd.set("purpose", purpose);
+    fd.set("hasTollway", String(hasTollway));
+    fd.set("hasFuel", String(hasFuel));
+    fd.set("otherExpense", hasOther ? otherExpense : "");
     passengerIds.forEach((id) => fd.append("passengerIds", id));
 
     startTransition(async () => {
@@ -151,6 +162,30 @@ export function VanBookingSheet({ open, onOpenChange, vehicleId, employees, curr
               value={purpose}
               onChange={(e) => setPurpose(e.target.value)}
             />
+          </div>
+
+          {/* Extra costs (item 7) */}
+          <div className="flex flex-col gap-2">
+            <Label>ค่าใช้จ่ายเพิ่มเติม</Label>
+            <label className="flex items-center gap-2.5 text-sm">
+              <input type="checkbox" checked={hasTollway} onChange={(e) => setHasTollway(e.target.checked)} className="accent-primary h-4 w-4" />
+              มีค่าขึ้นทางด่วน
+            </label>
+            <label className="flex items-center gap-2.5 text-sm">
+              <input type="checkbox" checked={hasFuel} onChange={(e) => setHasFuel(e.target.checked)} className="accent-primary h-4 w-4" />
+              มีค่าน้ำมัน
+            </label>
+            <label className="flex items-center gap-2.5 text-sm">
+              <input type="checkbox" checked={hasOther} onChange={(e) => setHasOther(e.target.checked)} className="accent-primary h-4 w-4" />
+              มีค่าใช้จ่ายอื่นๆ
+            </label>
+            {hasOther && (
+              <Input
+                placeholder="ระบุค่าใช้จ่ายอื่นๆ เช่น ค่าที่จอดรถ 100 บาท"
+                value={otherExpense}
+                onChange={(e) => setOtherExpense(e.target.value)}
+              />
+            )}
           </div>
 
           {/* Passenger picker */}

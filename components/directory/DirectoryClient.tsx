@@ -61,11 +61,11 @@ export function DirectoryClient({ employees }: { employees: DirectoryEmployee[] 
           (e.position?.toLowerCase().includes(q))
       );
     }
-    // หัวหน้าฝ่ายขึ้นก่อนเสมอ จากนั้นเรียงตามรหัสพนักงาน
+    // ผู้บริหารบนสุด → หัวหน้าฝ่าย → ที่เหลือ (ภายในกลุ่มเรียงตามรหัสพนักงาน)
+    const rank = (role: string | null) => (role === "exec" ? 0 : role === "dept_head" ? 1 : 2);
     return [...list].sort((a, b) => {
-      const aHead = a.role === "dept_head" ? 0 : 1;
-      const bHead = b.role === "dept_head" ? 0 : 1;
-      if (aHead !== bHead) return aHead - bHead;
+      const ra = rank(a.role), rb = rank(b.role);
+      if (ra !== rb) return ra - rb;
       return (a.employee_code ?? "￿").localeCompare(b.employee_code ?? "￿", "en", { numeric: true });
     });
   }, [employees, deptTab, search]);
@@ -110,7 +110,9 @@ export function DirectoryClient({ employees }: { employees: DirectoryEmployee[] 
             <div
               key={emp.id}
               className={
-                emp.role === "dept_head"
+                emp.role === "exec"
+                  ? "flex flex-col overflow-hidden rounded-2xl border-2 border-orange-500 bg-orange-50 shadow-md ring-1 ring-orange-300"
+                  : emp.role === "dept_head"
                   ? "flex flex-col overflow-hidden rounded-2xl border-2 border-primary bg-primary/5 shadow-md ring-1 ring-primary/20"
                   : "flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm"
               }
@@ -131,7 +133,12 @@ export function DirectoryClient({ employees }: { employees: DirectoryEmployee[] 
                     </span>
                   </div>
                 )}
-                {(emp.role === "dept_head") && (
+                {emp.role === "exec" && (
+                  <span className="absolute bottom-2 left-2 rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                    ผู้บริหาร
+                  </span>
+                )}
+                {emp.role === "dept_head" && (
                   <span className="absolute bottom-2 left-2 rounded-full bg-primary/90 px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
                     หัวหน้าฝ่าย
                   </span>
