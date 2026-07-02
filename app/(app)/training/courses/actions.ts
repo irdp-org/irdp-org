@@ -91,6 +91,48 @@ export async function deleteCourse(id: string) {
   return {};
 }
 
+// ── Batch (รุ่น) actions ──────────────────────────────────────────────────────
+
+const batchSchema = z.object({
+  batch_no: z.coerce.number().int().optional(),
+  training_dates: z.string().optional(),
+  location: z.string().optional(),
+  note: z.string().optional(),
+});
+
+export async function addBatch(courseId: string, formData: FormData) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "ไม่มีสิทธิ์" };
+
+  const parsed = batchSchema.safeParse({
+    batch_no: formData.get("batch_no") || undefined,
+    training_dates: formData.get("training_dates") || undefined,
+    location: formData.get("location") || undefined,
+    note: formData.get("note") || undefined,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("training_batches")
+    .insert({ ...parsed.data, course_id: courseId });
+
+  if (error) return { error: error.message };
+  revalidatePath(`/training/courses/${courseId}`);
+  return {};
+}
+
+export async function deleteBatch(id: string, courseId: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "ไม่มีสิทธิ์" };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("training_batches").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(`/training/courses/${courseId}`);
+  return {};
+}
+
 // ── Participant actions ──────────────────────────────────────────────────────
 
 const participantSchema = z.object({
@@ -103,7 +145,7 @@ const participantSchema = z.object({
   note: z.string().optional(),
 });
 
-export async function addParticipant(courseId: string, formData: FormData) {
+export async function addParticipant(courseId: string, batchId: string, formData: FormData) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "ไม่มีสิทธิ์" };
 
@@ -118,23 +160,26 @@ export async function addParticipant(courseId: string, formData: FormData) {
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
+  // Normalize organization (trim) so grouping stays consistent
+  const organization = parsed.data.organization?.trim() || null;
+
   const admin = createAdminClient();
   const { error } = await admin
     .from("training_participants")
-    .insert({ ...parsed.data, course_id: courseId });
+    .insert({ ...parsed.data, organization, course_id: courseId, batch_id: batchId });
 
   if (error) return { error: error.message };
-  revalidatePath(`/training/courses/${courseId}`);
+  revalidatePath(`/training/courses/${courseId}/batches/${batchId}`);
   return {};
 }
 
-export async function deleteParticipant(id: string, courseId: string) {
+export async function deleteParticipant(id: string, courseId: string, batchId: string) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "ไม่มีสิทธิ์" };
 
   const admin = createAdminClient();
   const { error } = await admin.from("training_participants").delete().eq("id", id);
   if (error) return { error: error.message };
-  revalidatePath(`/training/courses/${courseId}`);
+  revalidatePath(`/training/courses/${courseId}/batches/${batchId}`);
   return {};
 }

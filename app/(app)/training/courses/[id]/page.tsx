@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Pencil, MapPin, CalendarDays, Target, Users, FileText, Flag } from "lucide-react";
+import { Pencil, MapPin, CalendarDays, Target, Users, FileText, Flag, Layers } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ParticipantsClient } from "@/components/training/ParticipantsClient";
+import { BatchesClient } from "@/components/training/BatchesClient";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +10,24 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
   const { id } = await params;
   const admin = createAdminClient();
 
-  const [{ data: course }, { data: participants }] = await Promise.all([
+  const [{ data: course }, { data: batches }, { data: parts }] = await Promise.all([
     admin.from("training_courses").select("*").eq("id", id).single(),
-    admin.from("training_participants").select("*").eq("course_id", id).order("created_at"),
+    admin.from("training_batches").select("*").eq("course_id", id).order("batch_no", { ascending: true }),
+    admin.from("training_participants").select("batch_id").eq("course_id", id),
   ]);
 
   if (!course) notFound();
+
+  // count participants per batch
+  const countMap = new Map<string, number>();
+  for (const p of parts ?? []) {
+    if (p.batch_id) countMap.set(p.batch_id, (countMap.get(p.batch_id) ?? 0) + 1);
+  }
+
+  const batchesWithCount = (batches ?? []).map((b) => ({
+    ...b,
+    participant_count: countMap.get(b.id) ?? 0,
+  }));
 
   return (
     <div className="flex flex-col gap-5 mx-auto max-w-2xl">
@@ -63,21 +75,13 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
         )}
       </div>
 
-      {/* Participants */}
+      {/* Batches (รุ่น) */}
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
-            <Users className="h-4 w-4 text-blue-500" />
-            ผู้เข้าอบรม ({participants?.length ?? 0} คน)
-          </h3>
-          <Link
-            href={`/training/courses/${id}/export`}
-            className="text-xs text-blue-600 hover:underline"
-          >
-            ดาวน์โหลด CSV
-          </Link>
-        </div>
-        <ParticipantsClient courseId={id} participants={participants ?? []} />
+        <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+          <Layers className="h-4 w-4 text-blue-500" />
+          รุ่นการอบรม ({batchesWithCount.length} รุ่น)
+        </h3>
+        <BatchesClient courseId={id} batches={batchesWithCount} />
       </div>
     </div>
   );

@@ -20,10 +20,14 @@ type Participant = {
 
 export function ParticipantsClient({
   courseId,
+  batchId,
   participants,
+  organizations = [],
 }: {
   courseId: string;
+  batchId: string;
   participants: Participant[];
+  organizations?: string[];
 }) {
   const router = useRouter();
   const [showForm, setShowForm] = useState(false);
@@ -36,7 +40,7 @@ export function ParticipantsClient({
     const fd = new FormData(e.currentTarget);
     setError(null);
     startTransition(async () => {
-      const res = await addParticipant(courseId, fd);
+      const res = await addParticipant(courseId, batchId, fd);
       if ("error" in res && res.error) { setError(res.error); return; }
       (e.target as HTMLFormElement).reset();
       setShowForm(false);
@@ -46,7 +50,7 @@ export function ParticipantsClient({
 
   function handleDelete(id: string) {
     startTransition(async () => {
-      await deleteParticipant(id, courseId);
+      await deleteParticipant(id, courseId, batchId);
       setConfirmId(null);
       router.refresh();
     });
@@ -79,13 +83,20 @@ export function ParticipantsClient({
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Field name="position" label="ตำแหน่ง" />
-            <Field name="organization" label="หน่วยงาน" />
+            <Field name="organization" label="หน่วยงาน" list="org-list" />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <Field name="phone" label="เบอร์โทร" type="tel" />
             <Field name="email" label="อีเมล" type="email" />
           </div>
           <Field name="note" label="หมายเหตุ" />
+          {organizations.length > 0 && (
+            <datalist id="org-list">
+              {organizations.map((o) => (
+                <option key={o} value={o} />
+              ))}
+            </datalist>
+          )}
           {error && <p className="text-xs text-danger">{error}</p>}
           <div className="flex gap-2">
             <Button type="submit" size="sm" disabled={isPending} className="bg-blue-600 hover:bg-blue-700">
@@ -186,11 +197,13 @@ function Field({
   label,
   type = "text",
   required,
+  list,
 }: {
   name: string;
   label: string;
   type?: string;
   required?: boolean;
+  list?: string;
 }) {
   return (
     <div className="flex flex-col gap-1">
@@ -199,6 +212,7 @@ function Field({
         name={name}
         type={type}
         required={required}
+        list={list}
         className="rounded-md border border-input bg-background px-2.5 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       />
     </div>

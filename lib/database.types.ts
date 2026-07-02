@@ -357,10 +357,30 @@ export interface Database {
           created_by?: string | null;
         }
       >;
+      training_batches: TableShape<
+        {
+          id: string;
+          course_id: string;
+          batch_no: number | null;
+          training_dates: string | null;
+          location: string | null;
+          note: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          course_id: string;
+          batch_no?: number | null;
+          training_dates?: string | null;
+          location?: string | null;
+          note?: string | null;
+        }
+      >;
       training_participants: TableShape<
         {
           id: string;
           course_id: string;
+          batch_id: string | null;
           first_name: string;
           last_name: string;
           position: string | null;
@@ -373,6 +393,7 @@ export interface Database {
         {
           id?: string;
           course_id: string;
+          batch_id?: string | null;
           first_name: string;
           last_name: string;
           position?: string | null;

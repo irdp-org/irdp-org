@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentEmployee } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { TRAINING_DEPT_NAMES } from "@/lib/training";
 import { TrainingSideNav } from "@/components/training/TrainingSideNav";
 
 async function canAccessTraining(deptId: string | null, role: string): Promise<boolean> {
@@ -8,7 +9,7 @@ async function canAccessTraining(deptId: string | null, role: string): Promise<b
   if (!deptId) return false;
   const admin = createAdminClient();
   const { data } = await admin.from("departments").select("name").eq("id", deptId).single();
-  return data?.name === "อบรม";
+  return !!data?.name && TRAINING_DEPT_NAMES.includes(data.name);
 }
 
 export default async function TrainingLayout({ children }: { children: React.ReactNode }) {

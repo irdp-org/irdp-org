@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentEmployee } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { TRAINING_DEPT_NAMES } from "@/lib/training";
 import { TopBar } from "@/components/shell/TopBar";
 import { SideNav } from "@/components/shell/SideNav";
 import { BottomTabBar } from "@/components/shell/BottomTabBar";
@@ -18,7 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .select("name")
       .eq("id", employee.department_id)
       .single();
-    isTrainingDept = dept?.name === "อบรม";
+    isTrainingDept = !!dept?.name && TRAINING_DEPT_NAMES.includes(dept.name);
   }
 
   return (
