@@ -37,6 +37,15 @@ export function DirectoryClient({ employees }: { employees: DirectoryEmployee[] 
   const [search, setSearch] = useState("");
   const [deptTab, setDeptTab] = useState("ทั้งหมด");
 
+  const deptCounts = useMemo(() => {
+    const counts: Record<string, number> = { "ทั้งหมด": employees.length };
+    for (const tab of DEPT_TABS) {
+      if (tab === "ทั้งหมด") continue;
+      counts[tab] = employees.filter((e) => e.department_name.includes(tab)).length;
+    }
+    return counts;
+  }, [employees]);
+
   const filtered = useMemo(() => {
     let list = employees;
     if (deptTab !== "ทั้งหมด") {
@@ -85,7 +94,7 @@ export function DirectoryClient({ employees }: { employees: DirectoryEmployee[] 
                 : "bg-surface border border-border text-foreground"
             }`}
           >
-            {tab}
+            {tab} ({deptCounts[tab] ?? 0})
           </button>
         ))}
       </div>
