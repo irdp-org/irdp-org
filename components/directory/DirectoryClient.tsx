@@ -17,6 +17,7 @@ export type DirectoryEmployee = {
   phone: string | null;
   email: string | null;
   birthdate: string | null;
+  employee_code: string | null;
   avatarSrc: string | null;
 };
 
@@ -60,11 +61,12 @@ export function DirectoryClient({ employees }: { employees: DirectoryEmployee[] 
           (e.position?.toLowerCase().includes(q))
       );
     }
-    // dept_head / admin / exec always first within their group
+    // หัวหน้าฝ่ายขึ้นก่อนเสมอ จากนั้นเรียงตามรหัสพนักงาน
     return [...list].sort((a, b) => {
-      const aHead = a.role === "dept_head" || a.role === "admin" || a.role === "exec" ? 0 : 1;
-      const bHead = b.role === "dept_head" || b.role === "admin" || b.role === "exec" ? 0 : 1;
-      return aHead - bHead || a.full_name.localeCompare(b.full_name, "th");
+      const aHead = a.role === "dept_head" ? 0 : 1;
+      const bHead = b.role === "dept_head" ? 0 : 1;
+      if (aHead !== bHead) return aHead - bHead;
+      return (a.employee_code ?? "￿").localeCompare(b.employee_code ?? "￿", "en", { numeric: true });
     });
   }, [employees, deptTab, search]);
 
@@ -107,7 +109,11 @@ export function DirectoryClient({ employees }: { employees: DirectoryEmployee[] 
           {filtered.map((emp) => (
             <div
               key={emp.id}
-              className="flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm"
+              className={
+                emp.role === "dept_head"
+                  ? "flex flex-col overflow-hidden rounded-2xl border-2 border-primary bg-primary/5 shadow-md ring-1 ring-primary/20"
+                  : "flex flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-sm"
+              }
             >
               {/* Large photo */}
               <div className="relative aspect-square w-full bg-muted">

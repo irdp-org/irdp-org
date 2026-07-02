@@ -11,9 +11,9 @@ export default async function DirectoryPage() {
   const [{ data: employees }, { data: depts }] = await Promise.all([
     admin
       .from("employees")
-      .select("id, full_name, nickname, department_id, position, avatar_url, role, phone, email, birthdate")
+      .select("id, full_name, nickname, department_id, position, avatar_url, role, phone, email, birthdate, employee_code")
       .eq("status", "active")
-      .order("full_name"),
+      .order("employee_code", { nullsFirst: false }),
     admin.from("departments").select("id, name").order("name"),
   ]);
 
@@ -31,6 +31,7 @@ export default async function DirectoryPage() {
     phone: e.phone,
     email: e.email,
     birthdate: e.birthdate,
+    employee_code: e.employee_code,
     avatarSrc: getAvatarUrl(e.avatar_url),
   }));
 
