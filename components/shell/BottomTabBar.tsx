@@ -15,13 +15,13 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
-export function BottomTabBar({ role, isTrainingDept = false }: { role: RoleT; isTrainingDept?: boolean }) {
+export function BottomTabBar({ role, isTrainingDept = false, isDocumentDept = false }: { role: RoleT; isTrainingDept?: boolean; isDocumentDept?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const primary = NAV_ITEMS.filter((item) => PRIMARY_TAB_HREFS.includes(item.href));
   const moreItems = NAV_ITEMS.filter(
-    (item) => !PRIMARY_TAB_HREFS.includes(item.href) && isNavItemVisible(item, role, isTrainingDept)
+    (item) => !PRIMARY_TAB_HREFS.includes(item.href) && isNavItemVisible(item, role, isTrainingDept, isDocumentDept)
   );
 
   return (

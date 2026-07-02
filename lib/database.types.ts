@@ -458,6 +458,37 @@ export interface Database {
           sort_order?: number;
         }
       >;
+      received_documents: TableShape<
+        {
+          id: string;
+          doc_no: string;
+          year_be: number;
+          seq: number;
+          recipient_name: string | null;
+          recipient_emp_id: string | null;
+          sender: string | null;
+          subject: string | null;
+          image_drive_id: string | null;
+          image_url: string | null;
+          received_by: string | null;
+          received_at: string;
+          created_at: string;
+        },
+        {
+          id?: string;
+          doc_no: string;
+          year_be: number;
+          seq: number;
+          recipient_name?: string | null;
+          recipient_emp_id?: string | null;
+          sender?: string | null;
+          subject?: string | null;
+          image_drive_id?: string | null;
+          image_url?: string | null;
+          received_by?: string | null;
+          received_at?: string;
+        }
+      >;
       org_documents: TableShape<{
         id: string;
         title: string;
@@ -544,6 +575,10 @@ export interface Database {
       fn_recompute_leave_balance: {
         Args: { p_emp: string; p_year: number };
         Returns: undefined;
+      };
+      fn_next_doc_seq: {
+        Args: { p_year: number };
+        Returns: number;
       };
     };
     Enums: {

@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils";
 import { NAV_ITEMS, isNavItemVisible } from "@/lib/nav";
 import type { RoleT } from "@/lib/database.types";
 
-export function SideNav({ role, isTrainingDept = false }: { role: RoleT; isTrainingDept?: boolean }) {
+export function SideNav({ role, isTrainingDept = false, isDocumentDept = false }: { role: RoleT; isTrainingDept?: boolean; isDocumentDept?: boolean }) {
   const pathname = usePathname();
-  const items = NAV_ITEMS.filter((item) => isNavItemVisible(item, role, isTrainingDept));
+  const items = NAV_ITEMS.filter((item) => isNavItemVisible(item, role, isTrainingDept, isDocumentDept));
 
   return (
     <nav className="hidden w-60 shrink-0 flex-col gap-1 border-r border-border bg-background p-4 md:flex">

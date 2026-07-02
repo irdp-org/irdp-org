@@ -12,6 +12,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!employee) redirect("/pending");
 
   let isTrainingDept = false;
+  let isDocumentDept = false;
   if (employee.department_id) {
     const admin = createAdminClient();
     const { data: dept } = await admin
@@ -20,16 +21,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       .eq("id", employee.department_id)
       .single();
     isTrainingDept = !!dept?.name && TRAINING_DEPT_NAMES.includes(dept.name);
+    isDocumentDept = dept?.name === "ธุรการ";
   }
 
   return (
     <div className="flex min-h-svh flex-col">
       <TopBar employee={employee} />
       <div className="flex flex-1">
-        <SideNav role={employee.role} isTrainingDept={isTrainingDept} />
+        <SideNav role={employee.role} isTrainingDept={isTrainingDept} isDocumentDept={isDocumentDept} />
         <main className="flex-1 min-w-0 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">{children}</main>
       </div>
-      <BottomTabBar role={employee.role} isTrainingDept={isTrainingDept} />
+      <BottomTabBar role={employee.role} isTrainingDept={isTrainingDept} isDocumentDept={isDocumentDept} />
       <InstallPrompt />
     </div>
   );
