@@ -6,6 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 import { notify } from "@/lib/notify";
 import { createEvent, updateEvent, deleteEvent } from "@/lib/google-calendar";
+import { generateDocFromTemplate } from "@/lib/google-docs";
+import { sendMail } from "@/lib/gmail";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -416,6 +418,110 @@ export async function adminDeleteVanBooking(id: string) {
 
   revalidateAll();
   return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document generation (Google Docs templates) — items 5 & 6
+// ─────────────────────────────────────────────────────────────────────────────
+
+const TZ = "Asia/Bangkok";
+function dLabel(iso: string) {
+  return new Date(iso).toLocaleDateString("th-TH", { day: "numeric", month: "long", year: "numeric", timeZone: TZ });
+}
+function tLabel(iso: string) {
+  return new Date(iso).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: TZ });
+}
+
+/** Name of the dept head for an employee's department (for the approval line). */
+async function deptHeadName(employeeId: string): Promise<string> {
+  const admin = createAdminClient();
+  const { data: emp } = await admin.from("employees").select("department_id").eq("id", employeeId).single();
+  if (!emp?.department_id) return "";
+  const { data: head } = await admin
+    .from("employees")
+    .select("full_name")
+    .eq("department_id", emp.department_id)
+    .eq("role", "dept_head")
+    .limit(1)
+    .maybeSingle();
+  return head?.full_name ?? "";
+}
+
+async function emailDocIfRequested(sendEmail: boolean, requesterId: string, subject: string, url: string) {
+  if (!sendEmail) return;
+  const admin = createAdminClient();
+  const { data: emp } = await admin.from("employees").select("email, full_name").eq("id", requesterId).single();
+  if (!emp?.email) return;
+  await sendMail({
+    to: emp.email,
+    subject,
+    html: `<p>เรียน ${emp.full_name}</p><p>เอกสารของคุณถูกสร้างแล้ว สามารถเปิดได้ที่ลิงก์ด้านล่าง</p><p><a href="${url}">${url}</a></p>`,
+  });
+}
+
+export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+  const templateId = process.env.DOC_TEMPLATE_VAN;
+  if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบจองรถ (DOC_TEMPLATE_VAN)" };
+
+  const admin = createAdminClient();
+  const { data: b } = await admin.from("van_bookings").select("*").eq("id", bookingId).single();
+  if (!b) return { error: "ไม่พบการจอง" };
+
+  const { data: pax } = await admin.from("van_passengers").select("employee_id").eq("booking_id", bookingId);
+  const paxIds = (pax ?? []).map((p) => p.employee_id);
+  const lookupIds = [...new Set([b.requester_id, ...(b.driver_id ? [b.driver_id] : []), ...paxIds])];
+  const { data: people } = await admin.from("employees").select("id, full_name").in("id", lookupIds);
+  const nameById = new Map((people ?? []).map((p) => [p.id, p.full_name]));
+  const { data: veh } = await admin.from("vehicles").select("name").eq("id", b.vehicle_id).single();
+
+  const requesterName = nameById.get(b.requester_id) ?? "";
+  const others = [b.has_tollway ? "ค่าทางด่วน" : "", b.has_fuel ? "ค่าน้ำมัน" : "", b.other_expense || ""].filter(Boolean).join(", ");
+
+  const { url } = await generateDocFromTemplate(templateId, `ใบจองรถ-${dLabel(b.start_at)}-${requesterName}`, {
+    ผู้จอง: requesterName,
+    วันที่: dLabel(b.start_at),
+    เวลา: `${tLabel(b.start_at)} - ${tLabel(b.end_at)}`,
+    ปลายทาง: b.destination ?? "",
+    วัตถุประสงค์: b.purpose ?? "",
+    ผู้ร่วมเดินทาง: paxIds.map((id) => nameById.get(id) ?? "").filter(Boolean).join(", "),
+    คนขับ: b.driver_id ? (nameById.get(b.driver_id) ?? "") : "",
+    ค่าใช้จ่ายเพิ่มเติม: others || "ไม่มี",
+    รถ: veh?.name ?? "",
+    หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
+  });
+
+  await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองรถ ${dLabel(b.start_at)}`, url);
+  return { ok: true, url };
+}
+
+export async function generateRoomDoc(bookingId: string, sendEmail: boolean) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+  const templateId = process.env.DOC_TEMPLATE_ROOM;
+  if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบจองห้อง (DOC_TEMPLATE_ROOM)" };
+
+  const admin = createAdminClient();
+  const { data: b } = await admin.from("room_bookings").select("*").eq("id", bookingId).single();
+  if (!b) return { error: "ไม่พบการจอง" };
+
+  const { data: reqEmp } = await admin.from("employees").select("full_name").eq("id", b.requester_id).single();
+  const { data: room } = await admin.from("rooms").select("name").eq("id", b.room_id).single();
+
+  const requesterName = reqEmp?.full_name ?? "";
+  const { url } = await generateDocFromTemplate(templateId, `ใบจองห้อง-${dLabel(b.start_at)}-${requesterName}`, {
+    ผู้จอง: requesterName,
+    ห้อง: room?.name ?? "",
+    วันที่: dLabel(b.start_at),
+    เวลา: `${tLabel(b.start_at)} - ${tLabel(b.end_at)}`,
+    หัวข้อ: b.title ?? "",
+    อุปกรณ์: (b.equipment ?? []).join(", ") || "ไม่มี",
+    หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
+  });
+
+  await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองห้องประชุม ${dLabel(b.start_at)}`, url);
+  return { ok: true, url };
 }
 
 export async function adminDeleteRoomBooking(id: string) {

@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { VanBookingSheet, type EmployeeOption } from "./VanBookingSheet";
-import { cancelVanBooking, adminDeleteVanBooking } from "@/app/(app)/booking/actions";
+import { cancelVanBooking, adminDeleteVanBooking, generateVanDoc } from "@/app/(app)/booking/actions";
+import { GenerateDocButton } from "./GenerateDocButton";
 
 export type VanBookingRow = {
   id: string;
@@ -209,6 +210,7 @@ export function VanBookingClient({
                       </div>
 
                       <div className="ml-2 flex shrink-0 items-center gap-1">
+                        <GenerateDocButton id={b.id} generate={generateVanDoc} label="ออกใบจองรถ" />
                         {cancellable && b.status === "booked" && (
                           <AlertDialog>
                             <AlertDialogTrigger asChild>

@@ -21,7 +21,8 @@ import {
 import { EmptyState } from "@/components/shell/EmptyState";
 import { RoomBookingSheet, type RoomOption } from "./RoomBookingSheet";
 import { RoomTimeline, type TimelineBooking } from "./RoomTimeline";
-import { cancelRoomBooking, adminDeleteRoomBooking } from "@/app/(app)/booking/actions";
+import { cancelRoomBooking, adminDeleteRoomBooking, generateRoomDoc } from "@/app/(app)/booking/actions";
+import { GenerateDocButton } from "./GenerateDocButton";
 
 export type RoomBookingRow = {
   id: string;
@@ -234,6 +235,7 @@ export function RoomBookingClient({ bookings, rooms, currentEmployeeId, canEdit 
                         </div>
 
                         <div className="ml-2 flex shrink-0 items-center gap-1">
+                          <GenerateDocButton id={b.id} generate={generateRoomDoc} label="ออกใบจองห้อง" />
                           {cancellable && b.status === "booked" && (
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
