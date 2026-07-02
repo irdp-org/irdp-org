@@ -16,6 +16,7 @@ import {
   BookUser,
   ScrollText,
   GraduationCap,
+  QrCode,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -32,6 +33,7 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "หน้าหลัก", icon: Home },
+  { href: "/qr", label: "สร้าง QR Code", icon: QrCode },
   { href: "/leave", label: "ลา", icon: CalendarDays },
   { href: "/checkin", label: "เช็คอิน", icon: ScanLine },
   { href: "/field", label: "นอกสถานที่/OT", icon: MapPin },

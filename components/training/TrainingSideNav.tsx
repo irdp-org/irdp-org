@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { QrCode, BookOpen, Search } from "lucide-react";
+import { BookOpen, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/training/courses", label: "หลักสูตร", icon: BookOpen },
   { href: "/training/search", label: "ค้นหารายชื่อ", icon: Search },
-  { href: "/training/qr", label: "สร้าง QR Code", icon: QrCode },
 ];
 
 export function TrainingSideNav() {
