@@ -12,7 +12,7 @@ create table training_courses (
   target_group text,
   objectives   text,
   logo_url     text,
-  created_by   text        references employees(id) on delete set null,
+  created_by   uuid        references employees(id) on delete set null,
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );
