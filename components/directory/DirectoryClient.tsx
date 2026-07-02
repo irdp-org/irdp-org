@@ -20,7 +20,7 @@ export type DirectoryEmployee = {
   avatarSrc: string | null;
 };
 
-const DEPT_TABS = ["ทั้งหมด", "ผู้บริหาร", "ประเมิน", "วิจัย", "อบรม", "ธุรการ"];
+const DEPT_TABS = ["ทั้งหมด", "ผู้บริหาร", "ประเมินผล", "วิจัยและพัฒนา", "ฝึกอบรม", "ธุรการ"];
 
 function initials(name: string): string {
   const parts = name.trim().split(" ");

@@ -24,6 +24,9 @@ export async function getSignedAvatarUrl(path: string | null): Promise<string | 
 /** Synchronous public URL for avatars — use this for batch lookups (e.g. directory). */
 export function getAvatarUrl(path: string | null): string | null {
   if (!path) return null;
+  // Imported rosters may store a full external URL (Google Drive thumbnail,
+  // glide CDN, etc.) — use it as-is rather than prefixing the avatars bucket.
+  if (path.startsWith("http")) return path;
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   return `${base}/storage/v1/object/public/avatars/${path}`;
 }

@@ -60,6 +60,7 @@ export interface Database {
           address: string | null;
           avatar_url: string | null;
           status: EmployeeStatusT;
+          employee_code: string | null;
           education: EducationEntry[];
           created_at: string;
           updated_at: string;
@@ -80,6 +81,7 @@ export interface Database {
           address?: string | null;
           avatar_url?: string | null;
           status?: EmployeeStatusT;
+          employee_code?: string | null;
           education?: EducationEntry[];
         }
       >;
