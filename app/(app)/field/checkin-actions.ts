@@ -33,11 +33,10 @@ export async function checkInOffsite(formData: FormData) {
 
   const fieldRequestId = String(formData.get("fieldRequestId") ?? "");
   const kind = String(formData.get("kind") ?? "");
-  const lat = Number(formData.get("lat"));
-  const lng = Number(formData.get("lng"));
-  if (!fieldRequestId || (kind !== "in" && kind !== "out") || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-    return { error: "ข้อมูลไม่ถูกต้อง" };
-  }
+  const latRaw = Number(formData.get("lat"));
+  const lngRaw = Number(formData.get("lng"));
+  const hasGps = Number.isFinite(latRaw) && Number.isFinite(lngRaw);
+  if (!fieldRequestId || (kind !== "in" && kind !== "out")) return { error: "ข้อมูลไม่ถูกต้อง" };
 
   const supabase = await createClient();
 
@@ -55,6 +54,14 @@ export async function checkInOffsite(formData: FormData) {
   if (!["draft", "submitted", "returned"].includes(request.status))
     return { error: "รายการนี้เช็คอินไม่ได้ (อนุมัติแล้ว/ยกเลิก)" };
   if (!request.location_id) return { error: "คำขอนี้ไม่มีสถานที่ผูกไว้" };
+  // GPS required only for offsite (radius verification)
+  if (request.type === "offsite" && !hasGps) return { error: "กรุณาขอตำแหน่ง GPS ก่อน" };
+
+  // Selfie + worksite photo mandatory for both offsite/ot, in & out
+  const selfie = formData.get("selfie");
+  const photos = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  if (!(selfie instanceof File) || selfie.size === 0) return { error: "กรุณาแนบรูปเซลฟี่" };
+  if (photos.length === 0) return { error: "กรุณาแนบรูปถ่ายหน้างาน" };
 
   const { data: location } = await supabase
     .from("work_locations")
@@ -63,14 +70,15 @@ export async function checkInOffsite(formData: FormData) {
     .single();
   if (!location) return { error: "ไม่พบสถานที่ปฏิบัติงาน" };
 
-  const distanceM = haversineDistanceMeters(lat, lng, location.lat, location.lng);
-  const withinRadius = distanceM <= location.radius_m;
+  const distanceM = hasGps ? haversineDistanceMeters(latRaw, lngRaw, location.lat, location.lng) : null;
+  const withinRadius = distanceM !== null ? distanceM <= location.radius_m : null;
+  const lat = hasGps ? latRaw : null;
+  const lng = hasGps ? lngRaw : null;
 
   const stamp = Date.now();
   let selfieUrl: string | null = null;
   let photoUrl: string | null = null;
 
-  const selfie = formData.get("selfie");
   if (selfie instanceof File && selfie.size > 0) {
     const ext = extOf(selfie);
     const path = `${employee.id}/${fieldRequestId}-${kind}-${stamp}-selfie.${ext}`;
@@ -81,7 +89,6 @@ export async function checkInOffsite(formData: FormData) {
     selfieUrl = path;
   }
 
-  const photos = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
   for (let i = 0; i < photos.length; i++) {
     const ext = extOf(photos[i]);
     const path = `${employee.id}/${fieldRequestId}-${kind}-${stamp}-photo${i}.${ext}`;
@@ -211,7 +218,7 @@ export async function recordSimpleCheckin(fieldRequestId: string, kind: "in" | "
     .single();
 
   if (!request || request.employee_id !== employee.id) return { error: "ไม่พบคำขอ" };
-  if (request.type === "offsite") return { error: "นอกสถานที่ต้องเช็คอินด้วย GPS" };
+  if (request.type !== "wfh") return { error: "ประเภทนี้ต้องแนบรูปเซลฟี่และรูปหน้างาน" };
   if (!["draft", "submitted", "returned"].includes(request.status))
     return { error: "รายการนี้เช็คอินไม่ได้ (อนุมัติแล้ว/ยกเลิก)" };
 
@@ -254,6 +261,14 @@ export async function selfCheckIn(formData: FormData) {
   if ((type === "offsite" || type === "ot") && !locationId)
     return { error: "กรุณาเลือกสถานที่" };
 
+  // Selfie + worksite photo are mandatory for offsite/ot (both in & out)
+  const selfieFile = formData.get("selfie");
+  const photoFiles = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
+  if (type === "offsite" || type === "ot") {
+    if (!(selfieFile instanceof File) || selfieFile.size === 0) return { error: "กรุณาแนบรูปเซลฟี่" };
+    if (photoFiles.length === 0) return { error: "กรุณาแนบรูปถ่ายหน้างาน" };
+  }
+
   const supabase = await createClient();
   const today = todayBangkok();
   const nowIso = new Date().toISOString();
@@ -290,27 +305,25 @@ export async function selfCheckIn(formData: FormData) {
     }
   }
 
-  // 3) Photos/selfie for offsite only
+  // 3) Selfie + worksite photo for offsite/ot
   let selfieUrl: string | null = null;
   let photoUrl: string | null = null;
-  if (type === "offsite") {
+  if (type === "offsite" || type === "ot") {
     const stamp = Date.now();
-    const selfie = formData.get("selfie");
-    if (selfie instanceof File && selfie.size > 0) {
-      const ext = extOf(selfie);
+    if (selfieFile instanceof File && selfieFile.size > 0) {
+      const ext = extOf(selfieFile);
       const path = `${employee.id}/${row.id}-in-${stamp}-selfie.${ext}`;
       const { error } = await supabase.storage
         .from("checkin-photos")
-        .upload(path, selfie, { contentType: selfie.type || guessContentType(ext), upsert: true });
+        .upload(path, selfieFile, { contentType: selfieFile.type || guessContentType(ext), upsert: true });
       if (!error) selfieUrl = path;
     }
-    const photos = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
-    if (photos[0]) {
-      const ext = extOf(photos[0]);
+    if (photoFiles[0]) {
+      const ext = extOf(photoFiles[0]);
       const path = `${employee.id}/${row.id}-in-${stamp}-photo0.${ext}`;
       const { error } = await supabase.storage
         .from("checkin-photos")
-        .upload(path, photos[0], { contentType: photos[0].type || guessContentType(ext), upsert: true });
+        .upload(path, photoFiles[0], { contentType: photoFiles[0].type || guessContentType(ext), upsert: true });
       if (!error) photoUrl = path;
     }
   }

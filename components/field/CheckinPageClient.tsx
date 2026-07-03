@@ -141,9 +141,15 @@ function NewCheckinDialog({ locations }: { locations: LocationOption[] }) {
     if (!type) return;
     if ((type === "offsite" || type === "ot") && !locationId) { setError("กรุณาเลือกสถานที่"); return; }
     if (needsGps && !geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
-    setError(null);
 
     const fd = new FormData(e.currentTarget);
+    if (type === "offsite" || type === "ot") {
+      const s = fd.get("selfie");
+      const hasPhoto = fd.getAll("photos").some((f) => f instanceof File && f.size > 0);
+      if (!(s instanceof File) || s.size === 0) { setError("กรุณาแนบรูปเซลฟี่"); return; }
+      if (!hasPhoto) { setError("กรุณาแนบรูปถ่ายหน้างาน"); return; }
+    }
+    setError(null);
     fd.set("type", type);
     fd.set("note", note);
     if (geo.coords) {
@@ -234,14 +240,14 @@ function NewCheckinDialog({ locations }: { locations: LocationOption[] }) {
               </>
             )}
 
-            {type === "offsite" && (
+            {(type === "offsite" || type === "ot") && (
               <>
                 <div className="flex flex-col gap-1.5">
-                  <Label>เซลฟี่</Label>
+                  <Label>เซลฟี่ *</Label>
                   <input type="file" name="selfie" accept="image/*" capture="user" className="text-sm" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>รูปหน้างาน</Label>
+                  <Label>รูปหน้างาน *</Label>
                   <input type="file" name="photos" accept="image/*" capture="environment" className="text-sm" />
                 </div>
               </>
@@ -283,9 +289,10 @@ function CheckDialog({ req, kind }: { req: CheckinRequest; kind: "in" | "out" })
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const label = kind === "in" ? "เช็คอิน" : "เช็คเอาท์";
+  const needsGps = req.type === "offsite";
 
   const distance =
-    geo.coords && req.location_lat != null && req.location_lng != null
+    needsGps && geo.coords && req.location_lat != null && req.location_lng != null
       ? haversineDistanceMeters(geo.coords.lat, geo.coords.lng, req.location_lat, req.location_lng)
       : null;
   const radiusM = req.location_radius_m ?? 200;
@@ -293,15 +300,22 @@ function CheckDialog({ req, kind }: { req: CheckinRequest; kind: "in" | "out" })
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
+    if (needsGps && !geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
+
+    const fd = new FormData(e.currentTarget);
+    const s = fd.get("selfie");
+    const hasPhoto = fd.getAll("photos").some((f) => f instanceof File && f.size > 0);
+    if (!(s instanceof File) || s.size === 0) { setError("กรุณาแนบรูปเซลฟี่"); return; }
+    if (!hasPhoto) { setError("กรุณาแนบรูปถ่ายหน้างาน"); return; }
     setError(null);
 
     startTransition(async () => {
-      const fd = new FormData(e.currentTarget);
       fd.set("fieldRequestId", req.id);
       fd.set("kind", kind);
-      fd.set("lat", String(geo.coords!.lat));
-      fd.set("lng", String(geo.coords!.lng));
+      if (geo.coords) {
+        fd.set("lat", String(geo.coords.lat));
+        fd.set("lng", String(geo.coords.lng));
+      }
       const res = await checkInOffsite(fd);
       if (res && "error" in res && res.error) { setError(res.error); return; }
       setOpen(false);
@@ -326,27 +340,29 @@ function CheckDialog({ req, kind }: { req: CheckinRequest; kind: "in" | "out" })
           <DialogDescription>{TYPE_META[req.type].label}{req.location_name ? ` · ${req.location_name}` : ""}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <GpsButton coords={geo.coords} locating={geo.locating} error={geo.error} onRequest={geo.request} />
-          {distance !== null && (
-            <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${outsideRadius ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
-              {outsideRadius ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-              <span>
-                ห่าง {Math.round(distance)} ม. (รัศมี {radiusM} ม.){outsideRadius && " — อยู่นอกรัศมี!"}
-              </span>
-            </div>
-          )}
-          {kind === "in" && (
-            <div className="flex flex-col gap-1.5">
-              <Label>เซลฟี่</Label>
-              <input type="file" name="selfie" accept="image/*" capture="user" className="text-sm" />
-            </div>
+          {needsGps && (
+            <>
+              <GpsButton coords={geo.coords} locating={geo.locating} error={geo.error} onRequest={geo.request} />
+              {distance !== null && (
+                <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${outsideRadius ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
+                  {outsideRadius ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
+                  <span>
+                    ห่าง {Math.round(distance)} ม. (รัศมี {radiusM} ม.){outsideRadius && " — อยู่นอกรัศมี!"}
+                  </span>
+                </div>
+              )}
+            </>
           )}
           <div className="flex flex-col gap-1.5">
-            <Label>รูปหน้างาน{kind === "out" ? " (ถ้ามี)" : ""}</Label>
+            <Label>เซลฟี่ *</Label>
+            <input type="file" name="selfie" accept="image/*" capture="user" className="text-sm" />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>รูปหน้างาน *</Label>
             <input type="file" name="photos" accept="image/*" capture="environment" className="text-sm" />
           </div>
           {error && <p className="text-sm text-danger">{error}</p>}
-          <Button type="submit" disabled={isPending || !geo.coords}>
+          <Button type="submit" disabled={isPending || (needsGps && !geo.coords)}>
             {isPending ? "กำลังบันทึก..." : `บันทึก${label}`}
           </Button>
         </form>
@@ -380,7 +396,7 @@ function RecordCard({ req }: { req: CheckinRequest }) {
   const outCi = req.checkins.find((c) => c.kind === "out");
   const locked = req.status === "approved";
   const CheckControl = ({ kind }: { kind: "in" | "out" }) =>
-    req.type === "offsite" ? <CheckDialog req={req} kind={kind} /> : <SimpleCheckButton req={req} kind={kind} />;
+    req.type === "wfh" ? <SimpleCheckButton req={req} kind={kind} /> : <CheckDialog req={req} kind={kind} />;
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm">
