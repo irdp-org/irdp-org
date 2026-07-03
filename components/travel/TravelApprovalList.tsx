@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { MODE_LABELS, formatBaht } from "@/lib/travel";
-import { decideClaim } from "@/app/(app)/travel-expense/actions";
+import { decideClaim, generateTravelDoc } from "@/app/(app)/travel-expense/actions";
+import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 import type { RequestStatusT } from "@/lib/database.types";
 import type { TravelItem } from "./TravelExpenseClient";
 
@@ -91,7 +92,10 @@ export function TravelApprovalList({ rows, role }: { rows: TravelApprovalRow[]; 
               <DialogHeader>
                 <DialogTitle>{detail.title || "เอกสารเบิกค่าเดินทาง"}</DialogTitle>
               </DialogHeader>
-              <p className="text-sm text-muted-foreground">โดย {detail.employee_name}</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">โดย {detail.employee_name}</p>
+                <GenerateDocButton id={detail.id} generate={generateTravelDoc} label="ออกใบรับรองแทนใบเสร็จ" />
+              </div>
               <div className="flex flex-col divide-y divide-border">
                 {detail.items.map((it) => (
                   <div key={it.id} className="flex flex-col gap-0.5 py-2 text-sm">

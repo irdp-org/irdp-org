@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { TRAVEL_MODES, MODE_LABELS, KM_RATE, formatBaht } from "@/lib/travel";
-import { saveClaim, deleteClaim } from "@/app/(app)/travel-expense/actions";
+import { saveClaim, deleteClaim, generateTravelDoc } from "@/app/(app)/travel-expense/actions";
+import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 import type { RequestStatusT } from "@/lib/database.types";
 
 export type TravelItem = {
@@ -136,11 +137,14 @@ export function TravelExpenseClient({ claims }: { claims: TravelClaim[] }) {
               </DialogHeader>
               <div className="flex items-center justify-between">
                 <Badge variant={STATUS_VARIANT[detail.status]}>{LEAVE_STATUS_LABELS_TH[detail.status]}</Badge>
-                {(detail.status === "draft" || detail.status === "returned") && (
-                  <Button size="sm" variant="outline" onClick={() => openEdit(detail)}>
-                    <Pencil className="h-3.5 w-3.5" /> แก้ไข
-                  </Button>
-                )}
+                <div className="flex items-center gap-1">
+                  <GenerateDocButton id={detail.id} generate={generateTravelDoc} label="ออกใบรับรองแทนใบเสร็จ" />
+                  {(detail.status === "draft" || detail.status === "returned") && (
+                    <Button size="sm" variant="outline" onClick={() => openEdit(detail)}>
+                      <Pencil className="h-3.5 w-3.5" /> แก้ไข
+                    </Button>
+                  )}
+                </div>
               </div>
               <div className="flex flex-col divide-y divide-border">
                 {detail.items.map((it) => (

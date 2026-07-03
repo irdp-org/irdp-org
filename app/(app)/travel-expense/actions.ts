@@ -167,3 +167,63 @@ export async function deleteClaim(id: string) {
   revalidatePath("/travel-expense");
   return { ok: true };
 }
+
+// ── ใบรับรองแทนใบเสร็จรับเงิน (item: travel certificate) ──────────────────────
+export async function generateTravelDoc(id: string, sendEmail: boolean) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+  const templateId = process.env.DOC_TEMPLATE_TRAVEL_CERT;
+  if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบรับรองฯ (DOC_TEMPLATE_TRAVEL_CERT)" };
+
+  const { generateDocFromTemplate } = await import("@/lib/google-docs");
+  const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const { MODE_LABELS, formatBaht, bahtText } = await import("@/lib/travel");
+
+  const supabase = await createClient();
+  const { data: claim } = await supabase
+    .from("travel_expense_claims")
+    .select("employee_id, title, total_amount")
+    .eq("id", id)
+    .single();
+  if (!claim) return { error: "ไม่พบเอกสาร" };
+
+  const { data: items } = await supabase
+    .from("travel_expense_items")
+    .select("travel_date, from_location, to_location, mode, km, amount, note")
+    .eq("claim_id", id)
+    .order("sort_order");
+
+  const admin = createAdminClient();
+  const { data: emp } = await admin.from("employees").select("full_name, position").eq("id", claim.employee_id).single();
+  const head = await deptHeadName(claim.employee_id);
+  const dept = await deptNameOf(claim.employee_id);
+
+  // Build one big detail block (per the user's "single variable" request)
+  const lines = (items ?? []).map((it, i) => {
+    const route = [it.from_location, it.to_location].filter(Boolean).join(" - ");
+    const mode = MODE_LABELS[it.mode] ?? it.mode;
+    const km = it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : "";
+    return `${i + 1}. ${dLabel(it.travel_date)}  ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}  ${formatBaht(it.amount)} บาท`;
+  });
+
+  const detail =
+    `ข้าพเจ้า ${emp?.full_name ?? ""} ตำแหน่ง ${emp?.position ?? ""} ฝ่าย ${dept}\n` +
+    `ได้ปฏิบัติงานเกี่ยวกับ ${claim.title ?? "การเดินทางปฏิบัติงาน"}\n\n` +
+    `รายละเอียดการใช้จ่าย\n${lines.join("\n")}\n\n` +
+    `รวมเป็นเงินทั้งสิ้น ${formatBaht(claim.total_amount)} บาท (${bahtText(claim.total_amount)})`;
+
+  const { url } = await generateDocFromTemplate(templateId, `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}`, {
+    รายละเอียด: detail,
+    ชื่อ: emp?.full_name ?? "",
+    ตำแหน่ง: emp?.position ?? "",
+    ฝ่าย: dept,
+    ผู้อนุมัติ: head,
+    วันที่: dLabel(new Date().toISOString()),
+    รวมเป็นเงิน: formatBaht(claim.total_amount),
+    รวมเป็นเงินตัวอักษร: bahtText(claim.total_amount),
+  });
+
+  await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", url);
+  return { ok: true, url };
+}
