@@ -21,6 +21,7 @@ export type TravelApprovalRow = {
   status: RequestStatusT;
   total_amount: number;
   created_at: string;
+  attachment_urls: string[];
   employee_name: string;
   items: TravelItem[];
 };
@@ -116,6 +117,19 @@ export function TravelApprovalList({ rows, role }: { rows: TravelApprovalRow[]; 
                 <span>รวมทั้งสิ้น</span>
                 <span>{formatBaht(detail.total_amount)} บาท</span>
               </div>
+              {detail.attachment_urls.length > 0 && (
+                <div className="flex flex-col gap-1.5 border-t border-border pt-2">
+                  <span className="text-xs text-muted-foreground">หลักฐานแนบ ({detail.attachment_urls.length})</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {detail.attachment_urls.map((u, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a key={i} href={u} target="_blank" rel="noopener noreferrer">
+                        <img src={u} alt={`หลักฐาน ${i + 1}`} className="aspect-square w-full rounded-lg border border-border object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {canDecide && detail.status === "submitted" && (
                 <div className="flex gap-2 pt-2">

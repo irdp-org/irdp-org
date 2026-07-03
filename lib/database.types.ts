@@ -418,6 +418,7 @@ export interface Database {
           approver_id: string | null;
           decided_at: string | null;
           total_amount: number;
+          attachment_urls: string[];
           created_at: string;
           updated_at: string;
         },
@@ -429,6 +430,7 @@ export interface Database {
           approver_id?: string | null;
           decided_at?: string | null;
           total_amount?: number;
+          attachment_urls?: string[];
         }
       >;
       travel_expense_items: TableShape<

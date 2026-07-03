@@ -80,11 +80,30 @@ export async function saveClaim(formData: FormData) {
   const supabase = await createClient();
   const status = submit ? "submitted" : "draft";
 
+  // Upload evidence images (Google Maps distance, receipts) → per-user Drive folder
+  const files = formData.getAll("attachments").filter((f): f is File => f instanceof File && f.size > 0);
+  let newUrls: string[] = [];
+  if (files.length > 0) {
+    const { getOrCreateSubfolder, uploadToDrive, driveThumbUrl } = await import("@/lib/google-drive");
+    const folderId = await getOrCreateSubfolder(`เบิกค่าเดินทาง - ${employee.full_name}`);
+    const stamp = Date.now();
+    newUrls = await Promise.all(
+      files.map(async (f, i) => {
+        const buf = Buffer.from(await f.arrayBuffer());
+        const up = await uploadToDrive(buf, `evidence-${stamp}-${i}.jpg`, f.type || "image/jpeg", folderId);
+        return driveThumbUrl(up.id);
+      })
+    );
+  }
+
   let claimId = id;
   if (id) {
+    // Preserve existing attachments, append new ones
+    const { data: existing } = await supabase.from("travel_expense_claims").select("attachment_urls").eq("id", id).single();
+    const merged = [...(existing?.attachment_urls ?? []), ...newUrls];
     const { error } = await supabase
       .from("travel_expense_claims")
-      .update({ title, status })
+      .update({ title, status, attachment_urls: merged })
       .eq("id", id);
     if (error) return { error: error.message };
     // Replace items
@@ -92,7 +111,7 @@ export async function saveClaim(formData: FormData) {
   } else {
     const { data, error } = await supabase
       .from("travel_expense_claims")
-      .insert({ employee_id: employee.id, title, status })
+      .insert({ employee_id: employee.id, title, status, attachment_urls: newUrls })
       .select("id")
       .single();
     if (error || !data) return { error: error?.message ?? "บันทึกไม่สำเร็จ" };
@@ -175,7 +194,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   const templateId = process.env.DOC_TEMPLATE_TRAVEL_CERT;
   if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบรับรองฯ (DOC_TEMPLATE_TRAVEL_CERT)" };
 
-  const { generateDocFromTemplate } = await import("@/lib/google-docs");
+  const { generateDocFromTemplate, appendImagesToDoc } = await import("@/lib/google-docs");
   const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const { MODE_LABELS, formatBaht, bahtText } = await import("@/lib/travel");
@@ -183,7 +202,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   const supabase = await createClient();
   const { data: claim } = await supabase
     .from("travel_expense_claims")
-    .select("employee_id, title, total_amount")
+    .select("employee_id, title, total_amount, attachment_urls")
     .eq("id", id)
     .single();
   if (!claim) return { error: "ไม่พบเอกสาร" };
@@ -213,7 +232,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
     `รายละเอียดการใช้จ่าย\n${lines.join("\n")}\n\n` +
     `รวมเป็นเงินทั้งสิ้น ${formatBaht(claim.total_amount)} บาท (${bahtText(claim.total_amount)})`;
 
-  const { url } = await generateDocFromTemplate(templateId, `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}`, {
+  const { id: docId, url } = await generateDocFromTemplate(templateId, `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}`, {
     รายละเอียด: detail,
     ชื่อ: emp?.full_name ?? "",
     ตำแหน่ง: emp?.position ?? "",
@@ -223,6 +242,10 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
     รวมเป็นเงิน: formatBaht(claim.total_amount),
     รวมเป็นเงินตัวอักษร: bahtText(claim.total_amount),
   });
+
+  // Attach evidence images at the end of the certificate
+  const attachments = (claim.attachment_urls ?? []) as string[];
+  if (attachments.length > 0) await appendImagesToDoc(docId, attachments);
 
   await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", url);
   return { ok: true, url };

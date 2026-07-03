@@ -14,6 +14,7 @@ import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { TRAVEL_MODES, MODE_LABELS, KM_RATE, formatBaht } from "@/lib/travel";
 import { saveClaim, deleteClaim, generateTravelDoc } from "@/app/(app)/travel-expense/actions";
 import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
+import { compressImage } from "@/lib/image-compress";
 import type { RequestStatusT } from "@/lib/database.types";
 
 export type TravelItem = {
@@ -34,6 +35,7 @@ export type TravelClaim = {
   title: string | null;
   status: RequestStatusT;
   total_amount: number;
+  attachment_urls: string[];
   created_at: string;
   items: TravelItem[];
 };
@@ -166,6 +168,19 @@ export function TravelExpenseClient({ claims }: { claims: TravelClaim[] }) {
                 <span>รวมทั้งสิ้น</span>
                 <span>{formatBaht(detail.total_amount)} บาท</span>
               </div>
+              {detail.attachment_urls.length > 0 && (
+                <div className="flex flex-col gap-1.5 border-t border-border pt-2">
+                  <span className="text-xs text-muted-foreground">หลักฐานแนบ ({detail.attachment_urls.length})</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {detail.attachment_urls.map((u, i) => (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <a key={i} href={u} target="_blank" rel="noopener noreferrer">
+                        <img src={u} alt={`หลักฐาน ${i + 1}`} className="aspect-square w-full rounded-lg border border-border object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </DialogContent>
@@ -209,6 +224,7 @@ function ClaimForm({
       : [emptyRow()]
   );
   const [error, setError] = useState<string | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const total = rows.reduce((s, r) => s + rowAmount(r), 0);
@@ -244,6 +260,7 @@ function ClaimForm({
       )
     );
     startTransition(async () => {
+      for (const f of files) fd.append("attachments", await compressImage(f));
       const res = await saveClaim(fd);
       if ("error" in res && res.error) {
         setError(res.error);
@@ -321,6 +338,22 @@ function ClaimForm({
           <div className="flex justify-between border-t border-border pt-2 text-sm font-semibold">
             <span>รวมทั้งสิ้น</span>
             <span>{formatBaht(total)} บาท</span>
+          </div>
+
+          {/* Evidence images (Google Maps distance, receipts, ...) */}
+          <div className="flex flex-col gap-1.5 border-t border-border pt-3">
+            <Label>แนบหลักฐาน (แคปแผนที่ / ใบเสร็จ — แนบได้หลายรูป)</Label>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="text-sm"
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            />
+            {files.length > 0 && <p className="text-xs text-muted-foreground">เลือกไว้ {files.length} รูป</p>}
+            {existing && existing.attachment_urls.length > 0 && (
+              <p className="text-xs text-muted-foreground">มีอยู่แล้ว {existing.attachment_urls.length} รูป (รูปใหม่จะเพิ่มต่อท้าย)</p>
+            )}
           </div>
 
           {error && <p className="text-sm text-danger">{error}</p>}
