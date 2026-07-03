@@ -317,3 +317,43 @@ async function handleDocUpload(supabase: any, assetId: string, formData: FormDat
     entity_id: assetId,
   });
 }
+
+// ── Asset receipt/return document (item 6) ───────────────────────────────────
+export async function generateAssetDoc(assignmentId: string, sendEmail: boolean) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+  const templateId = process.env.DOC_TEMPLATE_ASSET;
+  if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบรับ-คืนอุปกรณ์ (DOC_TEMPLATE_ASSET)" };
+
+  const { generateDocFromTemplate } = await import("@/lib/google-docs");
+  const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
+
+  const admin = createAdminClient();
+  const { data: a } = await admin
+    .from("asset_assignments")
+    .select("id, employee_id, assigned_at, returned_at, status, asset_id")
+    .eq("id", assignmentId)
+    .single();
+  if (!a) return { error: "ไม่พบรายการมอบหมาย" };
+
+  const [{ data: asset }, { data: emp }] = await Promise.all([
+    admin.from("assets").select("name, category, asset_tag, serial").eq("id", a.asset_id).single(),
+    admin.from("employees").select("full_name").eq("id", a.employee_id).single(),
+  ]);
+
+  const { url } = await generateDocFromTemplate(templateId, `ใบรับคืนอุปกรณ์-${asset?.name ?? ""}-${emp?.full_name ?? ""}`, {
+    ผู้รับผิดชอบ: emp?.full_name ?? "",
+    ฝ่าย: await deptNameOf(a.employee_id),
+    ชื่ออุปกรณ์: asset?.name ?? "",
+    ประเภท: asset?.category ?? "",
+    หมายเลขครุภัณฑ์: asset?.asset_tag ?? asset?.serial ?? "",
+    สภาพ: a.status === "returned" ? "ส่งคืนแล้ว" : "ใช้งานอยู่",
+    วันที่รับ: dLabel(a.assigned_at),
+    วันที่คืน: a.returned_at ? dLabel(a.returned_at) : "-",
+    วันที่: dLabel(new Date().toISOString()),
+    หัวหน้าฝ่าย: await deptHeadName(a.employee_id),
+  });
+
+  await emailDocIfRequested(sendEmail, a.employee_id, `ใบรับ-คืนอุปกรณ์ ${asset?.name ?? ""}`, url);
+  return { ok: true, url };
+}

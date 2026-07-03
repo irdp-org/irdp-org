@@ -19,8 +19,9 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { EmptyState } from "@/components/shell/EmptyState";
-import { acceptAsset, returnAsset } from "@/app/(app)/assets/actions";
+import { acceptAsset, returnAsset, generateAssetDoc } from "@/app/(app)/assets/actions";
 import { CATEGORIES } from "@/components/admin/AssetSheet";
+import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 
 export type MyAssignment = {
   id: string;
@@ -100,12 +101,15 @@ function AssetCard({ assignment, onAction }: { assignment: MyAssignment; onActio
           </span>
         </div>
 
-        {/* Status badge */}
-        {assignment.status === "pending_accept" ? (
-          <Badge variant="secondary">รอยืนยัน</Badge>
-        ) : (
-          <Badge variant="default">รับแล้ว</Badge>
-        )}
+        {/* Status badge + doc */}
+        <div className="flex items-center gap-1">
+          {assignment.status === "pending_accept" ? (
+            <Badge variant="secondary">รอยืนยัน</Badge>
+          ) : (
+            <Badge variant="default">รับแล้ว</Badge>
+          )}
+          <GenerateDocButton id={assignment.id} generate={generateAssetDoc} label="ออกใบรับ-คืน" />
+        </div>
       </div>
 
       {/* Actions */}

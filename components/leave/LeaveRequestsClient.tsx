@@ -26,7 +26,8 @@ import {
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LeaveRequestSheet } from "./LeaveRequestSheet";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
-import { cancelLeaveRequest } from "@/app/(app)/leave/actions";
+import { cancelLeaveRequest, generateLeaveDoc } from "@/app/(app)/leave/actions";
+import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 import { CalendarDays } from "lucide-react";
 
 export type OwnLeaveRequest = {
@@ -222,6 +223,10 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
                     <span className="font-medium">หมายเหตุตีกลับ:</span> {detailItem.returnNote}
                   </div>
                 )}
+                <div className="flex items-center justify-between border-t border-border pt-3">
+                  <span className="text-sm text-muted-foreground">ออกใบลา (Google Doc)</span>
+                  <GenerateDocButton id={detailItem.id} generate={generateLeaveDoc} label="ออกใบลา" />
+                </div>
                 {detailItem.cert_url && (
                   <div className="flex flex-col gap-2">
                     <span className="text-muted-foreground">ไฟล์แนบ</span>

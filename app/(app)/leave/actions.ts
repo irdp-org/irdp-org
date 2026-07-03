@@ -218,3 +218,43 @@ export async function cancelLeaveRequest(id: string) {
   revalidatePath("/leave");
   return { ok: true };
 }
+
+// ── Leave document (item 6) ──────────────────────────────────────────────────
+export async function generateLeaveDoc(id: string, sendEmail: boolean) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+  const templateId = process.env.DOC_TEMPLATE_LEAVE;
+  if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบลา (DOC_TEMPLATE_LEAVE)" };
+
+  const { generateDocFromTemplate } = await import("@/lib/google-docs");
+  const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+
+  const supabase = await createClient();
+  const { data: r } = await supabase
+    .from("leave_requests")
+    .select("employee_id, leave_code, start_at, end_at, hours, reason, created_at")
+    .eq("id", id)
+    .single();
+  if (!r) return { error: "ไม่พบคำขอลา" };
+
+  const admin = createAdminClient();
+  const { data: emp } = await admin.from("employees").select("full_name, position").eq("id", r.employee_id).single();
+
+  const days = (r.hours / 7.5).toFixed(1).replace(/\.0$/, "");
+  const { url } = await generateDocFromTemplate(templateId, `ใบลา-${dLabel(r.start_at)}-${emp?.full_name ?? ""}`, {
+    ผู้ลา: emp?.full_name ?? "",
+    ตำแหน่ง: emp?.position ?? "",
+    ฝ่าย: await deptNameOf(r.employee_id),
+    ประเภทการลา: LEAVE_LABELS_TH[r.leave_code],
+    วันที่เริ่ม: dLabel(r.start_at),
+    วันที่สิ้นสุด: dLabel(r.end_at),
+    จำนวนวัน: days,
+    เหตุผล: r.reason ?? "",
+    วันที่ยื่น: dLabel(r.created_at),
+    หัวหน้าฝ่าย: await deptHeadName(r.employee_id),
+  });
+
+  await emailDocIfRequested(sendEmail, r.employee_id, `ใบลา ${dLabel(r.start_at)}`, url);
+  return { ok: true, url };
+}
