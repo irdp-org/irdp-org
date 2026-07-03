@@ -29,6 +29,8 @@ import {
 } from "@/app/(app)/leave/approval-actions";
 import { LeaveExportPanel } from "./LeaveExportPanel";
 import { ClipboardList } from "lucide-react";
+import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
+import { generateLeaveDoc } from "@/app/(app)/leave/actions";
 import type { RoleT, RequestStatusT, LeaveCodeT } from "@/lib/database.types";
 
 export type ApprovalQueueRow = {
@@ -247,7 +249,10 @@ export function ApprovalList({
                 </span>
                 {r.reason && <span className="text-muted-foreground">เหตุผล: {r.reason}</span>}
               </div>
-              <Badge variant={STATUS_VARIANT[r.status]}>{LEAVE_STATUS_LABELS_TH[r.status]}</Badge>
+              <div className="flex shrink-0 items-center gap-1">
+                <Badge variant={STATUS_VARIANT[r.status]}>{LEAVE_STATUS_LABELS_TH[r.status]}</Badge>
+                <GenerateDocButton id={r.id} generate={generateLeaveDoc} label="ออกใบลา" />
+              </div>
             </div>
 
             {r.status === "submitted" && canApprove && (
