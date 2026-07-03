@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { compressImage } from "@/lib/image-compress";
 import { uploadAndOcr, saveReceivedDocument } from "@/app/(app)/documents/actions";
 
 export type ReceivedDoc = {
@@ -60,9 +61,12 @@ export function DocumentIntakeClient({
     if (!file) return;
     setError(null);
     setScanning(true);
-    const fd = new FormData();
-    fd.set("image", file);
-    uploadAndOcr(fd)
+    compressImage(file)
+      .then((compressed) => {
+        const fd = new FormData();
+        fd.set("image", compressed);
+        return uploadAndOcr(fd);
+      })
       .then((res) => {
         if ("error" in res && res.error) {
           setError(res.error);

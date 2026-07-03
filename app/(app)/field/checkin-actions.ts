@@ -5,27 +5,36 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { haversineDistanceMeters } from "@/lib/geo";
 
-const EXT_TO_MIME: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  webp: "image/webp",
-  heic: "image/heic",
-  heif: "image/heif",
-};
-function guessContentType(ext: string): string {
-  return EXT_TO_MIME[ext.toLowerCase()] ?? "application/octet-stream";
-}
-
-function extOf(file: File): string {
-  return file.name.split(".").pop() || "jpg";
+/** Upload check-in selfie/worksite photo to a per-employee Google Drive folder
+ * (compressed client-side). Returns thumbnail URLs stored on the checkin row. */
+async function uploadCheckinMedia(
+  employeeName: string,
+  recordKey: string,
+  selfie: File | null,
+  photo: File | null
+): Promise<{ selfieUrl: string | null; photoUrl: string | null }> {
+  const { getOrCreateSubfolder, uploadToDrive, driveThumbUrl } = await import("@/lib/google-drive");
+  const folderId = await getOrCreateSubfolder(`เช็คอิน - ${employeeName}`);
+  const stamp = Date.now();
+  let selfieUrl: string | null = null;
+  let photoUrl: string | null = null;
+  if (selfie) {
+    const buf = Buffer.from(await selfie.arrayBuffer());
+    const up = await uploadToDrive(buf, `${recordKey}-${stamp}-selfie.jpg`, selfie.type || "image/jpeg", folderId);
+    selfieUrl = driveThumbUrl(up.id);
+  }
+  if (photo) {
+    const buf = Buffer.from(await photo.arrayBuffer());
+    const up = await uploadToDrive(buf, `${recordKey}-${stamp}-photo.jpg`, photo.type || "image/jpeg", folderId);
+    photoUrl = driveThumbUrl(up.id);
+  }
+  return { selfieUrl, photoUrl };
 }
 
 /**
- * GPS + selfie + worksite photo(s) check-in for an offsite request.
- * distance_m/within_radius are always recomputed here from the request's
- * own work_locations row — the client's own estimate (shown for UX) is
- * never trusted as the value that gets stored, per CLAUDE.md.
+ * Check-in/out on an existing record (all types). GPS/radius only for offsite;
+ * selfie + worksite photo required for offsite/ot, optional for wfh. Photos go
+ * to a per-employee Google Drive folder, compressed on the client first.
  */
 export async function checkInOffsite(formData: FormData) {
   const employee = await getCurrentEmployee();
@@ -47,103 +56,53 @@ export async function checkInOffsite(formData: FormData) {
     .single();
 
   if (!request || request.employee_id !== employee.id) return { error: "ไม่พบคำขอ" };
-  if (request.type !== "offsite" && request.type !== "ot")
-    return { error: "เช็คอินนี้ใช้ได้เฉพาะนอกสถานที่/OT" };
-  // Self-service: employee can check in/out on their own record until it is
-  // approved (approved = locked; cancelled/rejected = not allowed).
   if (!["draft", "submitted", "returned"].includes(request.status))
     return { error: "รายการนี้เช็คอินไม่ได้ (อนุมัติแล้ว/ยกเลิก)" };
-  if (!request.location_id) return { error: "คำขอนี้ไม่มีสถานที่ผูกไว้" };
-  // GPS required only for offsite (radius verification)
+
+  const needsMedia = request.type === "offsite" || request.type === "ot";
   if (request.type === "offsite" && !hasGps) return { error: "กรุณาขอตำแหน่ง GPS ก่อน" };
 
-  // Selfie + worksite photo mandatory for both offsite/ot, in & out
   const selfie = formData.get("selfie");
   const photos = formData.getAll("photos").filter((f): f is File => f instanceof File && f.size > 0);
-  if (!(selfie instanceof File) || selfie.size === 0) return { error: "กรุณาแนบรูปเซลฟี่" };
-  if (photos.length === 0) return { error: "กรุณาแนบรูปถ่ายหน้างาน" };
+  if (needsMedia && (!(selfie instanceof File) || selfie.size === 0)) return { error: "กรุณาแนบรูปเซลฟี่" };
+  if (needsMedia && photos.length === 0) return { error: "กรุณาแนบรูปถ่ายหน้างาน" };
 
-  const { data: location } = await supabase
-    .from("work_locations")
-    .select("id, lat, lng, radius_m, required_photos")
-    .eq("id", request.location_id)
-    .single();
-  if (!location) return { error: "ไม่พบสถานที่ปฏิบัติงาน" };
-
-  const distanceM = hasGps ? haversineDistanceMeters(latRaw, lngRaw, location.lat, location.lng) : null;
-  const withinRadius = distanceM !== null ? distanceM <= location.radius_m : null;
-  const lat = hasGps ? latRaw : null;
-  const lng = hasGps ? lngRaw : null;
-
-  const stamp = Date.now();
-  let selfieUrl: string | null = null;
-  let photoUrl: string | null = null;
-
-  if (selfie instanceof File && selfie.size > 0) {
-    const ext = extOf(selfie);
-    const path = `${employee.id}/${fieldRequestId}-${kind}-${stamp}-selfie.${ext}`;
-    const { error } = await supabase.storage
-      .from("checkin-photos")
-      .upload(path, selfie, { contentType: selfie.type || guessContentType(ext), upsert: true });
-    if (error) return { error: error.message };
-    selfieUrl = path;
-  }
-
-  for (let i = 0; i < photos.length; i++) {
-    const ext = extOf(photos[i]);
-    const path = `${employee.id}/${fieldRequestId}-${kind}-${stamp}-photo${i}.${ext}`;
-    const { error } = await supabase.storage
-      .from("checkin-photos")
-      .upload(path, photos[i], { contentType: photos[i].type || guessContentType(ext), upsert: true });
-    if (error) return { error: error.message };
-    if (i === 0) {
-      photoUrl = path;
-    } else {
-      // Extra photos beyond the first: attendance_checkins.photo_url is a
-      // single column, so additional required_photos go through the
-      // generic attachments table instead of a schema change.
-      await supabase.from("attachments").insert({
-        bucket: "checkin-photos",
-        path,
-        filename: photos[i].name,
-        content_type: photos[i].type || guessContentType(ext),
-        uploaded_by: employee.id,
-        entity: "attendance_checkins",
-        entity_id: null, // backfilled below once the checkin row exists
-      });
+  // Distance/radius — offsite only (has a location)
+  let distanceM: number | null = null;
+  let withinRadius: boolean | null = null;
+  if (request.type === "offsite" && request.location_id && hasGps) {
+    const { data: location } = await supabase
+      .from("work_locations")
+      .select("lat, lng, radius_m")
+      .eq("id", request.location_id)
+      .single();
+    if (location) {
+      distanceM = haversineDistanceMeters(latRaw, lngRaw, location.lat, location.lng);
+      withinRadius = distanceM <= location.radius_m;
     }
   }
 
-  const { data: checkin, error: checkinError } = await supabase
-    .from("attendance_checkins")
-    .insert({
-      employee_id: employee.id,
-      field_request_id: fieldRequestId,
-      location_id: location.id,
-      kind,
-      gps_lat: lat,
-      gps_lng: lng,
-      distance_m: distanceM,
-      within_radius: withinRadius,
-      selfie_url: selfieUrl,
-      photo_url: photoUrl,
-    })
-    .select("id")
-    .single();
+  const { selfieUrl, photoUrl } = await uploadCheckinMedia(
+    employee.full_name,
+    `${fieldRequestId}-${kind}`,
+    selfie instanceof File && selfie.size > 0 ? selfie : null,
+    photos[0] ?? null
+  );
 
-  if (checkinError || !checkin) return { error: checkinError?.message ?? "เช็คอินไม่สำเร็จ" };
+  const { error: checkinError } = await supabase.from("attendance_checkins").insert({
+    employee_id: employee.id,
+    field_request_id: fieldRequestId,
+    location_id: request.location_id,
+    kind,
+    gps_lat: hasGps ? latRaw : null,
+    gps_lng: hasGps ? lngRaw : null,
+    distance_m: distanceM,
+    within_radius: withinRadius,
+    selfie_url: selfieUrl,
+    photo_url: photoUrl,
+  });
+  if (checkinError) return { error: checkinError.message };
 
-  if (photos.length > 1) {
-    await supabase
-      .from("attachments")
-      .update({ entity_id: checkin.id })
-      .eq("entity", "attendance_checkins")
-      .eq("uploaded_by", employee.id)
-      .is("entity_id", null);
-  }
-
-  // Stamp actual work window so fn_field_autofill can (re)compute OT for
-  // ot/offsite: check-in → planned_start, check-out → planned_end.
   await stampPlannedTime(supabase, fieldRequestId, kind);
 
   revalidatePath("/field");
@@ -305,28 +264,14 @@ export async function selfCheckIn(formData: FormData) {
     }
   }
 
-  // 3) Selfie + worksite photo for offsite/ot
-  let selfieUrl: string | null = null;
-  let photoUrl: string | null = null;
-  if (type === "offsite" || type === "ot") {
-    const stamp = Date.now();
-    if (selfieFile instanceof File && selfieFile.size > 0) {
-      const ext = extOf(selfieFile);
-      const path = `${employee.id}/${row.id}-in-${stamp}-selfie.${ext}`;
-      const { error } = await supabase.storage
-        .from("checkin-photos")
-        .upload(path, selfieFile, { contentType: selfieFile.type || guessContentType(ext), upsert: true });
-      if (!error) selfieUrl = path;
-    }
-    if (photoFiles[0]) {
-      const ext = extOf(photoFiles[0]);
-      const path = `${employee.id}/${row.id}-in-${stamp}-photo0.${ext}`;
-      const { error } = await supabase.storage
-        .from("checkin-photos")
-        .upload(path, photoFiles[0], { contentType: photoFiles[0].type || guessContentType(ext), upsert: true });
-      if (!error) photoUrl = path;
-    }
-  }
+  // 3) Selfie + worksite photo → per-employee Google Drive folder
+  //    (mandatory for offsite/ot, optional for wfh)
+  const { selfieUrl, photoUrl } = await uploadCheckinMedia(
+    employee.full_name,
+    `${row.id}-in`,
+    selfieFile instanceof File && selfieFile.size > 0 ? selfieFile : null,
+    photoFiles[0] ?? null
+  );
 
   // 4) Insert the 'in' check-in
   const { error: ciErr } = await supabase.from("attendance_checkins").insert({

@@ -32,6 +32,10 @@ export function getAvatarUrl(path: string | null): string | null {
 }
 
 export async function getSignedCheckinPhotoUrl(path: string | null): Promise<string | null> {
+  if (!path) return null;
+  // New check-in photos live on Google Drive (stored as a full thumbnail URL);
+  // older ones are Supabase storage paths that still need signing.
+  if (path.startsWith("http")) return path;
   return getSignedUrl("checkin-photos", path);
 }
 

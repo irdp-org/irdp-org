@@ -38,11 +38,13 @@ export async function uploadAndOcr(formData: FormData) {
   const mimeType = file.type || "image/jpeg";
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
 
-  // Drive upload
+  // Drive upload — into a per-clerk subfolder
   let imageDriveId: string | null = null;
   let imageUrl: string | null = null;
   try {
-    const up = await uploadToDrive(buffer, `envelope-${Date.now()}.${ext}`, mimeType);
+    const { getOrCreateSubfolder } = await import("@/lib/google-drive");
+    const folderId = await getOrCreateSubfolder(`ลงรับเอกสาร - ${employee.full_name}`);
+    const up = await uploadToDrive(buffer, `envelope-${Date.now()}.${ext}`, mimeType, folderId);
     imageDriveId = up.id;
     imageUrl = up.webViewLink;
   } catch (err) {

@@ -13,7 +13,8 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { haversineDistanceMeters } from "@/lib/geo";
-import { selfCheckIn, checkInOffsite, recordSimpleCheckin } from "@/app/(app)/field/checkin-actions";
+import { compressImage } from "@/lib/image-compress";
+import { selfCheckIn, checkInOffsite } from "@/app/(app)/field/checkin-actions";
 
 export type CheckinRequest = {
   id: string;
@@ -128,10 +129,12 @@ function NewCheckinDialog({ locations }: { locations: LocationOption[] }) {
   }
 
   const selectedLoc = locations.find((l) => l.id === locationId) ?? null;
-  // GPS is only required for ปฏิบัติงานนอกสถานที่ (offsite)
-  const needsGps = type === "offsite";
+  // GPS radius verification is required only for ปฏิบัติงานนอกสถานที่ (offsite).
+  // For OT/WFH the GPS button still shows but is optional.
+  const gpsRequired = type === "offsite";
+  const mediaRequired = type === "offsite" || type === "ot";
   const distance =
-    needsGps && geo.coords && selectedLoc
+    type === "offsite" && geo.coords && selectedLoc
       ? haversineDistanceMeters(geo.coords.lat, geo.coords.lng, selectedLoc.lat, selectedLoc.lng)
       : null;
   const outsideRadius = distance !== null && selectedLoc !== null && distance > selectedLoc.radius_m;
@@ -140,25 +143,29 @@ function NewCheckinDialog({ locations }: { locations: LocationOption[] }) {
     e.preventDefault();
     if (!type) return;
     if ((type === "offsite" || type === "ot") && !locationId) { setError("กรุณาเลือกสถานที่"); return; }
-    if (needsGps && !geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
+    if (gpsRequired && !geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
 
-    const fd = new FormData(e.currentTarget);
-    if (type === "offsite" || type === "ot") {
-      const s = fd.get("selfie");
-      const hasPhoto = fd.getAll("photos").some((f) => f instanceof File && f.size > 0);
-      if (!(s instanceof File) || s.size === 0) { setError("กรุณาแนบรูปเซลฟี่"); return; }
-      if (!hasPhoto) { setError("กรุณาแนบรูปถ่ายหน้างาน"); return; }
+    const raw = new FormData(e.currentTarget);
+    const selfie = raw.get("selfie");
+    const photo = raw.getAll("photos").find((f) => f instanceof File && f.size > 0) as File | undefined;
+    if (mediaRequired) {
+      if (!(selfie instanceof File) || selfie.size === 0) { setError("กรุณาแนบรูปเซลฟี่"); return; }
+      if (!photo) { setError("กรุณาแนบรูปถ่ายหน้างาน"); return; }
     }
     setError(null);
-    fd.set("type", type);
-    fd.set("note", note);
-    if (geo.coords) {
-      fd.set("lat", String(geo.coords.lat));
-      fd.set("lng", String(geo.coords.lng));
-    }
-    if (type !== "wfh") fd.set("locationId", locationId);
 
     startTransition(async () => {
+      const fd = new FormData();
+      fd.set("type", type);
+      fd.set("note", note);
+      if (geo.coords) {
+        fd.set("lat", String(geo.coords.lat));
+        fd.set("lng", String(geo.coords.lng));
+      }
+      if (type !== "wfh") fd.set("locationId", locationId);
+      if (selfie instanceof File && selfie.size > 0) fd.set("selfie", await compressImage(selfie));
+      if (photo) fd.append("photos", await compressImage(photo));
+
       const res = await selfCheckIn(fd);
       if ("error" in res && res.error) { setError(res.error); return; }
       setOpen(false);
@@ -221,37 +228,32 @@ function NewCheckinDialog({ locations }: { locations: LocationOption[] }) {
               </div>
             )}
 
-            {needsGps && (
-              <>
-                <GpsButton coords={geo.coords} locating={geo.locating} error={geo.error} onRequest={geo.request} />
-                {distance !== null && selectedLoc && (
-                  <div
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
-                      outsideRadius ? "bg-danger/10 text-danger" : "bg-success/10 text-success"
-                    }`}
-                  >
-                    {outsideRadius ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-                    <span>
-                      ห่างจาก{selectedLoc.name} {Math.round(distance)} ม. (รัศมี {selectedLoc.radius_m} ม.)
-                      {outsideRadius && " — อยู่นอกรัศมี!"}
-                    </span>
-                  </div>
-                )}
-              </>
-            )}
+            <div className="flex flex-col gap-2">
+              <Label>ตำแหน่ง GPS {gpsRequired ? "*" : "(ไม่บังคับ)"}</Label>
+              <GpsButton coords={geo.coords} locating={geo.locating} error={geo.error} onRequest={geo.request} />
+              {distance !== null && selectedLoc && (
+                <div
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${
+                    outsideRadius ? "bg-danger/10 text-danger" : "bg-success/10 text-success"
+                  }`}
+                >
+                  {outsideRadius ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
+                  <span>
+                    ห่างจาก{selectedLoc.name} {Math.round(distance)} ม. (รัศมี {selectedLoc.radius_m} ม.)
+                    {outsideRadius && " — อยู่นอกรัศมี!"}
+                  </span>
+                </div>
+              )}
+            </div>
 
-            {(type === "offsite" || type === "ot") && (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <Label>เซลฟี่ *</Label>
-                  <input type="file" name="selfie" accept="image/*" capture="user" className="text-sm" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>รูปหน้างาน *</Label>
-                  <input type="file" name="photos" accept="image/*" capture="environment" className="text-sm" />
-                </div>
-              </>
-            )}
+            <div className="flex flex-col gap-1.5">
+              <Label>เซลฟี่ {mediaRequired ? "*" : "(ไม่บังคับ)"}</Label>
+              <input type="file" name="selfie" accept="image/*" capture="user" className="text-sm" />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>รูปหน้างาน {mediaRequired ? "*" : "(ไม่บังคับ)"}</Label>
+              <input type="file" name="photos" accept="image/*" capture="environment" className="text-sm" />
+            </div>
 
             <div className="flex flex-col gap-1.5">
               <Label>หมายเหตุ{type === "wfh" ? " *" : ""}</Label>
@@ -270,7 +272,7 @@ function NewCheckinDialog({ locations }: { locations: LocationOption[] }) {
               <Button type="button" variant="ghost" onClick={() => setType(null)} disabled={isPending}>
                 ย้อนกลับ
               </Button>
-              <Button type="submit" className="flex-1" disabled={isPending || (needsGps && !geo.coords)}>
+              <Button type="submit" className="flex-1" disabled={isPending || (gpsRequired && !geo.coords)}>
                 {isPending ? "กำลังบันทึก..." : "บันทึกเช็คอิน"}
               </Button>
             </div>
@@ -289,10 +291,11 @@ function CheckDialog({ req, kind }: { req: CheckinRequest; kind: "in" | "out" })
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const label = kind === "in" ? "เช็คอิน" : "เช็คเอาท์";
-  const needsGps = req.type === "offsite";
+  const gpsRequired = req.type === "offsite";
+  const mediaRequired = req.type === "offsite" || req.type === "ot";
 
   const distance =
-    needsGps && geo.coords && req.location_lat != null && req.location_lng != null
+    req.type === "offsite" && geo.coords && req.location_lat != null && req.location_lng != null
       ? haversineDistanceMeters(geo.coords.lat, geo.coords.lng, req.location_lat, req.location_lng)
       : null;
   const radiusM = req.location_radius_m ?? 200;
@@ -300,22 +303,27 @@ function CheckDialog({ req, kind }: { req: CheckinRequest; kind: "in" | "out" })
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (needsGps && !geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
+    if (gpsRequired && !geo.coords) { setError("กรุณาขอตำแหน่ง GPS ก่อน"); return; }
 
-    const fd = new FormData(e.currentTarget);
-    const s = fd.get("selfie");
-    const hasPhoto = fd.getAll("photos").some((f) => f instanceof File && f.size > 0);
-    if (!(s instanceof File) || s.size === 0) { setError("กรุณาแนบรูปเซลฟี่"); return; }
-    if (!hasPhoto) { setError("กรุณาแนบรูปถ่ายหน้างาน"); return; }
+    const raw = new FormData(e.currentTarget);
+    const selfie = raw.get("selfie");
+    const photo = raw.getAll("photos").find((f) => f instanceof File && f.size > 0) as File | undefined;
+    if (mediaRequired) {
+      if (!(selfie instanceof File) || selfie.size === 0) { setError("กรุณาแนบรูปเซลฟี่"); return; }
+      if (!photo) { setError("กรุณาแนบรูปถ่ายหน้างาน"); return; }
+    }
     setError(null);
 
     startTransition(async () => {
+      const fd = new FormData();
       fd.set("fieldRequestId", req.id);
       fd.set("kind", kind);
       if (geo.coords) {
         fd.set("lat", String(geo.coords.lat));
         fd.set("lng", String(geo.coords.lng));
       }
+      if (selfie instanceof File && selfie.size > 0) fd.set("selfie", await compressImage(selfie));
+      if (photo) fd.append("photos", await compressImage(photo));
       const res = await checkInOffsite(fd);
       if (res && "error" in res && res.error) { setError(res.error); return; }
       setOpen(false);
@@ -340,52 +348,33 @@ function CheckDialog({ req, kind }: { req: CheckinRequest; kind: "in" | "out" })
           <DialogDescription>{TYPE_META[req.type].label}{req.location_name ? ` · ${req.location_name}` : ""}</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          {needsGps && (
-            <>
-              <GpsButton coords={geo.coords} locating={geo.locating} error={geo.error} onRequest={geo.request} />
-              {distance !== null && (
-                <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${outsideRadius ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
-                  {outsideRadius ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
-                  <span>
-                    ห่าง {Math.round(distance)} ม. (รัศมี {radiusM} ม.){outsideRadius && " — อยู่นอกรัศมี!"}
-                  </span>
-                </div>
-              )}
-            </>
-          )}
+          <div className="flex flex-col gap-2">
+            <Label>ตำแหน่ง GPS {gpsRequired ? "*" : "(ไม่บังคับ)"}</Label>
+            <GpsButton coords={geo.coords} locating={geo.locating} error={geo.error} onRequest={geo.request} />
+            {distance !== null && (
+              <div className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm ${outsideRadius ? "bg-danger/10 text-danger" : "bg-success/10 text-success"}`}>
+                {outsideRadius ? <AlertTriangle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}
+                <span>
+                  ห่าง {Math.round(distance)} ม. (รัศมี {radiusM} ม.){outsideRadius && " — อยู่นอกรัศมี!"}
+                </span>
+              </div>
+            )}
+          </div>
           <div className="flex flex-col gap-1.5">
-            <Label>เซลฟี่ *</Label>
+            <Label>เซลฟี่ {mediaRequired ? "*" : "(ไม่บังคับ)"}</Label>
             <input type="file" name="selfie" accept="image/*" capture="user" className="text-sm" />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>รูปหน้างาน *</Label>
+            <Label>รูปหน้างาน {mediaRequired ? "*" : "(ไม่บังคับ)"}</Label>
             <input type="file" name="photos" accept="image/*" capture="environment" className="text-sm" />
           </div>
           {error && <p className="text-sm text-danger">{error}</p>}
-          <Button type="submit" disabled={isPending || (needsGps && !geo.coords)}>
+          <Button type="submit" disabled={isPending || (gpsRequired && !geo.coords)}>
             {isPending ? "กำลังบันทึก..." : `บันทึก${label}`}
           </Button>
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** No-GPS one-tap check-in/out button for ot/wfh records. */
-function SimpleCheckButton({ req, kind }: { req: CheckinRequest; kind: "in" | "out" }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const label = kind === "in" ? "เช็คอิน" : "เช็คเอาท์";
-  function run() {
-    startTransition(async () => {
-      await recordSimpleCheckin(req.id, kind);
-      router.refresh();
-    });
-  }
-  return (
-    <Button type="button" className="h-auto py-3 text-sm" disabled={isPending} onClick={run}>
-      <Clock className="h-4 w-4" /> {label}
-    </Button>
   );
 }
 
@@ -395,8 +384,7 @@ function RecordCard({ req }: { req: CheckinRequest }) {
   const inCi = req.checkins.find((c) => c.kind === "in");
   const outCi = req.checkins.find((c) => c.kind === "out");
   const locked = req.status === "approved";
-  const CheckControl = ({ kind }: { kind: "in" | "out" }) =>
-    req.type === "wfh" ? <SimpleCheckButton req={req} kind={kind} /> : <CheckDialog req={req} kind={kind} />;
+  const CheckControl = ({ kind }: { kind: "in" | "out" }) => <CheckDialog req={req} kind={kind} />;
 
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-white p-4 shadow-sm">
