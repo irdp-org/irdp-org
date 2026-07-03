@@ -38,11 +38,21 @@ export default async function DocumentsPage() {
 
   const employeeOptions = (emps ?? []).map((e) => ({ id: e.id, full_name: e.full_name }));
 
+  // Distinct senders (หน่วยงาน) already logged — for quick re-pick next time
+  const { data: senderRows } = await supabase
+    .from("received_documents")
+    .select("sender")
+    .not("sender", "is", null)
+    .limit(1000);
+  const senders = [...new Set((senderRows ?? []).map((s) => s.sender?.trim()).filter(Boolean) as string[])].sort((a, b) =>
+    a.localeCompare(b, "th")
+  );
+
   return (
     <div>
       <PageHeader title="ลงรับเอกสาร" description="ถ่ายรูปหน้าซอง → ระบบอ่านผู้รับ/ผู้ส่ง + ออกเลขลงรับอัตโนมัติ" />
       <div className="px-4 md:px-6">
-        <DocumentIntakeClient docs={rows} employees={employeeOptions} />
+        <DocumentIntakeClient docs={rows} employees={employeeOptions} senders={senders} />
       </div>
     </div>
   );

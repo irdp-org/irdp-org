@@ -97,7 +97,7 @@ export async function saveReceivedDocument(formData: FormData) {
   // Atomic running number
   const { data: seq, error: seqErr } = await supabase.rpc("fn_next_doc_seq", { p_year: yearBe });
   if (seqErr || seq == null) return { error: seqErr?.message ?? "ออกเลขลงรับไม่สำเร็จ" };
-  const docNo = `${yearBe}/${String(seq).padStart(4, "0")}`;
+  const docNo = `${yearBe}/${String(seq).padStart(2, "0")}`;
 
   const { data: row, error } = await supabase
     .from("received_documents")

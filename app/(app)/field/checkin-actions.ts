@@ -198,6 +198,35 @@ function todayBangkok(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 }
 
+/** No-GPS check-in/out for ot/wfh records (GPS is only required for offsite). */
+export async function recordSimpleCheckin(fieldRequestId: string, kind: "in" | "out") {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+
+  const supabase = await createClient();
+  const { data: request } = await supabase
+    .from("field_requests")
+    .select("id, employee_id, type, status")
+    .eq("id", fieldRequestId)
+    .single();
+
+  if (!request || request.employee_id !== employee.id) return { error: "ไม่พบคำขอ" };
+  if (request.type === "offsite") return { error: "นอกสถานที่ต้องเช็คอินด้วย GPS" };
+  if (!["draft", "submitted", "returned"].includes(request.status))
+    return { error: "รายการนี้เช็คอินไม่ได้ (อนุมัติแล้ว/ยกเลิก)" };
+
+  const { error } = await supabase.from("attendance_checkins").insert({
+    employee_id: employee.id,
+    field_request_id: fieldRequestId,
+    kind,
+  });
+  if (error) return { error: error.message };
+  await stampPlannedTime(supabase, fieldRequestId, kind);
+  revalidatePath("/field");
+  revalidatePath("/checkin");
+  return { ok: true };
+}
+
 /**
  * Self-service: create a field record for today and immediately check in.
  * type = offsite | ot | wfh. Records are created as 'submitted' (awaiting the
@@ -212,12 +241,16 @@ export async function selfCheckIn(formData: FormData) {
 
   const type = String(formData.get("type") ?? "") as "offsite" | "ot" | "wfh";
   const note = String(formData.get("note") ?? "").trim() || null;
-  const lat = Number(formData.get("lat"));
-  const lng = Number(formData.get("lng"));
+  const latRaw = Number(formData.get("lat"));
+  const lngRaw = Number(formData.get("lng"));
+  const hasGps = Number.isFinite(latRaw) && Number.isFinite(lngRaw);
+  const lat = hasGps ? latRaw : null;
+  const lng = hasGps ? lngRaw : null;
   const locationId = String(formData.get("locationId") ?? "") || null;
 
   if (!["offsite", "ot", "wfh"].includes(type)) return { error: "ประเภทไม่ถูกต้อง" };
-  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return { error: "กรุณาขอตำแหน่ง GPS ก่อน" };
+  // GPS (radius check) is required only for ปฏิบัติงานนอกสถานที่
+  if (type === "offsite" && !hasGps) return { error: "กรุณาขอตำแหน่ง GPS ก่อน" };
   if ((type === "offsite" || type === "ot") && !locationId)
     return { error: "กรุณาเลือกสถานที่" };
 
@@ -242,17 +275,17 @@ export async function selfCheckIn(formData: FormData) {
 
   if (insErr || !row) return { error: insErr?.message ?? "สร้างรายการไม่สำเร็จ" };
 
-  // 2) Distance check for offsite/ot
+  // 2) Distance check — only offsite verifies the radius (has GPS)
   let distanceM: number | null = null;
   let withinRadius: boolean | null = null;
-  if (type !== "wfh" && locationId) {
+  if (type === "offsite" && locationId && hasGps) {
     const { data: loc } = await supabase
       .from("work_locations")
       .select("lat, lng, radius_m")
       .eq("id", locationId)
       .single();
     if (loc) {
-      distanceM = haversineDistanceMeters(lat, lng, loc.lat, loc.lng);
+      distanceM = haversineDistanceMeters(lat!, lng!, loc.lat, loc.lng);
       withinRadius = distanceM <= loc.radius_m;
     }
   }

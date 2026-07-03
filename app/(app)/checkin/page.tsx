@@ -55,7 +55,13 @@ export default async function CheckinPage() {
     .eq("active", true)
     .order("name");
   const locationById = new Map((locations ?? []).map((l) => [l.id, l]));
-  const locationOptions = (locations ?? []).map((l) => ({ id: l.id, name: l.name }));
+  const locationOptions = (locations ?? []).map((l) => ({
+    id: l.id,
+    name: l.name,
+    lat: l.lat,
+    lng: l.lng,
+    radius_m: l.radius_m,
+  }));
 
   // Fetch existing check-ins
   const requestIds = (requests ?? []).map((r) => r.id);

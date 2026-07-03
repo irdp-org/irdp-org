@@ -34,12 +34,25 @@ type Draft = {
   subject: string;
 };
 
-export function DocumentIntakeClient({ docs, employees }: { docs: ReceivedDoc[]; employees: EmployeeOption[] }) {
+export function DocumentIntakeClient({
+  docs,
+  employees,
+  senders = [],
+}: {
+  docs: ReceivedDoc[];
+  employees: EmployeeOption[];
+  senders?: string[];
+}) {
   const router = useRouter();
   const [scanning, setScanning] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, startSave] = useTransition();
+
+  function openManual() {
+    setError(null);
+    setDraft({ imageDriveId: null, imageUrl: null, recipientName: "", recipientEmpId: "", sender: "", subject: "" });
+  }
 
   function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -107,6 +120,11 @@ export function DocumentIntakeClient({ docs, employees }: { docs: ReceivedDoc[];
         )}
       </label>
 
+      {/* Manual entry */}
+      <Button type="button" variant="outline" onClick={openManual} className="self-start">
+        <FileText className="h-4 w-4" /> กรอกเอง (ไม่ต้องถ่ายรูป)
+      </Button>
+
       {error && <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
 
       {/* Recent documents */}
@@ -169,7 +187,19 @@ export function DocumentIntakeClient({ docs, employees }: { docs: ReceivedDoc[];
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>ผู้ส่ง / หน่วยงาน</Label>
-                <Input value={draft.sender} onChange={(e) => setDraft({ ...draft, sender: e.target.value })} />
+                <Input
+                  value={draft.sender}
+                  onChange={(e) => setDraft({ ...draft, sender: e.target.value })}
+                  list="sender-list"
+                  placeholder="พิมพ์หรือเลือกหน่วยงานที่เคยบันทึก"
+                />
+                {senders.length > 0 && (
+                  <datalist id="sender-list">
+                    {senders.map((s) => (
+                      <option key={s} value={s} />
+                    ))}
+                  </datalist>
+                )}
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>เรื่อง</Label>
