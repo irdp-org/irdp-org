@@ -25,7 +25,7 @@ export default async function FieldPage({
       .from("field_requests")
       .select("id, type, location_id, work_date, planned_start, planned_end, ot_hours, status, reason")
       .eq("employee_id", employee.id)
-      .order("created_at", { ascending: false }),
+      .order("work_date", { ascending: false }),
     supabase
       .from("work_locations")
       .select("id, name, lat, lng, radius_m, required_photos")
