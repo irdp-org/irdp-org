@@ -9,6 +9,7 @@ import {
   type VehicleInfo,
 } from "@/components/booking/VanBookingClient";
 import { RoomBookingClient, type RoomBookingRow } from "@/components/booking/RoomBookingClient";
+import { BookingCalendar } from "@/components/booking/BookingCalendar";
 import type { RoomOption } from "@/components/booking/RoomBookingSheet";
 import type { EmployeeOption } from "@/components/booking/VanBookingSheet";
 import {
@@ -144,8 +145,45 @@ export default async function BookingPage({
     full_name: e.full_name,
   }));
 
+  // ── Calendar overview: ALL bookings (any status/date, incl. imported history)
+  const [{ data: calVan }, { data: calRoom }] = await Promise.all([
+    supabase.from("van_bookings").select("id, requester_id, destination, purpose, start_at, end_at, status"),
+    supabase.from("room_bookings").select("id, requester_id, room_id, title, start_at, end_at, status"),
+  ]);
+  const calIds = [
+    ...new Set([...(calVan ?? []).map((b) => b.requester_id), ...(calRoom ?? []).map((b) => b.requester_id)]),
+  ];
+  const { data: calPeople } = calIds.length
+    ? await supabase.from("employee_directory").select("id, full_name").in("id", calIds)
+    : { data: [] };
+  const calNameById = new Map((calPeople ?? []).map((p) => [p.id, p.full_name]));
+  const roomNameById = new Map((rooms ?? []).map((r) => [r.id, r.name]));
+
+  const calendarEvents = [
+    ...(calVan ?? []).map((b) => ({
+      id: b.id,
+      type: "van" as const,
+      title: b.destination || b.purpose || "จองรถ",
+      sub: vehicleInfo?.name ?? "รถตู้",
+      start_at: b.start_at,
+      end_at: b.end_at,
+      requester: calNameById.get(b.requester_id) ?? "—",
+      status: b.status as string,
+    })),
+    ...(calRoom ?? []).map((b) => ({
+      id: b.id,
+      type: "room" as const,
+      title: b.title || "จองห้อง",
+      sub: roomNameById.get(b.room_id) ?? "ห้องประชุม",
+      start_at: b.start_at,
+      end_at: b.end_at,
+      requester: calNameById.get(b.requester_id) ?? "—",
+      status: b.status as string,
+    })),
+  ];
+
   const { tab } = await searchParams;
-  const defaultTab = tab === "room" ? "room" : "van";
+  const defaultTab = tab === "room" ? "room" : tab === "calendar" ? "calendar" : "van";
   const userCanEdit = canEdit(employee.role);
 
   // ── Export data (hr/admin only, last 90 days) ─────────────────────────────
@@ -225,9 +263,14 @@ export default async function BookingPage({
       <div className="px-4 md:px-6">
         <Tabs defaultValue={defaultTab}>
           <TabsList className="mb-4 w-full">
+            <TabsTrigger value="calendar" className="flex-1">ปฏิทิน</TabsTrigger>
             <TabsTrigger value="van" className="flex-1">รถตู้</TabsTrigger>
             <TabsTrigger value="room" className="flex-1">ห้องประชุม</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="calendar">
+            <BookingCalendar events={calendarEvents} />
+          </TabsContent>
 
           <TabsContent value="van">
             <VanBookingClient
