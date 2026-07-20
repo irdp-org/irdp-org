@@ -42,6 +42,17 @@ export type OwnLeaveRequest = {
   returnNote?: string | null;
 };
 
+/** Legacy imports embed an attachment link in the reason text as
+ * "(เอกสารแนบ: <url>)" — pull it out so it renders as a real link instead of
+ * plain text, and return the reason with that suffix stripped. */
+function splitAttachment(reason: string | null): { text: string | null; url: string | null } {
+  if (!reason) return { text: null, url: null };
+  const m = reason.match(/\(เอกสารแนบ:\s*(https?:\/\/\S+)\)\s*$/);
+  if (!m) return { text: reason, url: null };
+  const text = reason.slice(0, m.index).trim();
+  return { text: text || null, url: m[1] };
+}
+
 const STATUS_VARIANT: Record<OwnLeaveRequest["status"], "default" | "secondary" | "destructive" | "outline"> = {
   draft: "outline",
   submitted: "secondary",
@@ -124,6 +135,8 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
           {filtered.map((r) => {
             const editable = r.status === "draft" || r.status === "returned";
             const cancellable = r.status !== "approved" && r.status !== "cancelled" && r.status !== "rejected";
+            const { text: reasonText, url: embeddedUrl } = splitAttachment(r.reason);
+            const attachmentUrl = r.cert_url || embeddedUrl;
             return (
               <li key={r.id} className="flex flex-col rounded-xl border border-border bg-surface">
                 {/* Tappable row → opens detail sheet */}
@@ -133,13 +146,17 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
                   onClick={() => setDetailItem(r)}
                 >
                   <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-                    <span className="font-medium text-foreground">{LEAVE_LABELS_TH[r.leave_code]}</span>
+                    <span className="truncate font-medium text-foreground">
+                      {LEAVE_LABELS_TH[r.leave_code]}
+                      {reasonText && <span className="font-normal text-muted-foreground"> · {reasonText}</span>}
+                    </span>
                     <span className="text-muted-foreground">
                       {format(new Date(r.start_at), "d MMM")} – {format(new Date(r.end_at), "d MMM yyyy")} ·{" "}
                       {r.hours} ชม.
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {attachmentUrl && <FileText className="h-4 w-4 text-primary" />}
                     <Badge variant={STATUS_VARIANT[r.status]}>{LEAVE_STATUS_LABELS_TH[r.status]}</Badge>
                     <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
@@ -212,44 +229,55 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
                   <span className="text-muted-foreground">จำนวนชั่วโมง</span>
                   <span className="text-foreground">{detailItem.hours} ชม. ({(detailItem.hours / 7.5).toFixed(2)} วัน)</span>
                 </div>
-                {detailItem.reason && (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-muted-foreground">เหตุผล</span>
-                    <span className="text-foreground">{detailItem.reason}</span>
-                  </div>
-                )}
-                {detailItem.returnNote && (
-                  <div className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-foreground">
-                    <span className="font-medium">หมายเหตุตีกลับ:</span> {detailItem.returnNote}
-                  </div>
-                )}
-                <div className="flex items-center justify-between border-t border-border pt-3">
-                  <span className="text-sm text-muted-foreground">ออกใบลา (Google Doc)</span>
-                  <GenerateDocButton id={detailItem.id} generate={generateLeaveDoc} label="ออกใบลา" />
-                </div>
-                {detailItem.cert_url && (
-                  <div className="flex flex-col gap-2">
-                    <span className="text-muted-foreground">ไฟล์แนบ</span>
-                    {/\.(jpg|jpeg|png|webp|heic|heif)$/i.test(detailItem.cert_url) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={detailItem.cert_url}
-                        alt="ใบรับรองแพทย์"
-                        className="max-h-64 w-full rounded-xl border border-border object-contain"
-                      />
-                    ) : (
-                      <a
-                        href={detailItem.cert_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-primary"
-                      >
-                        <FileText className="h-4 w-4 shrink-0" />
-                        เปิดไฟล์แนบ
-                      </a>
-                    )}
-                  </div>
-                )}
+                {(() => {
+                  const { text: reasonText, url: embeddedUrl } = splitAttachment(detailItem.reason);
+                  const attachmentUrl = detailItem.cert_url || embeddedUrl;
+                  const isImage = !!attachmentUrl && /\.(jpg|jpeg|png|webp|heic|heif)(\?|$)/i.test(attachmentUrl);
+                  return (
+                    <>
+                      {reasonText && (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-muted-foreground">เหตุผล / เรื่องที่ลา</span>
+                          <span className="text-foreground">{reasonText}</span>
+                        </div>
+                      )}
+                      {detailItem.returnNote && (
+                        <div className="rounded-xl bg-warning/10 px-3 py-2 text-xs text-foreground">
+                          <span className="font-medium">หมายเหตุตีกลับ:</span> {detailItem.returnNote}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between border-t border-border pt-3">
+                        <span className="text-sm text-muted-foreground">ออกใบลา (Google Doc)</span>
+                        <GenerateDocButton id={detailItem.id} generate={generateLeaveDoc} label="ออกใบลา" />
+                      </div>
+                      {attachmentUrl && (
+                        <div className="flex flex-col gap-2">
+                          <span className="text-muted-foreground">ไฟล์แนบ</span>
+                          {isImage ? (
+                            <a href={attachmentUrl} target="_blank" rel="noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={attachmentUrl}
+                                alt="เอกสารแนบ"
+                                className="max-h-64 w-full rounded-xl border border-border object-contain"
+                              />
+                            </a>
+                          ) : (
+                            <a
+                              href={attachmentUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-primary"
+                            >
+                              <FileText className="h-4 w-4 shrink-0" />
+                              เปิดไฟล์แนบ
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </>
           )}

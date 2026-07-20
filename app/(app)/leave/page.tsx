@@ -21,7 +21,7 @@ export default async function LeavePage({
     .from("leave_requests")
     .select("id, leave_code, start_at, end_at, hours, status, reason, cert_url")
     .eq("employee_id", employee.id)
-    .order("created_at", { ascending: false });
+    .order("start_at", { ascending: false });
 
   const returnedIds = (requests ?? []).filter((r) => r.status === "returned").map((r) => r.id);
   const { data: returnNotes } = returnedIds.length
