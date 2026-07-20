@@ -7,7 +7,7 @@
 insert into van_bookings
   (vehicle_id, requester_id, destination, purpose, start_at, end_at, status, has_tollway, has_fuel)
 select
-  (select id from vehicles order by created_at limit 1),
+  (select id from vehicles order by name limit 1),
   (select id from employees e where lower(e.email) = lower(v.email)),
   v.destination, v.purpose, v.start_at::timestamptz, v.end_at::timestamptz,
   'cancelled'::booking_status_t, v.has_tollway, v.has_fuel
