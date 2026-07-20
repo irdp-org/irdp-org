@@ -124,6 +124,21 @@ export async function changeAssetStatus(id: string, status: string, note: string
   return { ok: true };
 }
 
+// ── Admin: delete asset permanently ──────────────────────────────────────────
+export async function deleteAsset(id: string) {
+  const actor = await getCurrentEmployee();
+  if (actor?.role !== "admin") return { error: "ไม่มีสิทธิ์" };
+
+  const supabase = createAdminClient();
+  // Remove assignment history first (FK), then the asset
+  await supabase.from("asset_assignments").delete().eq("asset_id", id);
+  const { error } = await supabase.from("assets").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
 // ── Admin: assign to employee ─────────────────────────────────────────────────
 export async function assignAsset(assetId: string, employeeId: string) {
   const actor = await getCurrentEmployee();

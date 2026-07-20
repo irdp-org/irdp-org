@@ -26,7 +26,7 @@ export const CATEGORIES = [
 
 export type AssetRow = {
   id: string;
-  asset_tag: string;
+  asset_tag: string | null;
   category: string;
   name: string;
   brand: string | null;

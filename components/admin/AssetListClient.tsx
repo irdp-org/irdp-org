@@ -12,6 +12,7 @@ import {
   Download,
   Search,
   X,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +35,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { AssetSheet, CATEGORIES, type AssetRow } from "./AssetSheet";
 import { AssignSheet } from "./AssignSheet";
 import { AssetHistorySheet, type AssignmentRow } from "./AssetHistorySheet";
-import { changeAssetStatus } from "@/app/(app)/assets/actions";
+import { changeAssetStatus, deleteAsset } from "@/app/(app)/assets/actions";
 
 const STATUS_META: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
   in_stock: { label: "คลัง", variant: "secondary" },
@@ -151,6 +152,38 @@ function StatusChangeDialog({
   );
 }
 
+function DeleteAssetDialog({ asset }: { asset: AssetRow }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  return (
+    <AlertDialog>
+      <AlertDialogTrigger asChild>
+        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-danger" title="ลบ">
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>ลบทรัพย์สินถาวร</AlertDialogTitle>
+          <AlertDialogDescription>
+            ลบ {asset.name}{asset.asset_tag ? ` (${asset.asset_tag})` : ""} และประวัติการมอบหมายออกจากระบบถาวร ไม่สามารถกู้คืนได้
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-danger hover:bg-danger/90"
+            disabled={isPending}
+            onClick={() => startTransition(async () => { await deleteAsset(asset.id); router.refresh(); })}
+          >
+            ลบถาวร
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export function AssetListClient({ assets, employeeList, allAssignments, isAdmin }: Props) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editAsset, setEditAsset] = useState<AssetRow | null>(null);
@@ -170,10 +203,11 @@ export function AssetListClient({ assets, employeeList, allAssignments, isAdmin 
     if (search) {
       const q = search.toLowerCase();
       return (
-        a.asset_tag.toLowerCase().includes(q) ||
+        (a.asset_tag ?? "").toLowerCase().includes(q) ||
         a.name.toLowerCase().includes(q) ||
         (a.brand ?? "").toLowerCase().includes(q) ||
         (a.serial ?? "").toLowerCase().includes(q) ||
+        (a.note ?? "").toLowerCase().includes(q) ||
         (a.holder?.full_name ?? "").toLowerCase().includes(q)
       );
     }
@@ -246,106 +280,75 @@ export function AssetListClient({ assets, employeeList, allAssignments, isAdmin 
       {/* Count */}
       <p className="text-xs text-muted-foreground">{filtered.length} รายการ</p>
 
-      {/* List */}
+      {/* Table */}
       {filtered.length === 0 ? (
         <EmptyState icon={Package} title="ไม่พบทรัพย์สิน" />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {filtered.map((asset) => {
-            const { label, variant } = STATUS_META[asset.status] ?? { label: asset.status, variant: "secondary" };
-            const catLabel = CATEGORIES.find((c) => c.value === asset.category)?.label ?? asset.category;
-            const expiring = isExpiringSoon(asset);
-
-            return (
-              <li
-                key={asset.id}
-                className="flex items-start justify-between gap-3 rounded-2xl border border-border bg-white px-4 py-3"
-              >
-                <div className="flex min-w-0 flex-col gap-1 text-sm">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="font-medium text-foreground">{asset.name}</span>
-                    <Badge variant={variant} className="text-xs">{label}</Badge>
-                    <Badge variant="outline" className="text-xs">{catLabel}</Badge>
-                    {expiring && (
-                      <Badge variant="destructive" className="text-xs">
-                        License ใกล้หมด
-                      </Badge>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground">{asset.asset_tag}</span>
-                  {(asset.brand || asset.model) && (
-                    <span className="text-xs text-muted-foreground">
-                      {[asset.brand, asset.model].filter(Boolean).join(" · ")}
-                    </span>
-                  )}
-                  {asset.holder && (
-                    <span className="text-xs text-muted-foreground">
-                      ผู้ครอบครอง: {asset.holder.full_name}
-                    </span>
-                  )}
-                  {asset.license_expires_at && (
-                    <span className={`text-xs ${expiring ? "text-danger font-medium" : "text-muted-foreground"}`}>
-                      License หมดอายุ: {asset.license_expires_at}
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex shrink-0 items-center gap-1">
-                  {/* History */}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="text-muted-foreground"
-                    title="ประวัติ"
-                    onClick={() => {
-                      setHistoryAsset(asset);
-                      setHistoryOpen(true);
-                    }}
-                  >
-                    <History className="h-4 w-4" />
-                  </Button>
-
-                  {isAdmin && (
-                    <>
-                      {/* Edit */}
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="text-muted-foreground"
-                        title="แก้ไข"
-                        onClick={() => {
-                          setEditAsset(asset);
-                          setSheetOpen(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-
-                      {/* Assign (in_stock only) */}
-                      {asset.status === "in_stock" && (
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="text-muted-foreground"
-                          title="มอบหมาย"
-                          onClick={() => {
-                            setAssignTarget(asset);
-                            setAssignSheetOpen(true);
-                          }}
-                        >
-                          <UserPlus className="h-4 w-4" />
-                        </Button>
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full min-w-[880px] text-sm">
+            <thead>
+              <tr className="border-b border-border bg-surface text-left text-xs text-muted-foreground">
+                <th className="px-3 py-2 font-medium">รหัส</th>
+                <th className="px-3 py-2 font-medium">ชื่อ / รุ่น</th>
+                <th className="px-3 py-2 font-medium">Serial</th>
+                <th className="px-3 py-2 font-medium">ผู้ครอบครอง</th>
+                <th className="px-3 py-2 font-medium">สถานะ</th>
+                <th className="px-3 py-2 font-medium text-right">ราคา</th>
+                <th className="px-3 py-2 font-medium">หมายเหตุ</th>
+                <th className="px-3 py-2 font-medium text-right">จัดการ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((asset) => {
+                const { label, variant } = STATUS_META[asset.status] ?? { label: asset.status, variant: "secondary" };
+                const expiring = isExpiringSoon(asset);
+                return (
+                  <tr key={asset.id} className="border-b border-border last:border-0 align-top hover:bg-surface/60">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">{asset.asset_tag ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-foreground">{asset.name}</div>
+                      {(asset.brand || asset.model) && (
+                        <div className="text-xs text-muted-foreground">{[asset.brand, asset.model].filter(Boolean).join(" · ")}</div>
                       )}
-
-                      {/* Status change (not assigned) */}
-                      <StatusChangeDialog asset={asset} isAdmin={isAdmin} />
-                    </>
-                  )}
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{asset.serial ?? "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-xs">{asset.holder?.full_name ?? "—"}</td>
+                    <td className="px-3 py-2">
+                      <Badge variant={variant} className="text-xs">{label}</Badge>
+                      {expiring && <Badge variant="destructive" className="ml-1 text-xs">License ใกล้หมด</Badge>}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right text-xs">{asset.price != null ? asset.price.toLocaleString("th-TH") : "—"}</td>
+                    <td className="px-3 py-2 text-xs text-muted-foreground max-w-[260px]">{asset.note ?? ""}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" title="ประวัติ"
+                          onClick={() => { setHistoryAsset(asset); setHistoryOpen(true); }}>
+                          <History className="h-4 w-4" />
+                        </Button>
+                        {isAdmin && (
+                          <>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" title="แก้ไข"
+                              onClick={() => { setEditAsset(asset); setSheetOpen(true); }}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            {asset.status === "in_stock" && (
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground" title="มอบหมาย"
+                                onClick={() => { setAssignTarget(asset); setAssignSheetOpen(true); }}>
+                                <UserPlus className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <StatusChangeDialog asset={asset} isAdmin={isAdmin} />
+                            <DeleteAssetDialog asset={asset} />
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {/* Sheets */}
