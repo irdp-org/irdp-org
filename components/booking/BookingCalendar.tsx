@@ -13,14 +13,14 @@ import {
   addMonths,
   subMonths,
 } from "date-fns";
-import { ChevronLeft, ChevronRight, Bus, DoorOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, Bus, DoorOpen, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 export type BookingEvent = {
   id: string;
-  type: "van" | "room";
+  type: "van" | "room" | "camera";
   title: string;
   sub: string;
   start_at: string;
@@ -80,6 +80,7 @@ export function BookingCalendar({ events }: { events: BookingEvent[] }) {
       <div className="mb-2 flex items-center gap-4 text-xs text-muted-foreground">
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-primary" /> รถตู้</span>
         <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-success" /> ห้องประชุม</span>
+        <span className="flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-full bg-accent" /> กล้อง</span>
       </div>
 
       <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
@@ -94,6 +95,7 @@ export function BookingCalendar({ events }: { events: BookingEvent[] }) {
           const inMonth = isSameMonth(day, month);
           const vanCount = dayEvents.filter((e) => e.type === "van").length;
           const roomCount = dayEvents.filter((e) => e.type === "room").length;
+          const cameraCount = dayEvents.filter((e) => e.type === "camera").length;
           return (
             <button
               key={key}
@@ -114,6 +116,9 @@ export function BookingCalendar({ events }: { events: BookingEvent[] }) {
                 {roomCount > 0 && (
                   <span className="rounded bg-success/15 px-1 text-[10px] font-medium text-success">🚪{roomCount}</span>
                 )}
+                {cameraCount > 0 && (
+                  <span className="rounded bg-accent/15 px-1 text-[10px] font-medium text-accent-foreground">📷{cameraCount}</span>
+                )}
               </div>
             </button>
           );
@@ -131,8 +136,19 @@ export function BookingCalendar({ events }: { events: BookingEvent[] }) {
           <div className="flex flex-col gap-2 py-1">
             {selectedEvents.map((ev) => (
               <div key={ev.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-2.5 text-sm">
-                <div className={cn("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", ev.type === "van" ? "bg-primary/10" : "bg-success/10")}>
-                  {ev.type === "van" ? <Bus className="h-4 w-4 text-primary" /> : <DoorOpen className="h-4 w-4 text-success" />}
+                <div
+                  className={cn(
+                    "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg",
+                    ev.type === "van" ? "bg-primary/10" : ev.type === "room" ? "bg-success/10" : "bg-accent/10"
+                  )}
+                >
+                  {ev.type === "van" ? (
+                    <Bus className="h-4 w-4 text-primary" />
+                  ) : ev.type === "room" ? (
+                    <DoorOpen className="h-4 w-4 text-success" />
+                  ) : (
+                    <Camera className="h-4 w-4 text-accent-foreground" />
+                  )}
                 </div>
                 <div className="flex min-w-0 flex-col gap-0.5">
                   <p className="font-medium text-foreground">{ev.title}</p>

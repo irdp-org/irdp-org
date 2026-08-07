@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { getAvatarUrl } from "@/lib/storage";
 import { DirectoryClient, type DirectoryEmployee } from "@/components/directory/DirectoryClient";
+import type { EducationEntry } from "@/lib/database.types";
 
 export const revalidate = 300;
 
@@ -11,7 +12,9 @@ export default async function DirectoryPage() {
   const [{ data: employees }, { data: depts }] = await Promise.all([
     admin
       .from("employees")
-      .select("id, full_name, nickname, department_id, position, avatar_url, role, phone, email, birthdate, employee_code")
+      .select(
+        "id, full_name, nickname, department_id, position, avatar_url, role, phone, desk_phone, email, birthdate, employee_code, hire_date, education"
+      )
       .eq("status", "active")
       .order("employee_code", { nullsFirst: false }),
     admin.from("departments").select("id, name").order("name"),
@@ -32,6 +35,9 @@ export default async function DirectoryPage() {
     email: e.email,
     birthdate: e.birthdate,
     employee_code: e.employee_code,
+    desk_phone: e.desk_phone,
+    hire_date: e.hire_date,
+    education: e.education as EducationEntry[],
     avatarSrc: getAvatarUrl(e.avatar_url),
   }));
 

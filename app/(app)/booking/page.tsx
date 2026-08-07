@@ -9,6 +9,7 @@ import {
   type VehicleInfo,
 } from "@/components/booking/VanBookingClient";
 import { RoomBookingClient, type RoomBookingRow } from "@/components/booking/RoomBookingClient";
+import { CameraBookingClient, type CameraBookingRow } from "@/components/booking/CameraBookingClient";
 import { BookingCalendar } from "@/components/booking/BookingCalendar";
 import type { RoomOption } from "@/components/booking/RoomBookingSheet";
 import type { EmployeeOption } from "@/components/booking/VanBookingSheet";
@@ -35,6 +36,7 @@ export default async function BookingPage({
     { data: rooms },
     { data: vanBookingsRaw },
     { data: roomBookingsRaw },
+    { data: cameraBookingsRaw },
   ] = await Promise.all([
     supabase.from("vehicles").select("id, name, plate, driver_id").eq("active", true),
     supabase.from("rooms").select("id, name, size").eq("active", true).order("name"),
@@ -47,6 +49,12 @@ export default async function BookingPage({
     supabase
       .from("room_bookings")
       .select("id, room_id, requester_id, title, start_at, end_at, status, equipment")
+      .eq("status", "booked")
+      .gte("end_at", now)
+      .order("start_at"),
+    supabase
+      .from("camera_bookings")
+      .select("id, requester_id, location, purpose, start_at, end_at, status")
       .eq("status", "booked")
       .gte("end_at", now)
       .order("start_at"),
@@ -67,6 +75,7 @@ export default async function BookingPage({
       ...(vanBookingsRaw ?? []).map((b) => b.requester_id),
       ...(vanBookingsRaw ?? []).map((b) => b.driver_id).filter(Boolean) as string[],
       ...(roomBookingsRaw ?? []).map((b) => b.requester_id),
+      ...(cameraBookingsRaw ?? []).map((b) => b.requester_id),
       ...(passengersRaw ?? []).map((p) => p.employee_id),
       ...(vehicles ?? []).map((v) => v.driver_id).filter(Boolean) as string[],
     ]),
@@ -134,6 +143,18 @@ export default async function BookingPage({
     equipment: b.equipment ?? [],
   }));
 
+  // ── Shaped data for camera ──────────────────────────────────────────────────
+  const cameraBookings: CameraBookingRow[] = (cameraBookingsRaw ?? []).map((b) => ({
+    id: b.id,
+    requester_id: b.requester_id,
+    requester_name: nameById.get(b.requester_id) ?? "—",
+    location: b.location,
+    purpose: b.purpose,
+    start_at: b.start_at,
+    end_at: b.end_at,
+    status: b.status as "booked" | "cancelled",
+  }));
+
   // ── Employee picker for van passengers ────────────────────────────────────
   const { data: allEmployees } = await supabase
     .from("employee_directory")
@@ -146,12 +167,17 @@ export default async function BookingPage({
   }));
 
   // ── Calendar overview: ALL bookings (any status/date, incl. imported history)
-  const [{ data: calVan }, { data: calRoom }] = await Promise.all([
+  const [{ data: calVan }, { data: calRoom }, { data: calCamera }] = await Promise.all([
     supabase.from("van_bookings").select("id, requester_id, destination, purpose, start_at, end_at, status"),
     supabase.from("room_bookings").select("id, requester_id, room_id, title, start_at, end_at, status"),
+    supabase.from("camera_bookings").select("id, requester_id, location, purpose, start_at, end_at, status"),
   ]);
   const calIds = [
-    ...new Set([...(calVan ?? []).map((b) => b.requester_id), ...(calRoom ?? []).map((b) => b.requester_id)]),
+    ...new Set([
+      ...(calVan ?? []).map((b) => b.requester_id),
+      ...(calRoom ?? []).map((b) => b.requester_id),
+      ...(calCamera ?? []).map((b) => b.requester_id),
+    ]),
   ];
   const { data: calPeople } = calIds.length
     ? await supabase.from("employee_directory").select("id, full_name").in("id", calIds)
@@ -180,10 +206,21 @@ export default async function BookingPage({
       requester: calNameById.get(b.requester_id) ?? "—",
       status: b.status as string,
     })),
+    ...(calCamera ?? []).map((b) => ({
+      id: b.id,
+      type: "camera" as const,
+      title: b.purpose || "จองกล้อง",
+      sub: b.location || "กล้องประชาสัมพันธ์",
+      start_at: b.start_at,
+      end_at: b.end_at,
+      requester: calNameById.get(b.requester_id) ?? "—",
+      status: b.status as string,
+    })),
   ];
 
   const { tab } = await searchParams;
-  const defaultTab = tab === "room" ? "room" : tab === "calendar" ? "calendar" : "van";
+  const defaultTab =
+    tab === "room" ? "room" : tab === "camera" ? "camera" : tab === "calendar" ? "calendar" : "van";
   const userCanEdit = canEdit(employee.role);
 
   // ── Export data (hr/admin only, last 90 days) ─────────────────────────────
@@ -259,13 +296,14 @@ export default async function BookingPage({
 
   return (
     <div>
-      <PageHeader title="จอง" description="จองรถตู้และห้องประชุม" />
+      <PageHeader title="จอง" description="จองรถตู้ ห้องประชุม และกล้อง" />
       <div className="px-4 md:px-6">
         <Tabs defaultValue={defaultTab}>
           <TabsList className="mb-4 w-full">
             <TabsTrigger value="calendar" className="flex-1">ปฏิทิน</TabsTrigger>
             <TabsTrigger value="van" className="flex-1">รถตู้</TabsTrigger>
             <TabsTrigger value="room" className="flex-1">ห้องประชุม</TabsTrigger>
+            <TabsTrigger value="camera" className="flex-1">กล้อง</TabsTrigger>
           </TabsList>
 
           <TabsContent value="calendar">
@@ -286,6 +324,14 @@ export default async function BookingPage({
             <RoomBookingClient
               bookings={roomBookings}
               rooms={roomOptions}
+              currentEmployeeId={employee.id}
+              canEdit={userCanEdit}
+            />
+          </TabsContent>
+
+          <TabsContent value="camera">
+            <CameraBookingClient
+              bookings={cameraBookings}
               currentEmployeeId={employee.id}
               canEdit={userCanEdit}
             />

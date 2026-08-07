@@ -84,8 +84,14 @@ export async function saveClaim(formData: FormData) {
   const files = formData.getAll("attachments").filter((f): f is File => f instanceof File && f.size > 0);
   let newUrls: string[] = [];
   if (files.length > 0) {
-    const { getOrCreateSubfolder, uploadToDrive, driveThumbUrl } = await import("@/lib/google-drive");
-    const folderId = await getOrCreateSubfolder(`เบิกค่าเดินทาง - ${employee.full_name}`);
+    const { getOrCreateDatedFolder, uploadToDrive, driveThumbUrl } = await import("@/lib/google-drive");
+    // File under the earliest travel date in this claim so old claims stay
+    // grouped by the month/year the trip actually happened, not upload date.
+    const earliestDate = items.reduce(
+      (min, i) => (i.travel_date && (!min || i.travel_date < min) ? i.travel_date : min),
+      "" as string
+    ) || new Date().toISOString().slice(0, 10);
+    const folderId = await getOrCreateDatedFolder("เบิกค่าเดินทาง", earliestDate, employee.full_name);
     const stamp = Date.now();
     newUrls = await Promise.all(
       files.map(async (f, i) => {

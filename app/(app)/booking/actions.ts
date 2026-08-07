@@ -402,6 +402,183 @@ export async function cancelRoomBooking(id: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Camera Booking (ทรัพยากรชิ้นเดียว เหมือนรถตู้ ไม่มีผู้ร่วมเดินทาง)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function pushCameraToGoogle(bookingId: string, purpose: string | null, startAt: string, endAt: string) {
+  const admin = createAdminClient();
+  const { data: ce } = await admin
+    .from("calendar_events")
+    .select("id, google_event_id")
+    .eq("source_module", "camera")
+    .eq("source_id", bookingId)
+    .maybeSingle();
+  if (!ce) return;
+
+  const title = `จองกล้อง: ${purpose ?? "ไม่ระบุงาน"}`;
+  if (ce.google_event_id) {
+    const r = await updateEvent(ce.google_event_id, { title, startAt, endAt, allDay: false });
+    if (r?.etag) await admin.from("calendar_events").update({ google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
+  } else {
+    const r = await createEvent({ title, startAt, endAt, allDay: false });
+    if (r?.id) await admin.from("calendar_events").update({ google_event_id: r.id, google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
+  }
+}
+
+async function deleteCameraFromGoogle(bookingId: string) {
+  const admin = createAdminClient();
+  const { data: ce } = await admin
+    .from("calendar_events")
+    .select("google_event_id")
+    .eq("source_module", "camera")
+    .eq("source_id", bookingId)
+    .maybeSingle();
+  if (ce?.google_event_id) await deleteEvent(ce.google_event_id);
+}
+
+async function getCameraConflict(startAt: string, endAt: string, excludeId?: string) {
+  const supabase = await createClient();
+  let q = supabase
+    .from("camera_bookings")
+    .select("id, start_at, end_at, purpose, requester_id")
+    .eq("status", "booked")
+    .lt("start_at", endAt)
+    .gt("end_at", startAt);
+  if (excludeId) q = q.neq("id", excludeId);
+  const { data } = await q.limit(1);
+  if (!data?.length) return null;
+
+  const c = data[0];
+  const { data: people } = await supabase
+    .from("employee_directory")
+    .select("id, full_name")
+    .eq("id", c.requester_id);
+  const name = people?.[0]?.full_name ?? "—";
+  return { requester_name: name, start_at: c.start_at, end_at: c.end_at, purpose: c.purpose };
+}
+
+export async function createCameraBooking(formData: FormData) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+
+  const date = String(formData.get("date") ?? "");
+  const startTime = String(formData.get("startTime") ?? "");
+  const endDate = String(formData.get("endDate") ?? date);
+  const endTime = String(formData.get("endTime") ?? "");
+  const location = String(formData.get("location") ?? "").trim() || null;
+  const purpose = String(formData.get("purpose") ?? "").trim() || null;
+
+  if (!date || !startTime || !endTime) return { error: "กรุณากรอกข้อมูลให้ครบ" };
+
+  const startAt = toISO(date, startTime);
+  const endAt = toISO(endDate, endTime);
+  if (startAt >= endAt) return { error: "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม" };
+
+  const conflict = await getCameraConflict(startAt, endAt);
+  if (conflict) {
+    const purposeTxt = conflict.purpose ? ` (งาน: ${conflict.purpose})` : "";
+    return {
+      error: `กล้องถูกจองไว้แล้วโดย ${conflict.requester_name}${purposeTxt} (${fmtDatetime(conflict.start_at)} – ${fmtDatetime(conflict.end_at)})`,
+    };
+  }
+
+  const supabase = await createClient();
+  const { data: booking, error } = await supabase
+    .from("camera_bookings")
+    .insert({
+      requester_id: employee.id,
+      location,
+      purpose,
+      start_at: startAt,
+      end_at: endAt,
+    })
+    .select("id")
+    .single();
+
+  if (error || !booking) {
+    if (error?.code === "23P01") {
+      return { error: "กล้องถูกจองไว้ในช่วงเวลานั้นแล้ว กรุณาเลือกเวลาอื่น" };
+    }
+    return { error: error?.message ?? "จองไม่สำเร็จ" };
+  }
+
+  await pushCameraToGoogle(booking.id, purpose, startAt, endAt);
+
+  revalidateAll();
+  return { ok: true, id: booking.id };
+}
+
+export async function cancelCameraBooking(id: string) {
+  await deleteCameraFromGoogle(id);
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("camera_bookings")
+    .update({ status: "cancelled" })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+export async function updateCameraBooking(id: string, formData: FormData) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+
+  const date = String(formData.get("date") ?? "");
+  const startTime = String(formData.get("startTime") ?? "");
+  const endDate = String(formData.get("endDate") ?? date);
+  const endTime = String(formData.get("endTime") ?? "");
+  const location = String(formData.get("location") ?? "").trim() || null;
+  const purpose = String(formData.get("purpose") ?? "").trim() || null;
+
+  if (!date || !startTime || !endTime) return { error: "กรุณากรอกข้อมูลให้ครบ" };
+
+  const startAt = toISO(date, startTime);
+  const endAt = toISO(endDate, endTime);
+  if (startAt >= endAt) return { error: "เวลาสิ้นสุดต้องมากกว่าเวลาเริ่ม" };
+
+  const conflict = await getCameraConflict(startAt, endAt, id);
+  if (conflict) {
+    const purposeTxt = conflict.purpose ? ` (งาน: ${conflict.purpose})` : "";
+    return {
+      error: `กล้องถูกจองไว้แล้วโดย ${conflict.requester_name}${purposeTxt} (${fmtDatetime(conflict.start_at)} – ${fmtDatetime(conflict.end_at)})`,
+    };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("camera_bookings")
+    .update({ location, purpose, start_at: startAt, end_at: endAt })
+    .eq("id", id);
+
+  if (error) {
+    if (error.code === "23P01") return { error: "กล้องถูกจองไว้ในช่วงเวลานั้นแล้ว กรุณาเลือกเวลาอื่น" };
+    return { error: error.message };
+  }
+
+  await pushCameraToGoogle(id, purpose, startAt, endAt);
+
+  revalidateAll();
+  return { ok: true };
+}
+
+export async function adminDeleteCameraBooking(id: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee || !["admin", "hr"].includes(employee.role)) return { error: "unauthorized" };
+
+  await deleteCameraFromGoogle(id);
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("camera_bookings").delete().eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidateAll();
+  return { ok: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Admin hard-delete (admin/hr only — bypasses status, removes record entirely)
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -4,10 +4,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { PageHeader } from "@/components/shell/PageHeader";
-import { LEAVE_LABELS_TH } from "@/lib/leave";
+import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
+import { FIELD_TYPE_LABELS_TH, FIELD_STATUS_LABELS_TH } from "@/lib/ot";
 import { ReportClient, type ReportData } from "@/components/reports/ReportClient";
+import { ReportTable, type ReportRow } from "@/components/reports/ReportTable";
 
-const ALLOWED = ["hr", "admin", "exec"];
+const ALLOWED = ["hr", "admin", "exec", "dept_head"];
 
 function monthRange() {
   const now = new Date();
@@ -46,6 +48,8 @@ export default async function ReportsPage({
     { data: assetRows },
     { data: departments },
     { data: employees },
+    { data: leaveDetailRows },
+    { data: fieldDetailRows },
   ] = await Promise.all([
     supabase
       .from("leave_requests")
@@ -75,6 +79,18 @@ export default async function ReportsPage({
     supabase.from("assets").select("status"),
     supabase.from("departments").select("id, name").order("name"),
     supabase.from("employee_directory").select("id, full_name, department_id").eq("status", "active").order("full_name"),
+    // Row-level detail for the searchable table — unfiltered by status so
+    // admin/hr can see draft/submitted/rejected items too, not just approved.
+    supabase
+      .from("leave_requests")
+      .select("id, employee_id, leave_code, start_at, end_at, hours, status, reason")
+      .gte("start_at", fromTs)
+      .lte("end_at", toTs),
+    supabase
+      .from("field_requests")
+      .select("id, employee_id, type, work_date, planned_start, planned_end, ot_hours, status, reason")
+      .gte("work_date", from)
+      .lte("work_date", to),
   ]);
 
   const empDeptMap = new Map<string, string>(
@@ -173,6 +189,45 @@ export default async function ReportsPage({
 
   const departmentList = (departments ?? []).map((d) => ({ id: d.id, name: d.name }));
 
+  // ── Row-level table (search + filter, admin/hr) ─────────────────────────
+  const fullNameMap = new Map<string, string>((employees ?? []).map((e) => [e.id, e.full_name]));
+  const nameOf = (id: string) => fullNameMap.get(id) ?? "—";
+  const deptOf = (id: string) => deptNameMap.get(empDeptMap.get(id) ?? "") ?? "ไม่ระบุ";
+
+  const filteredLeaveDetail = filterEmpIds.size > 0
+    ? (leaveDetailRows ?? []).filter((r) => filterEmpIds.has(r.employee_id))
+    : (leaveDetailRows ?? []);
+  const filteredFieldDetail = filterEmpIds.size > 0
+    ? (fieldDetailRows ?? []).filter((r) => filterEmpIds.has(r.employee_id))
+    : (fieldDetailRows ?? []);
+
+  const tableRows: ReportRow[] = [
+    ...filteredLeaveDetail.map((r) => ({
+      id: r.id,
+      category: "ลา" as const,
+      typeLabel: LEAVE_LABELS_TH[r.leave_code],
+      employeeName: nameOf(r.employee_id),
+      deptName: deptOf(r.employee_id),
+      date: r.start_at.slice(0, 10),
+      amountLabel: `${r.hours} ชม.`,
+      status: r.status,
+      statusLabel: LEAVE_STATUS_LABELS_TH[r.status],
+      detail: r.reason,
+    })),
+    ...filteredFieldDetail.map((r) => ({
+      id: r.id,
+      category: "นอกสถานที่/OT/WFH" as const,
+      typeLabel: FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type,
+      employeeName: nameOf(r.employee_id),
+      deptName: deptOf(r.employee_id),
+      date: r.work_date,
+      amountLabel: r.ot_hours ? `OT ${r.ot_hours} ชม.` : "—",
+      status: r.status,
+      statusLabel: FIELD_STATUS_LABELS_TH[r.status],
+      detail: r.reason,
+    })),
+  ].sort((a, b) => (a.date < b.date ? 1 : -1));
+
   return (
     <div className="flex flex-col gap-4 pb-6">
       <PageHeader title="รีพอร์ต" description="สรุปข้อมูลข้ามโมดูล" />
@@ -186,6 +241,7 @@ export default async function ReportsPage({
           currentDept={deptParam ?? ""}
           currentPerson={personParam ?? ""}
         />
+        <ReportTable rows={tableRows} />
       </div>
     </div>
   );

@@ -188,6 +188,16 @@ export interface Database {
         created_at: string;
         updated_at: string;
       }>;
+      work_logs: TableShape<{
+        id: string;
+        employee_id: string;
+        work_date: string;
+        start_time: string | null;
+        end_time: string | null;
+        tasks: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
       work_locations: TableShape<{
         id: string;
         name: string;
@@ -278,6 +288,17 @@ export interface Database {
         end_at: string;
         status: BookingStatusT;
         equipment: string[];
+        created_at: string;
+        updated_at: string;
+      }>;
+      camera_bookings: TableShape<{
+        id: string;
+        requester_id: string;
+        location: string | null;
+        purpose: string | null;
+        start_at: string;
+        end_at: string;
+        status: BookingStatusT;
         created_at: string;
         updated_at: string;
       }>;

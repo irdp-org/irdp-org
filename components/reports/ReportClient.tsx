@@ -1,6 +1,7 @@
 "use client";
 
-import { Download, Search } from "lucide-react";
+import { Download, Search, CalendarClock } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -84,6 +85,13 @@ export function ReportClient({ from, to, data, departments = [], employees = [],
 
   return (
     <div className="flex flex-col gap-5">
+      <Link
+        href="/reports/timeline"
+        className="inline-flex w-fit items-center gap-2 rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground shadow-sm hover:bg-secondary/80 transition-colors"
+      >
+        <CalendarClock className="h-4 w-4" /> ดูไทม์ไลน์รายบุคคล (รวมทุกกิจกรรมรายวัน)
+      </Link>
+
       {/* Filters — native GET form for reliable mobile behavior */}
       <form method="GET" className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-3">
         {/* Date range */}
