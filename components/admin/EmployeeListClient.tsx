@@ -6,9 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmployeeSheet } from "./EmployeeSheet";
 import { roleLabelTh } from "@/lib/rbac";
-import type { RoleT, EmployeeStatusT } from "@/lib/database.types";
+import type { RoleT, EmployeeStatusT, EducationEntry } from "@/lib/database.types";
+
+function initialsOf(fullName: string) {
+  return fullName.trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
+}
 
 const STATUS_TABS: { key: "all" | EmployeeStatusT; label: string }[] = [
   { key: "all", label: "ทั้งหมด" },
@@ -29,6 +34,11 @@ export type EmployeeRow = {
   hire_date?: string | null;
   phone?: string | null;
   birthdate?: string | null;
+  avatar_url?: string | null;
+  avatarUrl?: string | null;
+  address?: string | null;
+  desk_phone?: string | null;
+  education?: EducationEntry[] | null;
 };
 
 export function EmployeeListClient({
@@ -127,13 +137,19 @@ export function EmployeeListClient({
               key={emp.id}
               className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3"
             >
-              <div className="flex flex-col gap-0.5 text-sm">
-                <span className="font-medium text-foreground">{emp.full_name}</span>
-                <span className="text-muted-foreground">
-                  {emp.email} · {emp.department_id ? departmentNameById.get(emp.department_id) : "—"} ·{" "}
-                  {roleLabelTh[emp.role]}
-                  {emp.position ? ` · ${emp.position}` : ""}
-                </span>
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar className="h-9 w-9 shrink-0">
+                  {emp.avatarUrl && <AvatarImage src={emp.avatarUrl} alt={emp.full_name} />}
+                  <AvatarFallback className="text-xs">{initialsOf(emp.full_name)}</AvatarFallback>
+                </Avatar>
+                <div className="flex min-w-0 flex-col gap-0.5 text-sm">
+                  <span className="truncate font-medium text-foreground">{emp.full_name}</span>
+                  <span className="truncate text-muted-foreground">
+                    {emp.email} · {emp.department_id ? departmentNameById.get(emp.department_id) : "—"} ·{" "}
+                    {roleLabelTh[emp.role]}
+                    {emp.position ? ` · ${emp.position}` : ""}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2">
                 {emp.status === "inactive" && <Badge variant="outline">ปิดการใช้งาน</Badge>}
