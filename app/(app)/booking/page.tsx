@@ -168,15 +168,22 @@ export default async function BookingPage({
 
   // ── Calendar overview: ALL bookings (any status/date, incl. imported history)
   const [{ data: calVan }, { data: calRoom }, { data: calCamera }] = await Promise.all([
-    supabase.from("van_bookings").select("id, requester_id, destination, purpose, start_at, end_at, status"),
-    supabase.from("room_bookings").select("id, requester_id, room_id, title, start_at, end_at, status"),
+    supabase
+      .from("van_bookings")
+      .select("id, requester_id, destination, purpose, start_at, end_at, status, has_tollway, has_fuel, other_expense"),
+    supabase.from("room_bookings").select("id, requester_id, room_id, title, start_at, end_at, status, equipment"),
     supabase.from("camera_bookings").select("id, requester_id, location, purpose, start_at, end_at, status"),
   ]);
+  const calVanIds = (calVan ?? []).map((b) => b.id);
+  const { data: calPassengersRaw } = calVanIds.length
+    ? await supabase.from("van_passengers").select("booking_id, employee_id").in("booking_id", calVanIds)
+    : { data: [] };
   const calIds = [
     ...new Set([
       ...(calVan ?? []).map((b) => b.requester_id),
       ...(calRoom ?? []).map((b) => b.requester_id),
       ...(calCamera ?? []).map((b) => b.requester_id),
+      ...(calPassengersRaw ?? []).map((p) => p.employee_id),
     ]),
   ];
   const { data: calPeople } = calIds.length
@@ -184,18 +191,35 @@ export default async function BookingPage({
     : { data: [] };
   const calNameById = new Map((calPeople ?? []).map((p) => [p.id, p.full_name]));
   const roomNameById = new Map((rooms ?? []).map((r) => [r.id, r.name]));
+  const calPassengersByBooking = new Map<string, string[]>();
+  for (const p of calPassengersRaw ?? []) {
+    const list = calPassengersByBooking.get(p.booking_id) ?? [];
+    list.push(calNameById.get(p.employee_id) ?? "—");
+    calPassengersByBooking.set(p.booking_id, list);
+  }
 
   const calendarEvents = [
-    ...(calVan ?? []).map((b) => ({
-      id: b.id,
-      type: "van" as const,
-      title: b.destination || b.purpose || "จองรถ",
-      sub: vehicleInfo?.name ?? "รถตู้",
-      start_at: b.start_at,
-      end_at: b.end_at,
-      requester: calNameById.get(b.requester_id) ?? "—",
-      status: b.status as string,
-    })),
+    ...(calVan ?? []).map((b) => {
+      const passengers = calPassengersByBooking.get(b.id) ?? [];
+      const expenses = [b.has_tollway ? "ค่าทางด่วน" : "", b.has_fuel ? "ค่าน้ำมัน" : "", b.other_expense || ""]
+        .filter(Boolean)
+        .join(", ");
+      return {
+        id: b.id,
+        type: "van" as const,
+        title: b.destination || b.purpose || "จองรถ",
+        sub: vehicleInfo?.name ?? "รถตู้",
+        start_at: b.start_at,
+        end_at: b.end_at,
+        requester: calNameById.get(b.requester_id) ?? "—",
+        status: b.status as string,
+        detailLines: [
+          ...(b.purpose ? [{ label: "วัตถุประสงค์", value: b.purpose }] : []),
+          ...(passengers.length ? [{ label: "ผู้ร่วมเดินทาง", value: passengers.join(", ") }] : []),
+          ...(expenses ? [{ label: "ค่าใช้จ่ายเพิ่มเติม", value: expenses }] : []),
+        ],
+      };
+    }),
     ...(calRoom ?? []).map((b) => ({
       id: b.id,
       type: "room" as const,
@@ -205,6 +229,7 @@ export default async function BookingPage({
       end_at: b.end_at,
       requester: calNameById.get(b.requester_id) ?? "—",
       status: b.status as string,
+      detailLines: (b.equipment ?? []).length ? [{ label: "อุปกรณ์", value: (b.equipment ?? []).join(", ") }] : [],
     })),
     ...(calCamera ?? []).map((b) => ({
       id: b.id,
@@ -215,6 +240,7 @@ export default async function BookingPage({
       end_at: b.end_at,
       requester: calNameById.get(b.requester_id) ?? "—",
       status: b.status as string,
+      detailLines: b.location ? [{ label: "สถานที่ใช้งาน", value: b.location }] : [],
     })),
   ];
 

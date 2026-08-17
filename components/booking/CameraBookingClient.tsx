@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { CameraBookingSheet } from "./CameraBookingSheet";
 import { cancelCameraBooking, adminDeleteCameraBooking } from "@/app/(app)/booking/actions";
 
@@ -78,14 +79,106 @@ export function CameraBookingClient({ bookings, currentEmployeeId, canEdit }: Pr
     });
   }
 
-  const grouped = new Map<string, CameraBookingRow[]>();
-  for (const b of bookings) {
-    const key = new Date(b.start_at).toLocaleDateString("th-TH", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: "Asia/Bangkok" });
-    const list = grouped.get(key) ?? [];
-    list.push(b);
-    grouped.set(key, list);
-  }
-  const sortedGroups = [...grouped.entries()].sort(([, a], [, b]) => a[0].start_at.localeCompare(b[0].start_at));
+  const columns: Column<CameraBookingRow>[] = [
+    {
+      key: "requester_name",
+      label: "ผู้จอง",
+      sortValue: (b) => b.requester_name,
+      render: (b) => (
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium text-foreground">{b.requester_name}</span>
+          {b.requester_id === currentEmployeeId && <Badge variant="secondary" className="text-xs">ฉัน</Badge>}
+        </div>
+      ),
+    },
+    {
+      key: "start_at",
+      label: "วันที่ / เวลา",
+      sortValue: (b) => b.start_at,
+      render: (b) => <span className="whitespace-nowrap text-foreground">{formatTimeRange(b.start_at, b.end_at)}</span>,
+    },
+    {
+      key: "location",
+      label: "สถานที่ใช้งาน",
+      sortValue: (b) => b.location ?? "",
+      render: (b) => <span className="text-foreground">{b.location || "-"}</span>,
+    },
+    {
+      key: "purpose",
+      label: "งาน / วัตถุประสงค์",
+      sortValue: (b) => b.purpose ?? "",
+      render: (b) => <span className="text-muted-foreground">{b.purpose || "-"}</span>,
+      className: "max-w-[240px]",
+    },
+    {
+      key: "actions",
+      label: "จัดการ",
+      render: (b) => {
+        const isMine = b.requester_id === currentEmployeeId;
+        const editable = isMine || canEdit;
+        return (
+          <div className="flex shrink-0 items-center gap-1">
+            {editable && b.status === "booked" && (
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-muted-foreground hover:text-primary"
+                disabled={isPending}
+                onClick={() => {
+                  setEditing(b);
+                  setSheetOpen(true);
+                }}
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+            {editable && b.status === "booked" && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
+                    <AlertDialogDescription>ต้องการยกเลิกการจองกล้อง{b.purpose ? ` "${b.purpose}"` : ""} ใช่หรือไม่?</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>ไม่</AlertDialogCancel>
+                    <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleCancel(b.id)}>
+                      ยกเลิกการจอง
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {canEdit && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>ลบรายการจองกล้อง</AlertDialogTitle>
+                    <AlertDialogDescription>ลบรายการนี้ออกจากระบบถาวร ไม่สามารถกู้คืนได้</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                    <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleAdminDelete(b.id)}>
+                      ลบถาวร
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -115,98 +208,7 @@ export function CameraBookingClient({ bookings, currentEmployeeId, canEdit }: Pr
       {bookings.length === 0 ? (
         <EmptyState icon={Camera} title="ยังไม่มีการจองกล้อง" description="กดปุ่ม 'จอง' เพื่อจองกล้องประชาสัมพันธ์" />
       ) : (
-        <div className="flex flex-col gap-5">
-          {sortedGroups.map(([dateKey, rows]) => (
-            <div key={dateKey}>
-              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {dayLabel(rows[0].start_at)}
-              </p>
-              <ul className="flex flex-col gap-2">
-                {rows.map((b) => {
-                  const isMine = b.requester_id === currentEmployeeId;
-                  const editable = isMine || canEdit;
-                  return (
-                    <li key={b.id} className="flex items-start justify-between rounded-2xl border border-border bg-white px-4 py-3">
-                      <div className="flex min-w-0 flex-col gap-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium text-foreground">{b.requester_name}</span>
-                          {isMine && <Badge variant="secondary" className="text-xs">ฉัน</Badge>}
-                        </div>
-                        <p className="text-xs text-muted-foreground">{formatTimeRange(b.start_at, b.end_at)}</p>
-                        {b.location && (
-                          <p className="flex items-center gap-1 text-xs text-foreground">
-                            <MapPin className="h-3 w-3 shrink-0 text-accent" />
-                            {b.location}
-                          </p>
-                        )}
-                        {b.purpose && <p className="text-xs text-muted-foreground">{b.purpose}</p>}
-                      </div>
-
-                      <div className="ml-2 flex shrink-0 items-center gap-1">
-                        {editable && b.status === "booked" && (
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="text-muted-foreground hover:text-primary"
-                            disabled={isPending}
-                            onClick={() => {
-                              setEditing(b);
-                              setSheetOpen(true);
-                            }}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                        )}
-                        {editable && b.status === "booked" && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
-                                <AlertDialogDescription>ต้องการยกเลิกการจองกล้อง{b.purpose ? ` "${b.purpose}"` : ""} ใช่หรือไม่?</AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>ไม่</AlertDialogCancel>
-                                <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleCancel(b.id)}>
-                                  ยกเลิกการจอง
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                        {canEdit && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>ลบรายการจองกล้อง</AlertDialogTitle>
-                                <AlertDialogDescription>ลบรายการนี้ออกจากระบบถาวร ไม่สามารถกู้คืนได้</AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-                                <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleAdminDelete(b.id)}>
-                                  ลบถาวร
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <SortableTable columns={columns} rows={bookings} rowKey={(b) => b.id} />
       )}
 
       <CameraBookingSheet

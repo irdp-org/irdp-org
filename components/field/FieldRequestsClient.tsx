@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { FieldRequestSheet } from "./FieldRequestSheet";
 import { FIELD_TYPE_LABELS_TH, FIELD_STATUS_LABELS_TH } from "@/lib/ot";
 import { cancelFieldRequest } from "@/app/(app)/field/actions";
@@ -110,47 +111,89 @@ export function FieldRequestsClient({
       {requests.length === 0 ? (
         <EmptyState icon={MapPin} title="ยังไม่มีคำขอนอกสถานที่/WFH" />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {requests.map((r) => {
-            const editable = r.status === "draft" || r.status === "returned" || r.status === "submitted";
-            const cancellable = r.status !== "approved" && r.status !== "cancelled" && r.status !== "rejected";
-            const { text: reasonText, url: attachmentUrl } = splitAttachment(r.reason);
-
-            return (
-              <li
-                key={r.id}
-                className="flex flex-col rounded-xl border border-border bg-surface"
-              >
-                {/* Tappable summary row → opens detail dialog */}
-                <button
-                  type="button"
-                  className="flex items-center justify-between gap-3 px-4 py-3 text-left"
-                  onClick={() => setDetailItem(r)}
-                >
-                  <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-                    <span className="truncate font-medium text-foreground">
-                      {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type}
-                      {r.location_name ? ` · ${r.location_name}` : ""}
-                      {reasonText && <span className="font-normal text-muted-foreground"> · {reasonText}</span>}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {format(new Date(r.work_date), "d MMM yyyy")}
-                      {r.planned_start && r.planned_end && (
-                        <> · {format(new Date(r.planned_start), "HH:mm")}–{format(new Date(r.planned_end), "HH:mm")}</>
-                      )}
-                      {r.ot_hours ? ` · OT ${r.ot_hours} ชม.` : ""}
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {attachmentUrl && <FileText className="h-4 w-4 text-primary" />}
-                    <Badge variant={STATUS_VARIANT[r.status]}>{FIELD_STATUS_LABELS_TH[r.status]}</Badge>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </button>
-
-                {/* Action row — edit / cancel (เช็คอิน/เช็คเอาท์ ทำที่หน้าเช็คอิน) */}
-                {(editable || cancellable) && (
-                  <div className="flex flex-wrap items-center gap-2 border-t border-border px-3 py-2">
+        (() => {
+          const columns: Column<OwnFieldRequest>[] = [
+            {
+              key: "type",
+              label: "ประเภท",
+              sortValue: (r) => FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type,
+              render: (r) => (
+                <span className="font-medium text-foreground">
+                  {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type}
+                </span>
+              ),
+            },
+            {
+              key: "work_date",
+              label: "วันที่",
+              sortValue: (r) => r.work_date,
+              render: (r) => <span className="whitespace-nowrap text-foreground">{format(new Date(r.work_date), "d MMM yyyy")}</span>,
+            },
+            {
+              key: "time",
+              label: "เวลา",
+              sortValue: (r) => r.planned_start ?? "",
+              render: (r) =>
+                r.planned_start && r.planned_end ? (
+                  <span className="whitespace-nowrap text-foreground">
+                    {format(new Date(r.planned_start), "HH:mm")}–{format(new Date(r.planned_end), "HH:mm")}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                ),
+            },
+            {
+              key: "location",
+              label: "สถานที่",
+              sortValue: (r) => r.location_name ?? "",
+              render: (r) => <span className="text-foreground">{r.location_name || "-"}</span>,
+            },
+            {
+              key: "ot_hours",
+              label: "OT ชม.",
+              sortValue: (r) => r.ot_hours ?? 0,
+              render: (r) => <span className="text-foreground">{r.ot_hours ? `${r.ot_hours} ชม.` : "-"}</span>,
+            },
+            {
+              key: "reason",
+              label: "เหตุผล",
+              sortValue: (r) => splitAttachment(r.reason).text ?? "",
+              render: (r) => <span className="text-muted-foreground">{splitAttachment(r.reason).text ?? "-"}</span>,
+              className: "max-w-[220px]",
+            },
+            {
+              key: "status",
+              label: "สถานะ",
+              sortValue: (r) => r.status,
+              render: (r) => <Badge variant={STATUS_VARIANT[r.status]}>{FIELD_STATUS_LABELS_TH[r.status]}</Badge>,
+            },
+            {
+              key: "attachment",
+              label: "ไฟล์แนบ",
+              render: (r) => {
+                const { url: attachmentUrl } = splitAttachment(r.reason);
+                if (!attachmentUrl) return <span className="text-muted-foreground">-</span>;
+                return (
+                  <a
+                    href={attachmentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <FileText className="h-4 w-4" /> เปิดไฟล์
+                  </a>
+                );
+              },
+            },
+            {
+              key: "actions",
+              label: "จัดการ",
+              render: (r) => {
+                const editable = r.status === "draft" || r.status === "returned" || r.status === "submitted";
+                const cancellable = r.status !== "approved" && r.status !== "cancelled" && r.status !== "rejected";
+                return (
+                  <div className="flex flex-wrap items-center gap-1">
                     {editable && (
                       <Button
                         type="button"
@@ -181,12 +224,21 @@ export function FieldRequestsClient({
                         </AlertDialogContent>
                       </AlertDialog>
                     )}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                );
+              },
+            },
+          ];
+          return (
+            <SortableTable
+              columns={columns}
+              rows={requests}
+              rowKey={(r) => r.id}
+              onRowClick={(r) => setDetailItem(r)}
+            />
+          );
+        })()
       )}
 
       {/* Detail dialog */}

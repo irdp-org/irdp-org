@@ -23,6 +23,11 @@ create index if not exists idx_worklog_emp on work_logs(employee_id, work_date);
 
 alter table work_logs enable row level security;
 
+drop policy if exists worklog_select on work_logs;
+drop policy if exists worklog_insert on work_logs;
+drop policy if exists worklog_update on work_logs;
+drop policy if exists worklog_delete on work_logs;
+
 create policy worklog_select on work_logs for select to authenticated
   using (employee_id = current_employee_id() or is_oversight()
          or exists (select 1 from employees e where e.id = work_logs.employee_id and is_head_of(e.department_id)));
@@ -33,6 +38,7 @@ create policy worklog_update on work_logs for update to authenticated
 create policy worklog_delete on work_logs for delete to authenticated
   using (employee_id = current_employee_id() or is_admin());
 
+drop trigger if exists trg_worklog_updated_at on work_logs;
 create trigger trg_worklog_updated_at
   before update on work_logs
   for each row execute function set_updated_at();

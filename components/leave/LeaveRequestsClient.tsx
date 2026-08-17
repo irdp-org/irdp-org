@@ -24,6 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { LeaveRequestSheet } from "./LeaveRequestSheet";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { cancelLeaveRequest, generateLeaveDoc } from "@/app/(app)/leave/actions";
@@ -131,40 +132,71 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
       {filtered.length === 0 ? (
         <EmptyState icon={CalendarDays} title={requests.length === 0 ? "ยังไม่มีคำขอลา" : "ไม่พบรายการที่ตรงกับตัวกรอง"} />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {filtered.map((r) => {
-            const editable = r.status === "draft" || r.status === "returned";
-            const cancellable = r.status !== "approved" && r.status !== "cancelled" && r.status !== "rejected";
-            const { text: reasonText, url: embeddedUrl } = splitAttachment(r.reason);
-            const attachmentUrl = r.cert_url || embeddedUrl;
-            return (
-              <li key={r.id} className="flex flex-col rounded-xl border border-border bg-surface">
-                {/* Tappable row → opens detail sheet */}
-                <button
-                  type="button"
-                  className="flex items-center justify-between gap-3 px-4 py-3 text-left"
-                  onClick={() => setDetailItem(r)}
-                >
-                  <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-                    <span className="truncate font-medium text-foreground">
-                      {LEAVE_LABELS_TH[r.leave_code]}
-                      {reasonText && <span className="font-normal text-muted-foreground"> · {reasonText}</span>}
-                    </span>
-                    <span className="text-muted-foreground">
-                      {format(new Date(r.start_at), "d MMM")} – {format(new Date(r.end_at), "d MMM yyyy")} ·{" "}
-                      {r.hours} ชม.
-                    </span>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {attachmentUrl && <FileText className="h-4 w-4 text-primary" />}
-                    <Badge variant={STATUS_VARIANT[r.status]}>{LEAVE_STATUS_LABELS_TH[r.status]}</Badge>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </button>
-
-                {/* Action row (edit / cancel) */}
-                {(editable || cancellable) && (
-                  <div className="flex items-center gap-1 border-t border-border px-3 py-1.5">
+        (() => {
+          const columns: Column<OwnLeaveRequest>[] = [
+            {
+              key: "leave_code",
+              label: "ประเภทลา",
+              sortValue: (r) => LEAVE_LABELS_TH[r.leave_code],
+              render: (r) => <span className="font-medium text-foreground">{LEAVE_LABELS_TH[r.leave_code]}</span>,
+            },
+            {
+              key: "start_at",
+              label: "ช่วงวันที่",
+              sortValue: (r) => r.start_at,
+              render: (r) => (
+                <span className="whitespace-nowrap text-foreground">
+                  {format(new Date(r.start_at), "d MMM")} – {format(new Date(r.end_at), "d MMM yyyy")}
+                </span>
+              ),
+            },
+            {
+              key: "hours",
+              label: "ชั่วโมง",
+              sortValue: (r) => r.hours,
+              render: (r) => <span className="text-foreground">{r.hours} ชม.</span>,
+            },
+            {
+              key: "reason",
+              label: "เหตุผล",
+              sortValue: (r) => splitAttachment(r.reason).text ?? "",
+              render: (r) => <span className="text-muted-foreground">{splitAttachment(r.reason).text ?? "-"}</span>,
+              className: "max-w-[220px]",
+            },
+            {
+              key: "status",
+              label: "สถานะ",
+              sortValue: (r) => r.status,
+              render: (r) => <Badge variant={STATUS_VARIANT[r.status]}>{LEAVE_STATUS_LABELS_TH[r.status]}</Badge>,
+            },
+            {
+              key: "attachment",
+              label: "ไฟล์แนบ",
+              render: (r) => {
+                const { url: embeddedUrl } = splitAttachment(r.reason);
+                const attachmentUrl = r.cert_url || embeddedUrl;
+                if (!attachmentUrl) return <span className="text-muted-foreground">-</span>;
+                return (
+                  <a
+                    href={attachmentUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-1 text-primary hover:underline"
+                  >
+                    <FileText className="h-4 w-4" /> เปิดไฟล์
+                  </a>
+                );
+              },
+            },
+            {
+              key: "actions",
+              label: "จัดการ",
+              render: (r) => {
+                const editable = r.status === "draft" || r.status === "returned";
+                const cancellable = r.status !== "approved" && r.status !== "cancelled" && r.status !== "rejected";
+                return (
+                  <div className="flex items-center gap-1">
                     {editable && (
                       <Button
                         type="button"
@@ -197,12 +229,21 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
                         </AlertDialogContent>
                       </AlertDialog>
                     )}
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                );
+              },
+            },
+          ];
+          return (
+            <SortableTable
+              columns={columns}
+              rows={filtered}
+              rowKey={(r) => r.id}
+              onRowClick={(r) => setDetailItem(r)}
+            />
+          );
+        })()
       )}
 
       {/* Detail dialog — full-screen on mobile, centered on desktop */}

@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { VanBookingSheet, type EmployeeOption } from "./VanBookingSheet";
 import { cancelVanBooking, adminDeleteVanBooking, generateVanDoc } from "@/app/(app)/booking/actions";
 import { GenerateDocButton } from "./GenerateDocButton";
@@ -109,24 +110,109 @@ export function VanBookingClient({
     });
   }
 
-  // Group bookings by date (Bangkok local date)
-  const grouped = new Map<string, VanBookingRow[]>();
-  for (const b of bookings) {
-    const key = new Date(b.start_at).toLocaleDateString("th-TH", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      timeZone: "Asia/Bangkok",
-    });
-    const list = grouped.get(key) ?? [];
-    list.push(b);
-    grouped.set(key, list);
-  }
-
-  // Sort entries by the first booking's start_at
-  const sortedGroups = [...grouped.entries()].sort(([, a], [, b]) =>
-    a[0].start_at.localeCompare(b[0].start_at)
-  );
+  const columns: Column<VanBookingRow>[] = [
+    {
+      key: "requester_name",
+      label: "ผู้จอง",
+      sortValue: (b) => b.requester_name,
+      render: (b) => (
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium text-foreground">{b.requester_name}</span>
+          {b.requester_id === currentEmployeeId && <Badge variant="secondary" className="text-xs">ฉัน</Badge>}
+        </div>
+      ),
+    },
+    {
+      key: "start_at",
+      label: "วันที่ / เวลา",
+      sortValue: (b) => b.start_at,
+      render: (b) => <span className="whitespace-nowrap text-foreground">{formatTimeRange(b.start_at, b.end_at)}</span>,
+    },
+    {
+      key: "destination",
+      label: "ปลายทาง",
+      sortValue: (b) => b.destination ?? "",
+      render: (b) => <span className="text-foreground">{b.destination || "-"}</span>,
+    },
+    {
+      key: "passengers",
+      label: "ผู้ร่วมเดินทาง",
+      sortValue: (b) => b.passengers.length,
+      render: (b) => <span className="text-muted-foreground">{b.passengers.map((p) => p.full_name).join(", ") || "-"}</span>,
+      className: "max-w-[220px]",
+    },
+    {
+      key: "expenses",
+      label: "ค่าใช้จ่ายเพิ่มเติม",
+      render: (b) =>
+        b.has_tollway || b.has_fuel || b.other_expense ? (
+          <div className="flex flex-wrap gap-1">
+            {b.has_tollway && <Badge variant="outline" className="text-[10px]">ค่าทางด่วน</Badge>}
+            {b.has_fuel && <Badge variant="outline" className="text-[10px]">ค่าน้ำมัน</Badge>}
+            {b.other_expense && <Badge variant="outline" className="text-[10px]">{b.other_expense}</Badge>}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "actions",
+      label: "จัดการ",
+      render: (b) => {
+        const isMine = b.requester_id === currentEmployeeId;
+        const cancellable = isMine || canEdit;
+        return (
+          <div className="flex shrink-0 items-center gap-1">
+            <GenerateDocButton id={b.id} generate={generateVanDoc} label="ออกใบจองรถ" />
+            {cancellable && b.status === "booked" && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      ต้องการยกเลิกการจองรถตู้{b.destination ? ` ไป${b.destination}` : ""} ใช่หรือไม่?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>ไม่</AlertDialogCancel>
+                    <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleCancel(b.id)}>
+                      ยกเลิกการจอง
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {canEdit && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>ลบรายการจองรถตู้</AlertDialogTitle>
+                    <AlertDialogDescription>ลบรายการนี้ออกจากระบบถาวร ไม่สามารถกู้คืนได้</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                    <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleAdminDelete(b.id)}>
+                      ลบถาวร
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -161,110 +247,7 @@ export function VanBookingClient({
       {bookings.length === 0 ? (
         <EmptyState icon={Bus} title="ยังไม่มีการจองรถตู้" description="กดปุ่ม 'จอง' เพื่อจองรถตู้ส่วนกลาง" />
       ) : (
-        <div className="flex flex-col gap-5">
-          {sortedGroups.map(([dateKey, rows]) => (
-            <div key={dateKey}>
-              <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                {dayLabel(rows[0].start_at)}
-              </p>
-              <ul className="flex flex-col gap-2">
-                {rows.map((b) => {
-                  const isMine = b.requester_id === currentEmployeeId;
-                  const cancellable = isMine || canEdit;
-                  return (
-                    <li
-                      key={b.id}
-                      className="flex items-start justify-between rounded-2xl border border-border bg-white px-4 py-3"
-                    >
-                      <div className="flex min-w-0 flex-col gap-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-medium text-foreground">
-                            {b.requester_name}
-                          </span>
-                          {isMine && (
-                            <Badge variant="secondary" className="text-xs">ฉัน</Badge>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {formatTimeRange(b.start_at, b.end_at)}
-                        </p>
-                        {b.destination && (
-                          <p className="flex items-center gap-1 text-xs text-foreground">
-                            <MapPin className="h-3 w-3 shrink-0 text-accent" />
-                            {b.destination}
-                          </p>
-                        )}
-                        {b.passengers.length > 0 && (
-                          <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Users className="h-3 w-3 shrink-0" />
-                            {b.passengers.map((p) => p.full_name).join(", ")}
-                          </p>
-                        )}
-                        {(b.has_tollway || b.has_fuel || b.other_expense) && (
-                          <div className="flex flex-wrap gap-1 pt-0.5">
-                            {b.has_tollway && <Badge variant="outline" className="text-[10px]">ค่าทางด่วน</Badge>}
-                            {b.has_fuel && <Badge variant="outline" className="text-[10px]">ค่าน้ำมัน</Badge>}
-                            {b.other_expense && <Badge variant="outline" className="text-[10px]">{b.other_expense}</Badge>}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="ml-2 flex shrink-0 items-center gap-1">
-                        <GenerateDocButton id={b.id} generate={generateVanDoc} label="ออกใบจองรถ" />
-                        {cancellable && b.status === "booked" && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  ต้องการยกเลิกการจองรถตู้{b.destination ? ` ไป${b.destination}` : ""} ใช่หรือไม่?
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>ไม่</AlertDialogCancel>
-                                <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleCancel(b.id)}>
-                                  ยกเลิกการจอง
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                        {canEdit && (
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>ลบรายการจองรถตู้</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  ลบรายการนี้ออกจากระบบถาวร ไม่สามารถกู้คืนได้
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-                                <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleAdminDelete(b.id)}>
-                                  ลบถาวร
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-        </div>
+        <SortableTable columns={columns} rows={bookings} rowKey={(b) => b.id} />
       )}
 
       {vehicle && (

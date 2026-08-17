@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { RoomBookingSheet, type RoomOption } from "./RoomBookingSheet";
 import { RoomTimeline, type TimelineBooking } from "./RoomTimeline";
 import { cancelRoomBooking, adminDeleteRoomBooking, generateRoomDoc } from "@/app/(app)/booking/actions";
@@ -115,7 +116,109 @@ export function RoomBookingClient({ bookings, rooms, currentEmployeeId, canEdit 
     }
   }
 
-  const grouped = groupByDate(bookings);
+  const columns: Column<RoomBookingRow>[] = [
+    {
+      key: "title",
+      label: "หัวข้อ",
+      sortValue: (b) => b.title ?? "",
+      render: (b) => (
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium text-foreground">{b.title ?? "(ไม่ระบุหัวข้อ)"}</span>
+          {b.requester_id === currentEmployeeId && <Badge variant="secondary" className="text-xs">ฉัน</Badge>}
+        </div>
+      ),
+    },
+    {
+      key: "start_at",
+      label: "วันที่ / เวลา",
+      sortValue: (b) => b.start_at,
+      render: (b) => <span className="whitespace-nowrap text-foreground">{dayLabel(b.start_at)} · {timeRange(b.start_at, b.end_at)}</span>,
+    },
+    {
+      key: "room",
+      label: "ห้อง",
+      sortValue: (b) => roomById.get(b.room_id)?.name ?? "",
+      render: (b) => <span className="text-foreground">{roomById.get(b.room_id)?.name ?? "—"}</span>,
+    },
+    {
+      key: "requester_name",
+      label: "ผู้จอง",
+      sortValue: (b) => b.requester_name,
+      render: (b) => <span className="text-foreground">{b.requester_name}</span>,
+    },
+    {
+      key: "equipment",
+      label: "อุปกรณ์",
+      render: (b) =>
+        b.equipment.length > 0 ? (
+          <div className="flex flex-wrap gap-1">
+            {b.equipment.map((eq) => (
+              <Badge key={eq} variant="outline" className="text-[10px]">{eq}</Badge>
+            ))}
+          </div>
+        ) : (
+          <span className="text-muted-foreground">-</span>
+        ),
+    },
+    {
+      key: "actions",
+      label: "จัดการ",
+      render: (b) => {
+        const room = roomById.get(b.room_id);
+        const isMine = b.requester_id === currentEmployeeId;
+        const cancellable = isMine || canEdit;
+        return (
+          <div className="flex shrink-0 items-center gap-1">
+            <GenerateDocButton id={b.id} generate={generateRoomDoc} label="ออกใบจองห้อง" />
+            {cancellable && b.status === "booked" && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      ต้องการยกเลิกการจอง{room?.name ? `ห้อง${room.name}` : "ห้องประชุม"}{b.title ? ` "${b.title}"` : ""} ใช่หรือไม่?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>ไม่</AlertDialogCancel>
+                    <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleCancel(b.id)}>
+                      ยกเลิกการจอง
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+            {canEdit && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>ลบรายการจองห้องประชุม</AlertDialogTitle>
+                    <AlertDialogDescription>ลบรายการนี้ออกจากระบบถาวร ไม่สามารถกู้คืนได้</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
+                    <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleAdminDelete(b.id)}>
+                      ลบถาวร
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
 
   const timelineBookings: TimelineBooking[] = bookings.map((b) => ({
     id: b.id,
@@ -196,100 +299,7 @@ export function RoomBookingClient({ bookings, rooms, currentEmployeeId, canEdit 
             description="กดปุ่ม 'จอง' ที่ห้องที่ต้องการ"
           />
         ) : (
-          <div className="flex flex-col gap-5">
-            {grouped.map(([, rows]) => (
-              <div key={rows[0].start_at}>
-                <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  {dayLabel(rows[0].start_at)}
-                </p>
-                <ul className="flex flex-col gap-2">
-                  {rows.map((b) => {
-                    const room = roomById.get(b.room_id);
-                    const isMine = b.requester_id === currentEmployeeId;
-                    const cancellable = isMine || canEdit;
-                    return (
-                      <li
-                        key={b.id}
-                        className="flex items-start justify-between rounded-2xl border border-border bg-white px-4 py-3"
-                      >
-                        <div className="flex min-w-0 flex-col gap-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-medium text-foreground">
-                              {b.title ?? "(ไม่ระบุหัวข้อ)"}
-                            </span>
-                            {isMine && (
-                              <Badge variant="secondary" className="text-xs">ฉัน</Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {timeRange(b.start_at, b.end_at)} · {room?.name ?? "—"}
-                          </p>
-                          <p className="text-xs text-muted-foreground">จองโดย {b.requester_name}</p>
-                          {b.equipment.length > 0 && (
-                            <div className="flex flex-wrap gap-1 pt-0.5">
-                              {b.equipment.map((eq) => (
-                                <Badge key={eq} variant="outline" className="text-[10px]">{eq}</Badge>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="ml-2 flex shrink-0 items-center gap-1">
-                          <GenerateDocButton id={b.id} generate={generateRoomDoc} label="ออกใบจองห้อง" />
-                          {cancellable && b.status === "booked" && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>ยืนยันการยกเลิก</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    ต้องการยกเลิกการจอง{room?.name ? `ห้อง${room.name}` : "ห้องประชุม"}{b.title ? ` "${b.title}"` : ""} ใช่หรือไม่?
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>ไม่</AlertDialogCancel>
-                                  <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleCancel(b.id)}>
-                                    ยกเลิกการจอง
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                          {canEdit && (
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button size="icon" variant="ghost" className="text-muted-foreground hover:text-danger" disabled={isPending}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>ลบรายการจองห้องประชุม</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    ลบรายการนี้ออกจากระบบถาวร ไม่สามารถกู้คืนได้
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>ยกเลิก</AlertDialogCancel>
-                                  <AlertDialogAction className="bg-danger hover:bg-danger/90" onClick={() => handleAdminDelete(b.id)}>
-                                    ลบถาวร
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
-                          )}
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <SortableTable columns={columns} rows={bookings} rowKey={(b) => b.id} />
         )
       )}
 

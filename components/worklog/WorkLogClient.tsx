@@ -23,6 +23,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { createWorkLog, updateWorkLog, deleteWorkLog } from "@/app/(app)/worklog/actions";
 
 export type OwnWorkLog = {
@@ -147,57 +148,78 @@ export function WorkLogClient({ logs }: { logs: OwnWorkLog[] }) {
       {logs.length === 0 ? (
         <EmptyState icon={Clock} title="ยังไม่มีบันทึกเวลาทำงาน" />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {logs.map((l) => (
-            <li key={l.id} className="flex flex-col rounded-xl border border-border bg-surface">
-              <div className="flex items-center justify-between gap-3 px-4 py-3">
-                <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-                  <span className="font-medium text-foreground">
-                    {format(new Date(`${l.work_date}T00:00:00`), "d MMM yyyy")}
-                    {l.start_time && l.end_time && (
-                      <span className="font-normal text-muted-foreground">
-                        {" "}
-                        · {l.start_time.slice(0, 5)}–{l.end_time.slice(0, 5)} น.
-                      </span>
-                    )}
+        (() => {
+          const columns: Column<OwnWorkLog>[] = [
+            {
+              key: "work_date",
+              label: "วันที่",
+              sortValue: (l) => l.work_date,
+              render: (l) => (
+                <span className="whitespace-nowrap font-medium text-foreground">
+                  {format(new Date(`${l.work_date}T00:00:00`), "d MMM yyyy")}
+                </span>
+              ),
+            },
+            {
+              key: "time",
+              label: "เวลาทำงาน",
+              sortValue: (l) => l.start_time ?? "",
+              render: (l) =>
+                l.start_time && l.end_time ? (
+                  <span className="whitespace-nowrap text-foreground">
+                    {l.start_time.slice(0, 5)}–{l.end_time.slice(0, 5)} น.
                   </span>
-                  {l.tasks && <span className="text-muted-foreground">{l.tasks}</span>}
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                ),
+            },
+            {
+              key: "tasks",
+              label: "งานที่ทำ",
+              sortValue: (l) => l.tasks ?? "",
+              render: (l) => <span className="text-muted-foreground">{l.tasks || "-"}</span>,
+              className: "max-w-[320px]",
+            },
+            {
+              key: "actions",
+              label: "จัดการ",
+              render: (l) => (
+                <div className="flex items-center gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="gap-1 text-xs"
+                    onClick={() => {
+                      setEditing(l);
+                      setSheetOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" /> แก้ไข
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs text-danger" disabled={isPending}>
+                        <X className="h-3.5 w-3.5" /> ลบ
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>ลบบันทึกนี้?</AlertDialogTitle>
+                        <AlertDialogDescription>ไม่สามารถกู้คืนได้หลังลบ</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>ปิด</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(l.id)}>ลบ</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
-              </div>
-              <div className="flex items-center gap-1 border-t border-border px-3 py-1.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="gap-1 text-xs"
-                  onClick={() => {
-                    setEditing(l);
-                    setSheetOpen(true);
-                  }}
-                >
-                  <Pencil className="h-3.5 w-3.5" /> แก้ไข
-                </Button>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs text-danger" disabled={isPending}>
-                      <X className="h-3.5 w-3.5" /> ลบ
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>ลบบันทึกนี้?</AlertDialogTitle>
-                      <AlertDialogDescription>ไม่สามารถกู้คืนได้หลังลบ</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>ปิด</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(l.id)}>ลบ</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </li>
-          ))}
-        </ul>
+              ),
+            },
+          ];
+          return <SortableTable columns={columns} rows={logs} rowKey={(l) => l.id} />;
+        })()
       )}
 
       <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>

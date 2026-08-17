@@ -27,6 +27,8 @@ export type BookingEvent = {
   end_at: string;
   requester: string;
   status: string;
+  /** Extra label:value lines shown in the day-detail dialog (passengers, equipment, expenses, etc.) */
+  detailLines?: { label: string; value: string }[];
 };
 
 const WEEKDAYS_TH = ["จ", "อ", "พ", "พฤ", "ศ", "ส", "อา"];
@@ -155,7 +157,19 @@ export function BookingCalendar({ events }: { events: BookingEvent[] }) {
                   <p className="text-xs text-muted-foreground">
                     {ev.sub} · {timeLabel(ev.start_at)}–{timeLabel(ev.end_at)}
                   </p>
-                  <p className="text-xs text-muted-foreground">โดย {ev.requester}{ev.status === "cancelled" ? " · (ประวัติ/ยกเลิก)" : ""}</p>
+                  <p className="text-xs">
+                    <span className="font-medium text-foreground">โดย {ev.requester}</span>
+                    {ev.status === "cancelled" && <span className="text-muted-foreground"> · (ประวัติ/ยกเลิก)</span>}
+                  </p>
+                  {ev.detailLines && ev.detailLines.length > 0 && (
+                    <div className="mt-1 flex flex-col gap-0.5 border-t border-border pt-1.5">
+                      {ev.detailLines.map((d, i) => (
+                        <p key={i} className="text-xs text-muted-foreground">
+                          <span className="text-foreground">{d.label}:</span> {d.value}
+                        </p>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -24,6 +24,11 @@ create table if not exists camera_bookings (
 
 alter table camera_bookings enable row level security;
 
+drop policy if exists camerab_select on camera_bookings;
+drop policy if exists camerab_insert on camera_bookings;
+drop policy if exists camerab_update on camera_bookings;
+drop policy if exists camerab_delete on camera_bookings;
+
 create policy camerab_select on camera_bookings for select to authenticated using (true);
 create policy camerab_insert on camera_bookings for insert to authenticated
   with check (requester_id = current_employee_id());
@@ -70,6 +75,7 @@ create trigger trg_camera_booking_calendar
   after insert or update on camera_bookings
   for each row execute function fn_camera_booking_calendar_sync();
 
+drop trigger if exists trg_camerab_updated_at on camera_bookings;
 create trigger trg_camerab_updated_at
   before update on camera_bookings
   for each row execute function set_updated_at();
