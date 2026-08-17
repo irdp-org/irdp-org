@@ -20,6 +20,7 @@ import {
   QrCode,
   Receipt,
   Inbox,
+  Hash,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -59,6 +60,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, roles: ["admin"] },
   { href: "/training", label: "ระบบอบรม (TMS)", icon: GraduationCap, trainingAccess: true },
   { href: "/documents", label: "ลงรับเอกสาร", icon: Inbox, documentAccess: true },
+  { href: "/document-numbers", label: "ออกเลขเอกสาร", icon: Hash },
 ];
 
 // Primary tabs shown directly in the mobile bottom bar (iOS-style, keep ≤5

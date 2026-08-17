@@ -198,6 +198,20 @@ export interface Database {
         created_at: string;
         updated_at: string;
       }>;
+      document_numbers: TableShape<{
+        id: string;
+        department_id: string;
+        year_be: number;
+        seq: number;
+        doc_no: string;
+        title: string;
+        issued_date: string;
+        issued_by: string;
+        attachment_drive_id: string | null;
+        attachment_url: string | null;
+        created_at: string;
+        updated_at: string;
+      }>;
       work_locations: TableShape<{
         id: string;
         name: string;
@@ -601,6 +615,10 @@ export interface Database {
       };
       fn_next_doc_seq: {
         Args: { p_year: number };
+        Returns: number;
+      };
+      fn_next_docnum_seq: {
+        Args: { p_department_id: string; p_year: number };
         Returns: number;
       };
     };
