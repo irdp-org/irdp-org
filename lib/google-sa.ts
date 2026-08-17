@@ -2,10 +2,15 @@ import "server-only";
 import { google } from "googleapis";
 
 /**
- * Shared service-account auth for Drive / Docs / Sheets / Gmail.
- * Credentials come from GOOGLE_SERVICE_ACCOUNT_JSON (the full JSON key, as a
- * single env value). SA email: irdp-org@irdp-org.iam.gserviceaccount.com —
- * the target Drive folder / template docs must be shared with it (Editor).
+ * Shared auth for Drive / Docs / Sheets.
+ *
+ * NOT a service account — service accounts have zero personal Drive storage
+ * quota and cannot create or copy files into a regular (non-Shared-Drive)
+ * folder, which is what GOOGLE_DRIVE_FOLDER_ID is. Instead this delegates as
+ * a real user (irdpofficer@gmail.com), the same pattern already used for
+ * Calendar (GOOGLE_CALENDAR_REFRESH_TOKEN) and Gmail (GMAIL_REFRESH_TOKEN):
+ * GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET + a per-service refresh token minted
+ * once via OAuth consent for that user, covering the scopes below.
  */
 export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/drive",
@@ -13,33 +18,22 @@ export const GOOGLE_SCOPES = [
   "https://www.googleapis.com/auth/spreadsheets",
 ];
 
-let cachedCreds: Record<string, unknown> | null = null;
-
-function credentials(): Record<string, unknown> {
-  if (cachedCreds) return cachedCreds;
-  const raw = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!raw) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is not set");
-  const parsed = JSON.parse(raw) as Record<string, unknown>;
-  // Some env stores escape newlines in the private key — normalize back.
-  if (typeof parsed.private_key === "string") {
-    parsed.private_key = (parsed.private_key as string).replace(/\\n/g, "\n");
-  }
-  cachedCreds = parsed;
-  return parsed;
-}
-
-export function saAuth(scopes: string[] = GOOGLE_SCOPES) {
-  return new google.auth.GoogleAuth({ credentials: credentials(), scopes });
+function driveAuth() {
+  const oauth2Client = new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET);
+  const refreshToken = process.env.GOOGLE_DRIVE_REFRESH_TOKEN;
+  if (!refreshToken) throw new Error("GOOGLE_DRIVE_REFRESH_TOKEN is not set");
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+  return oauth2Client;
 }
 
 export function driveClient() {
-  return google.drive({ version: "v3", auth: saAuth() });
+  return google.drive({ version: "v3", auth: driveAuth() });
 }
 
 export function docsClient() {
-  return google.docs({ version: "v1", auth: saAuth() });
+  return google.docs({ version: "v1", auth: driveAuth() });
 }
 
 export function sheetsClient() {
-  return google.sheets({ version: "v4", auth: saAuth() });
+  return google.sheets({ version: "v4", auth: driveAuth() });
 }

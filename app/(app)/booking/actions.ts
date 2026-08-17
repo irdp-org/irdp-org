@@ -624,6 +624,15 @@ async function deptHeadName(employeeId: string): Promise<string> {
   return head?.full_name ?? "";
 }
 
+/** Department name for an employee (for the "ฝ่าย" field on generated docs). */
+async function deptNameOf(employeeId: string): Promise<string> {
+  const admin = createAdminClient();
+  const { data: emp } = await admin.from("employees").select("department_id").eq("id", employeeId).single();
+  if (!emp?.department_id) return "";
+  const { data: dept } = await admin.from("departments").select("name").eq("id", emp.department_id).single();
+  return dept?.name ?? "";
+}
+
 async function emailDocIfRequested(sendEmail: boolean, requesterId: string, subject: string, url: string) {
   if (!sendEmail) return;
   const admin = createAdminClient();
@@ -649,23 +658,27 @@ export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
   const { data: pax } = await admin.from("van_passengers").select("employee_id").eq("booking_id", bookingId);
   const paxIds = (pax ?? []).map((p) => p.employee_id);
   const lookupIds = [...new Set([b.requester_id, ...(b.driver_id ? [b.driver_id] : []), ...paxIds])];
-  const { data: people } = await admin.from("employees").select("id, full_name").in("id", lookupIds);
+  const { data: people } = await admin.from("employees").select("id, full_name, position").in("id", lookupIds);
+  const byId = new Map((people ?? []).map((p) => [p.id, p]));
   const nameById = new Map((people ?? []).map((p) => [p.id, p.full_name]));
-  const { data: veh } = await admin.from("vehicles").select("name").eq("id", b.vehicle_id).single();
 
   const requesterName = nameById.get(b.requester_id) ?? "";
   const others = [b.has_tollway ? "ค่าทางด่วน" : "", b.has_fuel ? "ค่าน้ำมัน" : "", b.other_expense || ""].filter(Boolean).join(", ");
 
   const { url } = await generateDocFromTemplate(templateId, `ใบจองรถ-${dLabel(b.start_at)}-${requesterName}`, {
-    ผู้จอง: requesterName,
-    วันที่: dLabel(b.start_at),
-    เวลา: `${tLabel(b.start_at)} - ${tLabel(b.end_at)}`,
-    ปลายทาง: b.destination ?? "",
+    เมื่อวันที่: dLabel(new Date().toISOString()),
+    ชื่อผู้จอง: requesterName,
+    ตำแหน่ง: byId.get(b.requester_id)?.position ?? "",
+    ฝ่าย: await deptNameOf(b.requester_id),
+    ขอใช้ไปสถานที่: b.destination ?? "",
     วัตถุประสงค์: b.purpose ?? "",
-    ผู้ร่วมเดินทาง: paxIds.map((id) => nameById.get(id) ?? "").filter(Boolean).join(", "),
-    คนขับ: b.driver_id ? (nameById.get(b.driver_id) ?? "") : "",
-    ค่าใช้จ่ายเพิ่มเติม: others || "ไม่มี",
-    รถ: veh?.name ?? "",
+    จำนวนผู้โดยสาร: String(paxIds.length),
+    การเดินทางพื้นที่: "",
+    รายชื่อผู้ร่วมเดินทาง: paxIds.map((id) => nameById.get(id) ?? "").filter(Boolean).join(", ") || "ไม่มี",
+    ตั้งแต่: `${dLabel(b.start_at)} ${tLabel(b.start_at)}`,
+    ถึง: `${dLabel(b.end_at)} ${tLabel(b.end_at)}`,
+    รายจ่ายเพิ่มเติม: others || "ไม่มี",
+    ค่าผ่านทาง1c: "",
     หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
   });
 
@@ -683,17 +696,20 @@ export async function generateRoomDoc(bookingId: string, sendEmail: boolean) {
   const { data: b } = await admin.from("room_bookings").select("*").eq("id", bookingId).single();
   if (!b) return { error: "ไม่พบการจอง" };
 
-  const { data: reqEmp } = await admin.from("employees").select("full_name").eq("id", b.requester_id).single();
+  const { data: reqEmp } = await admin.from("employees").select("full_name, position").eq("id", b.requester_id).single();
   const { data: room } = await admin.from("rooms").select("name").eq("id", b.room_id).single();
 
   const requesterName = reqEmp?.full_name ?? "";
   const { url } = await generateDocFromTemplate(templateId, `ใบจองห้อง-${dLabel(b.start_at)}-${requesterName}`, {
-    ผู้จอง: requesterName,
-    ห้อง: room?.name ?? "",
-    วันที่: dLabel(b.start_at),
-    เวลา: `${tLabel(b.start_at)} - ${tLabel(b.end_at)}`,
-    หัวข้อ: b.title ?? "",
-    อุปกรณ์: (b.equipment ?? []).join(", ") || "ไม่มี",
+    เมื่อวันที่: dLabel(new Date().toISOString()),
+    ชื่อผู้จอง: requesterName,
+    ตำแหน่ง: reqEmp?.position ?? "",
+    ฝ่ายงาน: await deptNameOf(b.requester_id),
+    ห้องประชุมที่ต้องการจอง: room?.name ?? "",
+    จำนวนผู้เข้าประชุม: "",
+    วัตถุประสงค์: b.title ?? "",
+    ตั้งแต่: `${dLabel(b.start_at)} ${tLabel(b.start_at)}`,
+    ถึง: `${dLabel(b.end_at)} ${tLabel(b.end_at)}`,
     หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
   });
 

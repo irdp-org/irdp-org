@@ -8,7 +8,9 @@ import { notify } from "@/lib/notify";
 import { uploadToDrive } from "@/lib/google-drive";
 import { ocrEnvelope } from "@/lib/gemini";
 
-/** ฝ่ายรับเอกสาร = ฝ่ายธุรการ + admin/hr */
+const RECEIVE_DEPARTMENTS = ["ธุรการ", "บุคคล", "ฝ่ายบุคคล"];
+
+/** ฝ่ายรับเอกสาร = ฝ่ายธุรการ + ฝ่ายบุคคล + admin/hr */
 async function assertCanReceive(): Promise<Employee> {
   const employee = await getCurrentEmployee();
   if (!employee) throw new Error("unauthorized");
@@ -16,7 +18,7 @@ async function assertCanReceive(): Promise<Employee> {
   if (employee.department_id) {
     const admin = createAdminClient();
     const { data: dept } = await admin.from("departments").select("name").eq("id", employee.department_id).single();
-    if (dept?.name === "ธุรการ") return employee;
+    if (dept?.name && RECEIVE_DEPARTMENTS.includes(dept.name)) return employee;
   }
   throw new Error("forbidden");
 }

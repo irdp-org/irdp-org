@@ -224,22 +224,21 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   const head = await deptHeadName(claim.employee_id);
   const dept = await deptNameOf(claim.employee_id);
 
-  // Build one big detail block (per the user's "single variable" request)
+  // One numbered line per item: date · route+mode · amount — the template's
+  // pre-drawn table rows are a single merged 38-column grid (not a clean
+  // repeating row), too fragile to edit cell-by-cell via the Docs API, so the
+  // breakdown goes into the one {{รายละเอียด}} cell as a formatted list instead.
   const lines = (items ?? []).map((it, i) => {
     const route = [it.from_location, it.to_location].filter(Boolean).join(" - ");
     const mode = MODE_LABELS[it.mode] ?? it.mode;
     const km = it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : "";
-    return `${i + 1}. ${dLabel(it.travel_date)}  ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}  ${formatBaht(it.amount)} บาท`;
+    return `${i + 1}. ${dLabel(it.travel_date)}  ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}  —  ${formatBaht(it.amount)} บาท`;
   });
-
-  const detail =
-    `ข้าพเจ้า ${emp?.full_name ?? ""} ตำแหน่ง ${emp?.position ?? ""} ฝ่าย ${dept}\n` +
-    `ได้ปฏิบัติงานเกี่ยวกับ ${claim.title ?? "การเดินทางปฏิบัติงาน"}\n\n` +
-    `รายละเอียดการใช้จ่าย\n${lines.join("\n")}\n\n` +
-    `รวมเป็นเงินทั้งสิ้น ${formatBaht(claim.total_amount)} บาท (${bahtText(claim.total_amount)})`;
+  const detail = lines.join("\n");
 
   const { id: docId, url } = await generateDocFromTemplate(templateId, `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}`, {
     รายละเอียด: detail,
+    ได้ปฏิบัติงานเกี่ยวกับ: claim.title ?? "การเดินทางปฏิบัติงาน",
     ชื่อ: emp?.full_name ?? "",
     ตำแหน่ง: emp?.position ?? "",
     ฝ่าย: dept,
