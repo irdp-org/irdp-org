@@ -2,9 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Plus, X, Trash2, Pencil, MapPin } from "lucide-react";
-import { format, isToday, isTomorrow } from "date-fns";
-import { th } from "date-fns/locale";
+import { Camera, Plus, X, Trash2, Pencil } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -52,12 +51,6 @@ function formatTimeRange(startAt: string, endAt: string) {
   return `${start.toLocaleDateString("th-TH", dateOpts)} ${start.toLocaleTimeString("th-TH", timeOpts)} – ${end.toLocaleDateString("th-TH", dateOpts)} ${end.toLocaleTimeString("th-TH", timeOpts)}`;
 }
 
-function dayLabel(iso: string) {
-  const d = new Date(iso);
-  if (isToday(d)) return "วันนี้";
-  if (isTomorrow(d)) return "พรุ่งนี้";
-  return format(d, "d MMMM yyyy", { locale: th });
-}
 
 export function CameraBookingClient({ bookings, currentEmployeeId, canEdit }: Props) {
   const router = useRouter();
@@ -206,7 +199,7 @@ export function CameraBookingClient({ bookings, currentEmployeeId, canEdit }: Pr
       </div>
 
       {bookings.length === 0 ? (
-        <EmptyState icon={Camera} title="ยังไม่มีการจองกล้อง" description="กดปุ่ม 'จอง' เพื่อจองกล้องประชาสัมพันธ์" />
+        <EmptyState icon={Camera} title="ยังไม่มีการจองกล้องใน 30 วันข้างหน้า" description="กดปุ่ม 'จอง' เพื่อจองกล้องประชาสัมพันธ์" />
       ) : (
         <SortableTable columns={columns} rows={bookings} rowKey={(b) => b.id} />
       )}

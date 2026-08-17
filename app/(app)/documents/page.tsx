@@ -12,7 +12,7 @@ async function canReceive(deptId: string | null, role: string): Promise<boolean>
   if (!deptId) return false;
   const admin = createAdminClient();
   const { data } = await admin.from("departments").select("name").eq("id", deptId).single();
-  return data?.name === "ธุรการ";
+  return ["ธุรการ", "บุคคล", "ฝ่ายบุคคล"].includes(data?.name ?? "");
 }
 
 export default async function DocumentsPage() {

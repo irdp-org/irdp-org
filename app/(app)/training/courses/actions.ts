@@ -17,8 +17,37 @@ const courseSchema = z.object({
   description: z.string().optional(),
   target_group: z.string().optional(),
   objectives: z.string().optional(),
-  logo_url: z.string().optional(),
+  is_open: z.coerce.boolean(),
 });
+
+const MAX_LOGO_BYTES = 3 * 1024 * 1024;
+const LOGO_MIME: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  webp: "image/webp",
+  svg: "image/svg+xml",
+};
+
+async function uploadLogoIfPresent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  courseId: string,
+  formData: FormData
+): Promise<{ logo_url?: string; error?: string }> {
+  const file = formData.get("logoFile");
+  if (!(file instanceof File) || file.size === 0) return {};
+  if (file.size > MAX_LOGO_BYTES) return { error: "ไฟล์โลโก้ใหญ่เกินไป (จำกัด 3MB)" };
+  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const path = `${courseId}/logo.${ext}`;
+  const { error } = await admin.storage.from("training-logos").upload(path, file, {
+    contentType: file.type || LOGO_MIME[ext] || "application/octet-stream",
+    upsert: true,
+  });
+  if (error) return { error: error.message };
+  const { data } = admin.storage.from("training-logos").getPublicUrl(path);
+  return { logo_url: data.publicUrl };
+}
 
 export async function createCourse(formData: FormData) {
   const employee = await getCurrentEmployee();
@@ -34,7 +63,7 @@ export async function createCourse(formData: FormData) {
     description: formData.get("description") || undefined,
     target_group: formData.get("target_group") || undefined,
     objectives: formData.get("objectives") || undefined,
-    logo_url: formData.get("logo_url") || undefined,
+    is_open: formData.get("is_open") === "true",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
@@ -46,6 +75,11 @@ export async function createCourse(formData: FormData) {
     .single();
 
   if (error) return { error: error.message };
+
+  const logo = await uploadLogoIfPresent(admin, data.id, formData);
+  if (logo.error) return { error: logo.error };
+  if (logo.logo_url) await admin.from("training_courses").update({ logo_url: logo.logo_url }).eq("id", data.id);
+
   revalidatePath("/training/courses");
   return { id: data.id };
 }
@@ -64,14 +98,18 @@ export async function updateCourse(id: string, formData: FormData) {
     description: formData.get("description") || undefined,
     target_group: formData.get("target_group") || undefined,
     objectives: formData.get("objectives") || undefined,
-    logo_url: formData.get("logo_url") || undefined,
+    is_open: formData.get("is_open") === "true",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const admin = createAdminClient();
+
+  const logo = await uploadLogoIfPresent(admin, id, formData);
+  if (logo.error) return { error: logo.error };
+
   const { error } = await admin
     .from("training_courses")
-    .update({ ...parsed.data, updated_at: new Date().toISOString() })
+    .update({ ...parsed.data, ...(logo.logo_url ? { logo_url: logo.logo_url } : {}), updated_at: new Date().toISOString() })
     .eq("id", id);
 
   if (error) return { error: error.message };
@@ -98,6 +136,9 @@ const batchSchema = z.object({
   training_dates: z.string().optional(),
   location: z.string().optional(),
   note: z.string().optional(),
+  description: z.string().optional(),
+  target_group: z.string().optional(),
+  objectives: z.string().optional(),
 });
 
 export async function addBatch(courseId: string, formData: FormData) {
@@ -122,6 +163,27 @@ export async function addBatch(courseId: string, formData: FormData) {
   return {};
 }
 
+export async function updateBatch(id: string, courseId: string, formData: FormData) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "ไม่มีสิทธิ์" };
+
+  const parsed = batchSchema.safeParse({
+    batch_no: formData.get("batch_no") || undefined,
+    training_dates: formData.get("training_dates") || undefined,
+    location: formData.get("location") || undefined,
+    note: formData.get("note") || undefined,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("training_batches").update(parsed.data).eq("id", id);
+
+  if (error) return { error: error.message };
+  revalidatePath(`/training/courses/${courseId}`);
+  revalidatePath(`/training/courses/${courseId}/batches/${id}`);
+  return {};
+}
+
 export async function deleteBatch(id: string, courseId: string) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "ไม่มีสิทธิ์" };
@@ -133,11 +195,36 @@ export async function deleteBatch(id: string, courseId: string) {
   return {};
 }
 
+const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+const PHOTO_MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+
+async function uploadParticipantPhotoIfPresent(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  participantId: string,
+  formData: FormData
+): Promise<{ photo_url?: string; error?: string }> {
+  const file = formData.get("photoFile");
+  if (!(file instanceof File) || file.size === 0) return {};
+  if (file.size > MAX_PHOTO_BYTES) return { error: "ไฟล์รูปใหญ่เกินไป (จำกัด 3MB)" };
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const path = `${participantId}/photo.${ext}`;
+  const { error } = await admin.storage.from("training-photos").upload(path, file, {
+    contentType: file.type || PHOTO_MIME[ext] || "application/octet-stream",
+    upsert: true,
+  });
+  if (error) return { error: error.message };
+  const { data } = admin.storage.from("training-photos").getPublicUrl(path);
+  return { photo_url: data.publicUrl };
+}
+
 // ── Participant actions ──────────────────────────────────────────────────────
 
 const participantSchema = z.object({
+  prefix: z.string().optional(),
   first_name: z.string().min(1, "กรุณากรอกชื่อ"),
   last_name: z.string().min(1, "กรุณากรอกนามสกุล"),
+  nickname: z.string().optional(),
   position: z.string().optional(),
   organization: z.string().optional(),
   phone: z.string().optional(),
@@ -150,8 +237,10 @@ export async function addParticipant(courseId: string, batchId: string, formData
   if (!employee) return { error: "ไม่มีสิทธิ์" };
 
   const parsed = participantSchema.safeParse({
+    prefix: formData.get("prefix") || undefined,
     first_name: formData.get("first_name"),
     last_name: formData.get("last_name"),
+    nickname: formData.get("nickname") || undefined,
     position: formData.get("position") || undefined,
     organization: formData.get("organization") || undefined,
     phone: formData.get("phone") || undefined,
@@ -164,9 +253,50 @@ export async function addParticipant(courseId: string, batchId: string, formData
   const organization = parsed.data.organization?.trim() || null;
 
   const admin = createAdminClient();
+  const { data: row, error } = await admin
+    .from("training_participants")
+    .insert({ ...parsed.data, organization, course_id: courseId, batch_id: batchId })
+    .select("id")
+    .single();
+
+  if (error || !row) return { error: error?.message ?? "บันทึกไม่สำเร็จ" };
+
+  const photo = await uploadParticipantPhotoIfPresent(admin, row.id, formData);
+  if (photo.error) return { error: photo.error };
+  if (photo.photo_url) await admin.from("training_participants").update({ photo_url: photo.photo_url }).eq("id", row.id);
+
+  revalidatePath(`/training/courses/${courseId}/batches/${batchId}`);
+  return {};
+}
+
+export async function updateParticipant(id: string, courseId: string, batchId: string, formData: FormData) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "ไม่มีสิทธิ์" };
+
+  const parsed = participantSchema.safeParse({
+    prefix: formData.get("prefix") || undefined,
+    first_name: formData.get("first_name"),
+    last_name: formData.get("last_name"),
+    nickname: formData.get("nickname") || undefined,
+    position: formData.get("position") || undefined,
+    organization: formData.get("organization") || undefined,
+    phone: formData.get("phone") || undefined,
+    email: formData.get("email") || undefined,
+    note: formData.get("note") || undefined,
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const organization = parsed.data.organization?.trim() || null;
+
+  const admin = createAdminClient();
+
+  const photo = await uploadParticipantPhotoIfPresent(admin, id, formData);
+  if (photo.error) return { error: photo.error };
+
   const { error } = await admin
     .from("training_participants")
-    .insert({ ...parsed.data, organization, course_id: courseId, batch_id: batchId });
+    .update({ ...parsed.data, organization, ...(photo.photo_url ? { photo_url: photo.photo_url } : {}) })
+    .eq("id", id);
 
   if (error) return { error: error.message };
   revalidatePath(`/training/courses/${courseId}/batches/${batchId}`);

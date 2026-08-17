@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { Pencil, MapPin, CalendarDays, Target, Users, FileText, Flag, Layers } from "lucide-react";
+import { Pencil, MapPin, CalendarDays, Target, FileText, Flag, Layers } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { BatchesClient } from "@/components/training/BatchesClient";
 
@@ -42,7 +42,16 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <h2 className="text-base font-bold text-foreground leading-snug">{course.name_th}</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold text-foreground leading-snug">{course.name_th}</h2>
+            <span
+              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                course.is_open ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+              }`}
+            >
+              {course.is_open ? "เปิดอยู่" : "ปิดอยู่"}
+            </span>
+          </div>
           {course.name_en && <p className="text-xs text-muted-foreground mt-0.5">{course.name_en}</p>}
           <Link
             href={`/training/courses/${id}/edit`}
@@ -81,7 +90,11 @@ export default async function CourseDetailPage({ params }: { params: Promise<{ i
           <Layers className="h-4 w-4 text-blue-500" />
           รุ่นการอบรม ({batchesWithCount.length} รุ่น)
         </h3>
-        <BatchesClient courseId={id} batches={batchesWithCount} />
+        <BatchesClient
+          courseId={id}
+          batches={batchesWithCount}
+          courseDefaults={{ description: course.description, target_group: course.target_group, objectives: course.objectives }}
+        />
       </div>
     </div>
   );

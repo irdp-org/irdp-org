@@ -70,15 +70,18 @@ function parseForm(formData: FormData) {
 }
 
 async function uploadAvatarFor(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
   targetEmployeeId: string,
   file: File
 ): Promise<{ path?: string; error?: string }> {
   if (file.size > MAX_AVATAR_BYTES) return { error: "ไฟล์รูปใหญ่เกินไป (จำกัด 5MB)" };
   const ext = file.name.split(".").pop() || "jpg";
   const path = `${targetEmployeeId}/avatar.${ext}`;
-  const { error } = await supabase.storage.from("avatars").upload(path, file, {
+  // Uploading here on behalf of ANOTHER employee (admin/hr), so this must go
+  // through the service-role client — the session-scoped client's storage
+  // RLS check (own-folder-or-can_edit()) has been unreliable for this path
+  // in practice; admin already gated this action with canEdit() above.
+  const admin = createAdminClient();
+  const { error } = await admin.storage.from("avatars").upload(path, file, {
     contentType: file.type || guessContentType(ext),
     upsert: true,
   });
@@ -118,7 +121,7 @@ export async function createEmployee(formData: FormData) {
 
   const avatarFile = formData.get("avatarFile");
   if (avatarFile instanceof File && avatarFile.size > 0) {
-    const up = await uploadAvatarFor(supabase, row.id, avatarFile);
+    const up = await uploadAvatarFor(row.id, avatarFile);
     if (up.error) return { error: up.error };
     if (up.path) await supabase.from("employees").update({ avatar_url: up.path }).eq("id", row.id);
   }
@@ -139,7 +142,7 @@ export async function updateEmployee(id: string, formData: FormData) {
   let avatarPath: string | undefined;
   const avatarFile = formData.get("avatarFile");
   if (avatarFile instanceof File && avatarFile.size > 0) {
-    const up = await uploadAvatarFor(supabase, id, avatarFile);
+    const up = await uploadAvatarFor(id, avatarFile);
     if (up.error) return { error: up.error };
     avatarPath = up.path;
   }

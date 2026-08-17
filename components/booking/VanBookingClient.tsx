@@ -2,9 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bus, Plus, X, Trash2, MapPin, Users } from "lucide-react";
-import { format, isToday, isTomorrow } from "date-fns";
-import { th } from "date-fns/locale";
+import { Bus, Plus, X, Trash2 } from "lucide-react";
+import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -76,13 +75,6 @@ function formatTimeRange(startAt: string, endAt: string) {
     return `${start.toLocaleDateString("th-TH", dateOpts)} · ${start.toLocaleTimeString("th-TH", timeOpts)} – ${end.toLocaleTimeString("th-TH", timeOpts)}`;
   }
   return `${start.toLocaleDateString("th-TH", dateOpts)} ${start.toLocaleTimeString("th-TH", timeOpts)} – ${end.toLocaleDateString("th-TH", dateOpts)} ${end.toLocaleTimeString("th-TH", timeOpts)}`;
-}
-
-function dayLabel(iso: string) {
-  const d = new Date(iso);
-  if (isToday(d)) return "วันนี้";
-  if (isTomorrow(d)) return "พรุ่งนี้";
-  return format(d, "d MMMM yyyy", { locale: th });
 }
 
 export function VanBookingClient({
@@ -245,7 +237,7 @@ export function VanBookingClient({
 
       {/* Booking list */}
       {bookings.length === 0 ? (
-        <EmptyState icon={Bus} title="ยังไม่มีการจองรถตู้" description="กดปุ่ม 'จอง' เพื่อจองรถตู้ส่วนกลาง" />
+        <EmptyState icon={Bus} title="ยังไม่มีการจองรถตู้ใน 30 วันข้างหน้า" description="กดปุ่ม 'จอง' เพื่อจองรถตู้ส่วนกลาง" />
       ) : (
         <SortableTable columns={columns} rows={bookings} rowKey={(b) => b.id} />
       )}

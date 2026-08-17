@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Search } from "lucide-react";
+import { BookOpen, Search, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/training/courses", label: "หลักสูตร", icon: BookOpen },
+  { href: "/training/organizations", label: "หน่วยงาน", icon: Building2 },
   { href: "/training/search", label: "ค้นหารายชื่อ", icon: Search },
 ];
 

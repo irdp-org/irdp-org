@@ -63,17 +63,6 @@ function dayLabel(iso: string) {
   return format(d, "d MMMM yyyy", { locale: th });
 }
 
-function groupByDate(rows: RoomBookingRow[]) {
-  const map = new Map<string, RoomBookingRow[]>();
-  for (const b of rows) {
-    const key = new Date(b.start_at).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
-    const list = map.get(key) ?? [];
-    list.push(b);
-    map.set(key, list);
-  }
-  return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-}
-
 function todayStr() {
   return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" });
 }
@@ -295,7 +284,7 @@ export function RoomBookingClient({ bookings, rooms, currentEmployeeId, canEdit 
         bookings.length === 0 ? (
           <EmptyState
             icon={DoorOpen}
-            title="ยังไม่มีการจองห้องประชุม"
+            title="ยังไม่มีการจองห้องประชุมใน 30 วันข้างหน้า"
             description="กดปุ่ม 'จอง' ที่ห้องที่ต้องการ"
           />
         ) : (

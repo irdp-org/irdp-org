@@ -28,7 +28,12 @@ export default async function BookingPage({
   if (!employee) return null;
 
   const supabase = await createClient();
-  const now = new Date().toISOString();
+  // "Upcoming" window: today (Bangkok, start of day) through 30 days ahead —
+  // covers both bookings starting soon and ones already in progress today.
+  const todayStartBkk = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
+  todayStartBkk.setHours(0, 0, 0, 0);
+  const now = todayStartBkk.toISOString();
+  const horizon = new Date(todayStartBkk.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
   // ── Fetch static data ──────────────────────────────────────────────────────
   const [
@@ -45,18 +50,21 @@ export default async function BookingPage({
       .select("id, vehicle_id, requester_id, driver_id, destination, purpose, start_at, end_at, status, has_tollway, has_fuel, other_expense")
       .eq("status", "booked")
       .gte("end_at", now)
+      .lte("start_at", horizon)
       .order("start_at"),
     supabase
       .from("room_bookings")
       .select("id, room_id, requester_id, title, start_at, end_at, status, equipment")
       .eq("status", "booked")
       .gte("end_at", now)
+      .lte("start_at", horizon)
       .order("start_at"),
     supabase
       .from("camera_bookings")
       .select("id, requester_id, location, purpose, start_at, end_at, status")
       .eq("status", "booked")
       .gte("end_at", now)
+      .lte("start_at", horizon)
       .order("start_at"),
   ]);
 
@@ -253,7 +261,7 @@ export default async function BookingPage({
   let vanExportRows: VanExportRow[] = [];
   let roomExportRows: RoomExportRow[] = [];
   if (userCanEdit) {
-    const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const ninetyDaysAgo = new Date(todayStartBkk.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString();
     const [{ data: allVan }, { data: allRoom }] = await Promise.all([
       supabase
         .from("van_bookings")

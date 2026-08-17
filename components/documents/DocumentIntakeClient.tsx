@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { compressImage } from "@/lib/image-compress";
 import { uploadAndOcr, saveReceivedDocument } from "@/app/(app)/documents/actions";
 
@@ -135,26 +136,54 @@ export function DocumentIntakeClient({
       {docs.length === 0 ? (
         <EmptyState icon={FileText} title="ยังไม่มีเอกสารที่ลงรับ" />
       ) : (
-        <ul className="flex flex-col gap-2">
-          {docs.map((d) => (
-            <li key={d.id} className="flex items-start justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3">
-              <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-                <span className="font-semibold text-foreground">เลขลงรับ {d.doc_no}</span>
-                <span className="text-muted-foreground">
-                  ถึง {d.recipient_display || "—"}
-                  {d.sender ? ` · จาก ${d.sender}` : ""}
-                </span>
-                {d.subject && <span className="text-xs text-muted-foreground">เรื่อง {d.subject}</span>}
-                <span className="text-xs text-muted-foreground">{format(new Date(d.received_at), "d MMM yyyy HH:mm")}</span>
-              </div>
-              {d.image_url && (
-                <a href={d.image_url} target="_blank" rel="noopener noreferrer" className="shrink-0 text-primary">
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              )}
-            </li>
-          ))}
-        </ul>
+        (() => {
+          const columns: Column<ReceivedDoc>[] = [
+            {
+              key: "doc_no",
+              label: "เลขลงรับ",
+              sortValue: (d) => d.doc_no,
+              render: (d) => <span className="whitespace-nowrap font-semibold text-foreground">{d.doc_no}</span>,
+            },
+            {
+              key: "received_at",
+              label: "วันเวลาที่ลงรับ",
+              sortValue: (d) => d.received_at,
+              render: (d) => <span className="whitespace-nowrap text-foreground">{format(new Date(d.received_at), "d MMM yyyy HH:mm")}</span>,
+            },
+            {
+              key: "recipient_display",
+              label: "ผู้รับ",
+              sortValue: (d) => d.recipient_display ?? "",
+              render: (d) => <span className="text-foreground">{d.recipient_display || "—"}</span>,
+            },
+            {
+              key: "sender",
+              label: "ผู้ส่ง / หน่วยงาน",
+              sortValue: (d) => d.sender ?? "",
+              render: (d) => <span className="text-foreground">{d.sender || "-"}</span>,
+            },
+            {
+              key: "subject",
+              label: "เรื่อง",
+              sortValue: (d) => d.subject ?? "",
+              render: (d) => <span className="text-muted-foreground">{d.subject || "-"}</span>,
+              className: "max-w-[240px]",
+            },
+            {
+              key: "image_url",
+              label: "รูปหน้าซอง",
+              render: (d) =>
+                d.image_url ? (
+                  <a href={d.image_url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                    <ExternalLink className="h-4 w-4" /> เปิดรูป
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                ),
+            },
+          ];
+          return <SortableTable columns={columns} rows={docs} rowKey={(d) => d.id} />;
+        })()
       )}
 
       {/* Confirm dialog */}

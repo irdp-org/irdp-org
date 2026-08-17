@@ -379,6 +379,7 @@ export interface Database {
           target_group: string | null;
           objectives: string | null;
           logo_url: string | null;
+          is_open: boolean;
           created_by: string | null;
           created_at: string;
           updated_at: string;
@@ -395,6 +396,7 @@ export interface Database {
           target_group?: string | null;
           objectives?: string | null;
           logo_url?: string | null;
+          is_open?: boolean;
           created_by?: string | null;
         }
       >;
@@ -406,6 +408,9 @@ export interface Database {
           training_dates: string | null;
           location: string | null;
           note: string | null;
+          description: string | null;
+          target_group: string | null;
+          objectives: string | null;
           created_at: string;
         },
         {
@@ -415,6 +420,9 @@ export interface Database {
           training_dates?: string | null;
           location?: string | null;
           note?: string | null;
+          description?: string | null;
+          target_group?: string | null;
+          objectives?: string | null;
         }
       >;
       training_participants: TableShape<
@@ -422,26 +430,32 @@ export interface Database {
           id: string;
           course_id: string;
           batch_id: string | null;
+          prefix: string | null;
           first_name: string;
           last_name: string;
+          nickname: string | null;
           position: string | null;
           organization: string | null;
           phone: string | null;
           email: string | null;
           note: string | null;
+          photo_url: string | null;
           created_at: string;
         },
         {
           id?: string;
           course_id: string;
           batch_id?: string | null;
+          prefix?: string | null;
           first_name: string;
           last_name: string;
+          nickname?: string | null;
           position?: string | null;
           organization?: string | null;
           phone?: string | null;
           email?: string | null;
           note?: string | null;
+          photo_url?: string | null;
         }
       >;
       travel_expense_claims: TableShape<
