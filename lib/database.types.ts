@@ -195,9 +195,36 @@ export interface Database {
         start_time: string | null;
         end_time: string | null;
         tasks: string | null;
+        project_id: string | null;
+        attachment_url: string | null;
+        attachment_drive_id: string | null;
         created_at: string;
         updated_at: string;
       }>;
+      projects: TableShape<
+        { id: string; name: string; created_by: string | null; created_at: string },
+        { id?: string; name: string; created_by?: string | null }
+      >;
+      day_acknowledgements: TableShape<
+        {
+          id: string;
+          employee_id: string;
+          log_date: string;
+          comment: string | null;
+          acknowledged_by: string;
+          acknowledged_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          employee_id: string;
+          log_date: string;
+          comment?: string | null;
+          acknowledged_by: string;
+          acknowledged_at?: string;
+          updated_at?: string;
+        }
+      >;
       document_numbers: TableShape<{
         id: string;
         department_id: string;
