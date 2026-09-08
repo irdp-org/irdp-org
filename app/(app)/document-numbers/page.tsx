@@ -13,10 +13,14 @@ export default async function DocumentNumbersPage() {
   const supabase = await createClient();
 
   // RLS already scopes rows to the caller's department (or all, for oversight roles).
-  const { data: rows } = await supabase
-    .from("document_numbers")
-    .select("id, department_id, doc_no, title, issued_date, issued_by, attachment_url, created_at")
-    .order("doc_no", { ascending: false });
+  const [{ data: rows }, { data: categories }, { data: recipients }] = await Promise.all([
+    supabase
+      .from("document_numbers")
+      .select("id, department_id, category_id, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at")
+      .order("doc_no", { ascending: false }),
+    supabase.from("document_categories").select("id, department_id, label").order("sort_order"),
+    supabase.from("document_recipients").select("name").order("name"),
+  ]);
 
   const deptIds = [...new Set((rows ?? []).map((r) => r.department_id))];
   const issuerIds = [...new Set((rows ?? []).map((r) => r.issued_by))];
@@ -28,16 +32,22 @@ export default async function DocumentNumbersPage() {
   ]);
   const deptNameById = new Map((depts ?? []).map((d) => [d.id, d.name]));
   const issuerNameById = new Map((issuers ?? []).map((p) => [p.id, p.full_name]));
+  const categoryLabelById = new Map((categories ?? []).map((c) => [c.id, c.label]));
 
   const docRows: DocNumberRow[] = (rows ?? []).map((r) => ({
     id: r.id,
     doc_no: r.doc_no,
     title: r.title,
+    recipient: r.recipient,
+    category_label: r.category_id ? categoryLabelById.get(r.category_id) ?? null : null,
     issued_date: r.issued_date,
     department_name: deptNameById.get(r.department_id) ?? "—",
     issuer_name: issuerNameById.get(r.issued_by) ?? "—",
     attachment_url: r.attachment_url,
   }));
+
+  const categoryLabels = [...new Set((categories ?? []).filter((c) => c.department_id === employee.department_id).map((c) => c.label))];
+  const recipientNames = (recipients ?? []).map((r) => r.name);
 
   return (
     <div>
@@ -50,7 +60,12 @@ export default async function DocumentNumbersPage() {
         }
       />
       <div className="px-4 md:px-6">
-        <DocumentNumbersClient rows={docRows} showDeptColumn={isOversight(employee.role)} />
+        <DocumentNumbersClient
+          rows={docRows}
+          showDeptColumn={isOversight(employee.role)}
+          categoryLabels={categoryLabels}
+          recipientNames={recipientNames}
+        />
       </div>
     </div>
   );

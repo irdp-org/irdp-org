@@ -228,10 +228,12 @@ export interface Database {
       document_numbers: TableShape<{
         id: string;
         department_id: string;
+        category_id: string | null;
         year_be: number;
         seq: number;
         doc_no: string;
         title: string;
+        recipient: string | null;
         issued_date: string;
         issued_by: string;
         attachment_drive_id: string | null;
@@ -239,6 +241,29 @@ export interface Database {
         created_at: string;
         updated_at: string;
       }>;
+      document_categories: TableShape<
+        {
+          id: string;
+          department_id: string;
+          code: string | null;
+          label: string;
+          sort_order: number;
+          created_by: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          department_id: string;
+          code?: string | null;
+          label: string;
+          sort_order?: number;
+          created_by?: string | null;
+        }
+      >;
+      document_recipients: TableShape<
+        { id: string; name: string; created_by: string | null; created_at: string },
+        { id?: string; name: string; created_by?: string | null }
+      >;
       work_locations: TableShape<{
         id: string;
         name: string;

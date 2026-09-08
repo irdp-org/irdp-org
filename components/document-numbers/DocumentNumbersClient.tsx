@@ -15,6 +15,8 @@ export type DocNumberRow = {
   id: string;
   doc_no: string;
   title: string;
+  recipient: string | null;
+  category_label: string | null;
   issued_date: string;
   department_name: string;
   issuer_name: string;
@@ -22,13 +24,28 @@ export type DocNumberRow = {
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
+const ALL_TAB = "ทั้งหมด";
 
-export function DocumentNumbersClient({ rows, showDeptColumn }: { rows: DocNumberRow[]; showDeptColumn: boolean }) {
+export function DocumentNumbersClient({
+  rows,
+  showDeptColumn,
+  categoryLabels,
+  recipientNames,
+}: {
+  rows: DocNumberRow[];
+  showDeptColumn: boolean;
+  categoryLabels: string[];
+  recipientNames: string[];
+}) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<DocNumberRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [activeTab, setActiveTab] = useState(ALL_TAB);
+
+  const tabs = [ALL_TAB, ...categoryLabels, ...([...new Set(rows.map((r) => r.category_label).filter(Boolean))] as string[]).filter((l) => !categoryLabels.includes(l))];
+  const visibleRows = activeTab === ALL_TAB ? rows : rows.filter((r) => r.category_label === activeTab);
 
   function handleCreate(formData: FormData) {
     setError(null);
@@ -70,6 +87,12 @@ export function DocumentNumbersClient({ rows, showDeptColumn }: { rows: DocNumbe
       sortValue: (r) => r.title,
       render: (r) => <span className="text-foreground">{r.title}</span>,
       className: "max-w-[280px]",
+    },
+    {
+      key: "recipient",
+      label: "ถึง",
+      sortValue: (r) => r.recipient ?? "",
+      render: (r) => <span className="text-foreground">{r.recipient ?? "-"}</span>,
     },
     {
       key: "issued_date",
@@ -128,14 +151,35 @@ export function DocumentNumbersClient({ rows, showDeptColumn }: { rows: DocNumbe
 
   return (
     <div className="flex flex-col gap-4">
-      <Button type="button" className="self-start" onClick={() => setCreateOpen(true)}>
-        <Plus className="h-4 w-4" /> ออกเลขเอกสาร
-      </Button>
+      <div className="flex items-center justify-between gap-2">
+        <Button type="button" onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4" /> ออกเลขเอกสาร
+        </Button>
+      </div>
 
-      {rows.length === 0 ? (
+      {tabs.length > 1 && (
+        <div className="flex flex-wrap gap-1 border-b border-border">
+          {tabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                activeTab === tab
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {visibleRows.length === 0 ? (
         <EmptyState icon={Hash} title="ยังไม่มีเอกสารที่ออกเลข" description="กดปุ่ม 'ออกเลขเอกสาร' เพื่อเริ่มออกเลขแรก" />
       ) : (
-        <SortableTable columns={columns} rows={rows} rowKey={(r) => r.id} />
+        <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} />
       )}
 
       {/* Create */}
@@ -145,9 +189,34 @@ export function DocumentNumbersClient({ rows, showDeptColumn }: { rows: DocNumbe
             <DialogTitle>ออกเลขเอกสาร</DialogTitle>
           </DialogHeader>
           <form action={handleCreate} className="flex flex-col gap-3">
+            {categoryLabels.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <Label>หมวด/ส่วนงาน</Label>
+                <Input
+                  name="category"
+                  list="doc-category-options"
+                  placeholder="เช่น IT, บช., บค. (พิมพ์ใหม่เพื่อสร้างหมวด)"
+                  defaultValue={activeTab !== ALL_TAB ? activeTab : ""}
+                />
+                <datalist id="doc-category-options">
+                  {categoryLabels.map((c) => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label>ชื่อเรื่อง</Label>
               <Input name="title" placeholder="ออกเอกสารเรื่องอะไร..." required autoFocus />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>ถึง</Label>
+              <Input name="recipient" list="doc-recipient-options" placeholder="ชื่อบริษัท/บุคคล/ตำแหน่ง (พิมพ์ใหม่เพื่อเพิ่ม)" />
+              <datalist id="doc-recipient-options">
+                {recipientNames.map((n) => (
+                  <option key={n} value={n} />
+                ))}
+              </datalist>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>วันที่ออกเลข</Label>
@@ -178,6 +247,10 @@ export function DocumentNumbersClient({ rows, showDeptColumn }: { rows: DocNumbe
               <div className="flex flex-col gap-1.5">
                 <Label>ชื่อเรื่อง</Label>
                 <Input name="title" defaultValue={editing.title} required />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>ถึง</Label>
+                <Input name="recipient" list="doc-recipient-options" defaultValue={editing.recipient ?? ""} placeholder="ชื่อบริษัท/บุคคล/ตำแหน่ง" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>วันที่ออกเลข</Label>
