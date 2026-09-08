@@ -53,6 +53,7 @@ export function DocumentNumbersClient({
     startTransition(async () => {
       await deleteDocumentNumber(id);
       setConfirmId(null);
+      setEditing(null);
       router.refresh();
     });
   }
@@ -169,37 +170,9 @@ export function DocumentNumbersClient({
       key: "actions",
       label: "จัดการ",
       render: (r) => (
-        <div className="flex items-center gap-1">
-          <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setEditing(r)}>
-            <Pencil className="h-3.5 w-3.5" /> แก้ไข
-          </Button>
-          {canDelete &&
-            (confirmId === r.id ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(r.id)}
-                  disabled={isPending}
-                  className="text-xs text-danger"
-                >
-                  ยืนยัน
-                </button>
-                <button type="button" onClick={() => setConfirmId(null)} className="text-xs text-muted-foreground">
-                  ยกเลิก
-                </button>
-              </>
-            ) : (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="gap-1 text-xs text-danger hover:text-danger"
-                onClick={() => setConfirmId(r.id)}
-              >
-                <Trash2 className="h-3.5 w-3.5" /> ลบ
-              </Button>
-            ))}
-        </div>
+        <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setEditing(r)}>
+          <Pencil className="h-3.5 w-3.5" /> แก้ไข
+        </Button>
       ),
     },
   ];
@@ -317,7 +290,7 @@ export function DocumentNumbersClient({
       </Dialog>
 
       {/* Edit */}
-      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) { setEditing(null); setError(null); } }}>
+      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) { setEditing(null); setError(null); setConfirmId(null); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editing?.doc_no}</DialogTitle>
@@ -346,8 +319,30 @@ export function DocumentNumbersClient({
                 )}
               </div>
               {error && <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
-              <DialogFooter>
-                <Button type="submit" disabled={isPending}>
+              <DialogFooter className="flex-row items-center justify-between sm:justify-between">
+                {canDelete &&
+                  (confirmId === editing.id ? (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-muted-foreground">ลบรายการนี้?</span>
+                      <button type="button" onClick={() => handleDelete(editing.id)} disabled={isPending} className="font-medium text-danger">
+                        ยืนยัน
+                      </button>
+                      <button type="button" onClick={() => setConfirmId(null)} className="text-muted-foreground">
+                        ยกเลิก
+                      </button>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1 text-xs text-danger hover:text-danger"
+                      onClick={() => setConfirmId(editing.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> ลบเอกสารนี้
+                    </Button>
+                  ))}
+                <Button type="submit" disabled={isPending} className="ml-auto">
                   {isPending ? "กำลังบันทึก..." : "บันทึก"}
                 </Button>
               </DialogFooter>
