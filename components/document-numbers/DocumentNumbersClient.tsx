@@ -46,6 +46,8 @@ export function DocumentNumbersClient({
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [yearFilter, setYearFilter] = useState(ALL_TAB);
+  const [search, setSearch] = useState("");
 
   function handleDelete(id: string) {
     startTransition(async () => {
@@ -56,7 +58,21 @@ export function DocumentNumbersClient({
   }
 
   const tabs = [ALL_TAB, ...categoryLabels, ...([...new Set(rows.map((r) => r.category_label).filter(Boolean))] as string[]).filter((l) => !categoryLabels.includes(l))];
-  const visibleRows = activeTab === ALL_TAB ? rows : rows.filter((r) => r.category_label === activeTab);
+
+  const years = [...new Set(rows.map((r) => String(new Date(r.issued_date).getFullYear() + 543)))].sort((a, b) => Number(b) - Number(a));
+
+  const searchLower = search.trim().toLowerCase();
+  const visibleRows = rows
+    .filter((r) => activeTab === ALL_TAB || r.category_label === activeTab)
+    .filter((r) => yearFilter === ALL_TAB || String(new Date(r.issued_date).getFullYear() + 543) === yearFilter)
+    .filter(
+      (r) =>
+        !searchLower ||
+        r.title.toLowerCase().includes(searchLower) ||
+        (r.recipient ?? "").toLowerCase().includes(searchLower) ||
+        r.doc_no.toLowerCase().includes(searchLower) ||
+        r.issuer_name.toLowerCase().includes(searchLower)
+    );
 
   function handleCreate(formData: FormData) {
     setError(null);
@@ -215,8 +231,33 @@ export function DocumentNumbersClient({
         </div>
       )}
 
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <select
+          value={yearFilter}
+          onChange={(e) => setYearFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+        >
+          <option value={ALL_TAB}>ทุกปี</option>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              ปี {y}
+            </option>
+          ))}
+        </select>
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="ค้นหาชื่อเรื่อง, ถึง, เลขที่, ผู้ออกเลข..."
+          className="sm:max-w-xs"
+        />
+      </div>
+
       {visibleRows.length === 0 ? (
-        <EmptyState icon={Hash} title="ยังไม่มีเอกสารที่ออกเลข" description="กดปุ่ม 'ออกเลขเอกสาร' เพื่อเริ่มออกเลขแรก" />
+        rows.length === 0 ? (
+          <EmptyState icon={Hash} title="ยังไม่มีเอกสารที่ออกเลข" description="กดปุ่ม 'ออกเลขเอกสาร' เพื่อเริ่มออกเลขแรก" />
+        ) : (
+          <EmptyState icon={Hash} title="ไม่พบรายการ" description="ลองเปลี่ยนตัวกรองหรือคำค้นหา" />
+        )
       ) : (
         <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} />
       )}
