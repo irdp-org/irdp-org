@@ -2,14 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, FileText, Hash } from "lucide-react";
+import { Plus, Pencil, FileText, Hash, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
-import { createDocumentNumber, updateDocumentNumber } from "@/app/(app)/document-numbers/actions";
+import { createDocumentNumber, updateDocumentNumber, deleteDocumentNumber } from "@/app/(app)/document-numbers/actions";
 
 export type DocNumberRow = {
   id: string;
@@ -31,11 +31,13 @@ export function DocumentNumbersClient({
   showDeptColumn,
   categoryLabels,
   recipientNames,
+  canDelete,
 }: {
   rows: DocNumberRow[];
   showDeptColumn: boolean;
   categoryLabels: string[];
   recipientNames: string[];
+  canDelete: boolean;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -43,6 +45,15 @@ export function DocumentNumbersClient({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [activeTab, setActiveTab] = useState(ALL_TAB);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+
+  function handleDelete(id: string) {
+    startTransition(async () => {
+      await deleteDocumentNumber(id);
+      setConfirmId(null);
+      router.refresh();
+    });
+  }
 
   const tabs = [ALL_TAB, ...categoryLabels, ...([...new Set(rows.map((r) => r.category_label).filter(Boolean))] as string[]).filter((l) => !categoryLabels.includes(l))];
   const visibleRows = activeTab === ALL_TAB ? rows : rows.filter((r) => r.category_label === activeTab);
@@ -142,9 +153,37 @@ export function DocumentNumbersClient({
       key: "actions",
       label: "จัดการ",
       render: (r) => (
-        <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setEditing(r)}>
-          <Pencil className="h-3.5 w-3.5" /> แก้ไข
-        </Button>
+        <div className="flex items-center gap-1">
+          <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setEditing(r)}>
+            <Pencil className="h-3.5 w-3.5" /> แก้ไข
+          </Button>
+          {canDelete &&
+            (confirmId === r.id ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(r.id)}
+                  disabled={isPending}
+                  className="text-xs text-danger"
+                >
+                  ยืนยัน
+                </button>
+                <button type="button" onClick={() => setConfirmId(null)} className="text-xs text-muted-foreground">
+                  ยกเลิก
+                </button>
+              </>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-xs text-danger hover:text-danger"
+                onClick={() => setConfirmId(r.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> ลบ
+              </Button>
+            ))}
+        </div>
       ),
     },
   ];

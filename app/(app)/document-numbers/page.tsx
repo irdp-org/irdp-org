@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
-import { isOversight } from "@/lib/rbac";
+import { isOversight, isAdmin } from "@/lib/rbac";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { DocumentNumbersClient, type DocNumberRow } from "@/components/document-numbers/DocumentNumbersClient";
 
@@ -65,6 +65,7 @@ export default async function DocumentNumbersPage() {
           showDeptColumn={isOversight(employee.role)}
           categoryLabels={categoryLabels}
           recipientNames={recipientNames}
+          canDelete={isAdmin(employee.role)}
         />
       </div>
     </div>
