@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Receipt, Pencil, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Receipt, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { TRAVEL_MODES, MODE_LABELS, KM_RATE, formatBaht } from "@/lib/travel";
 import { saveClaim, deleteClaim, generateTravelDoc } from "@/app/(app)/travel-expense/actions";
@@ -80,11 +81,25 @@ function rowAmount(r: Row): number {
   return Number.isFinite(a) ? a : 0;
 }
 
+const ALL_FILTER = "ทั้งหมด";
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-xl border border-border bg-surface p-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-lg font-semibold text-foreground">{value}</span>
+      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
+    </div>
+  );
+}
+
 export function TravelExpenseClient({ claims }: { claims: TravelClaim[] }) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TravelClaim | null>(null);
   const [detail, setDetail] = useState<TravelClaim | null>(null);
+  const [statusFilter, setStatusFilter] = useState(ALL_FILTER);
+  const [yearFilter, setYearFilter] = useState(ALL_FILTER);
 
   function openNew() {
     setEditing(null);
@@ -96,37 +111,96 @@ export function TravelExpenseClient({ claims }: { claims: TravelClaim[] }) {
     setFormOpen(true);
   }
 
+  const approvedTotal = claims.filter((c) => c.status === "approved").reduce((s, c) => s + c.total_amount, 0);
+  const pendingClaims = claims.filter((c) => c.status === "submitted");
+  const pendingTotal = pendingClaims.reduce((s, c) => s + c.total_amount, 0);
+
+  const years = [...new Set(claims.map((c) => String(new Date(c.created_at).getFullYear() + 543)))].sort((a, b) => Number(b) - Number(a));
+  const visibleClaims = claims
+    .filter((c) => statusFilter === ALL_FILTER || c.status === statusFilter)
+    .filter((c) => yearFilter === ALL_FILTER || String(new Date(c.created_at).getFullYear() + 543) === yearFilter);
+
+  const columns: Column<TravelClaim>[] = [
+    {
+      key: "title",
+      label: "ชื่อเรื่อง",
+      sortValue: (c) => c.title ?? "",
+      render: (c) => <span className="font-medium text-foreground">{c.title || "เอกสารเบิกค่าเดินทาง"}</span>,
+    },
+    {
+      key: "items",
+      label: "รายการ",
+      sortValue: (c) => c.items.length,
+      render: (c) => <span className="text-foreground">{c.items.length} รายการ</span>,
+    },
+    {
+      key: "total_amount",
+      label: "จำนวนเงิน",
+      sortValue: (c) => c.total_amount,
+      render: (c) => <span className="whitespace-nowrap text-foreground">{formatBaht(c.total_amount)} บาท</span>,
+    },
+    {
+      key: "status",
+      label: "สถานะ",
+      sortValue: (c) => c.status,
+      render: (c) => <Badge variant={STATUS_VARIANT[c.status]}>{LEAVE_STATUS_LABELS_TH[c.status]}</Badge>,
+    },
+    {
+      key: "created_at",
+      label: "วันที่สร้าง",
+      sortValue: (c) => c.created_at,
+      render: (c) => <span className="whitespace-nowrap text-foreground">{format(new Date(c.created_at), "d MMM yyyy")}</span>,
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
-      <Button className="self-start" onClick={openNew}>
-        <Plus className="h-4 w-4" /> สร้างเอกสารเบิก
-      </Button>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <StatCard label="เอกสารทั้งหมด" value={String(claims.length)} />
+        <StatCard label="อนุมัติแล้ว" value={`${formatBaht(approvedTotal)} บาท`} sub={`${claims.filter((c) => c.status === "approved").length} ฉบับ`} />
+        <StatCard label="รออนุมัติ" value={`${formatBaht(pendingTotal)} บาท`} sub={`${pendingClaims.length} ฉบับ`} />
+      </div>
 
-      {claims.length === 0 ? (
-        <EmptyState icon={Receipt} title="ยังไม่มีเอกสารเบิกค่าเดินทาง" />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button onClick={openNew}>
+          <Plus className="h-4 w-4" /> สร้างเอกสารเบิก
+        </Button>
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            <option value={ALL_FILTER}>ทุกสถานะ</option>
+            {(Object.keys(LEAVE_STATUS_LABELS_TH) as RequestStatusT[]).map((s) => (
+              <option key={s} value={s}>
+                {LEAVE_STATUS_LABELS_TH[s]}
+              </option>
+            ))}
+          </select>
+          <select
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            <option value={ALL_FILTER}>ทุกปี</option>
+            {years.map((y) => (
+              <option key={y} value={y}>
+                ปี {y}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {visibleClaims.length === 0 ? (
+        claims.length === 0 ? (
+          <EmptyState icon={Receipt} title="ยังไม่มีเอกสารเบิกค่าเดินทาง" />
+        ) : (
+          <EmptyState icon={Receipt} title="ไม่พบรายการ" description="ลองเปลี่ยนตัวกรอง" />
+        )
       ) : (
-        <ul className="flex flex-col gap-2">
-          {claims.map((c) => (
-            <li key={c.id} className="rounded-xl border border-border bg-surface">
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-                onClick={() => setDetail(c)}
-              >
-                <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-                  <span className="font-medium text-foreground">{c.title || "เอกสารเบิกค่าเดินทาง"}</span>
-                  <span className="text-muted-foreground">
-                    {c.items.length} รายการ · รวม {formatBaht(c.total_amount)} บาท
-                  </span>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Badge variant={STATUS_VARIANT[c.status]}>{LEAVE_STATUS_LABELS_TH[c.status]}</Badge>
-                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                </div>
-              </button>
-            </li>
-          ))}
-        </ul>
+        <SortableTable columns={columns} rows={visibleClaims} rowKey={(c) => c.id} onRowClick={setDetail} />
       )}
 
       {/* Detail dialog */}

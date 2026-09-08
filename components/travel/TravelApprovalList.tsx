@@ -2,12 +2,14 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, RotateCcw, ChevronRight, Receipt } from "lucide-react";
+import { Check, X, RotateCcw, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
+import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { MODE_LABELS, formatBaht } from "@/lib/travel";
 import { decideClaim, generateTravelDoc } from "@/app/(app)/travel-expense/actions";
@@ -35,14 +37,26 @@ const STATUS_VARIANT: Record<RequestStatusT, "default" | "secondary" | "destruct
   cancelled: "outline",
 };
 
+const ALL_FILTER = "ทั้งหมด";
+
+function StatCard({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5 rounded-xl border border-border bg-surface p-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-lg font-semibold text-foreground">{value}</span>
+      {sub && <span className="text-xs text-muted-foreground">{sub}</span>}
+    </div>
+  );
+}
+
 export function TravelApprovalList({ rows, role }: { rows: TravelApprovalRow[]; role: string }) {
   const router = useRouter();
   const [detail, setDetail] = useState<TravelApprovalRow | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [statusFilter, setStatusFilter] = useState(ALL_FILTER);
+  const [yearFilter, setYearFilter] = useState(ALL_FILTER);
+  const [search, setSearch] = useState("");
   const canDecide = ["dept_head", "admin", "exec"].includes(role);
-
-  const pending = rows.filter((r) => r.status === "submitted");
-  const others = rows.filter((r) => r.status !== "submitted");
 
   function decide(id: string, decision: "approved" | "rejected" | "returned") {
     startTransition(async () => {
@@ -54,36 +68,102 @@ export function TravelApprovalList({ rows, role }: { rows: TravelApprovalRow[]; 
 
   if (rows.length === 0) return <EmptyState icon={Receipt} title="ยังไม่มีเอกสารเบิกค่าเดินทาง" />;
 
-  const renderRow = (r: TravelApprovalRow) => (
-    <li key={r.id} className="rounded-xl border border-border bg-surface">
-      <button type="button" className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left" onClick={() => setDetail(r)}>
-        <div className="flex min-w-0 flex-col gap-0.5 text-sm">
-          <span className="font-medium text-foreground">{r.employee_name}</span>
-          <span className="text-muted-foreground">
-            {r.title || "ค่าเดินทาง"} · {r.items.length} รายการ · {formatBaht(r.total_amount)} บาท
-          </span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Badge variant={STATUS_VARIANT[r.status]}>{LEAVE_STATUS_LABELS_TH[r.status]}</Badge>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
-        </div>
-      </button>
-    </li>
-  );
+  const pendingRows = rows.filter((r) => r.status === "submitted");
+  const approvedRows = rows.filter((r) => r.status === "approved");
+  const pendingTotal = pendingRows.reduce((s, r) => s + r.total_amount, 0);
+  const approvedTotal = approvedRows.reduce((s, r) => s + r.total_amount, 0);
+
+  const years = [...new Set(rows.map((r) => String(new Date(r.created_at).getFullYear() + 543)))].sort((a, b) => Number(b) - Number(a));
+  const searchLower = search.trim().toLowerCase();
+  const visibleRows = rows
+    .filter((r) => statusFilter === ALL_FILTER || r.status === statusFilter)
+    .filter((r) => yearFilter === ALL_FILTER || String(new Date(r.created_at).getFullYear() + 543) === yearFilter)
+    .filter((r) => !searchLower || r.employee_name.toLowerCase().includes(searchLower) || (r.title ?? "").toLowerCase().includes(searchLower));
+
+  const columns: Column<TravelApprovalRow>[] = [
+    {
+      key: "employee_name",
+      label: "พนักงาน",
+      sortValue: (r) => r.employee_name,
+      render: (r) => <span className="font-medium text-foreground">{r.employee_name}</span>,
+    },
+    {
+      key: "title",
+      label: "ชื่อเรื่อง",
+      sortValue: (r) => r.title ?? "",
+      render: (r) => <span className="text-foreground">{r.title || "ค่าเดินทาง"}</span>,
+    },
+    {
+      key: "items",
+      label: "รายการ",
+      sortValue: (r) => r.items.length,
+      render: (r) => <span className="text-foreground">{r.items.length} รายการ</span>,
+    },
+    {
+      key: "total_amount",
+      label: "จำนวนเงิน",
+      sortValue: (r) => r.total_amount,
+      render: (r) => <span className="whitespace-nowrap text-foreground">{formatBaht(r.total_amount)} บาท</span>,
+    },
+    {
+      key: "status",
+      label: "สถานะ",
+      sortValue: (r) => r.status,
+      render: (r) => <Badge variant={STATUS_VARIANT[r.status]}>{LEAVE_STATUS_LABELS_TH[r.status]}</Badge>,
+    },
+    {
+      key: "created_at",
+      label: "วันที่ยื่น",
+      sortValue: (r) => r.created_at,
+      render: (r) => <span className="whitespace-nowrap text-foreground">{format(new Date(r.created_at), "d MMM yyyy")}</span>,
+    },
+  ];
 
   return (
     <div className="flex flex-col gap-4">
-      {pending.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold text-foreground">รออนุมัติ ({pending.length})</p>
-          <ul className="flex flex-col gap-2">{pending.map(renderRow)}</ul>
-        </div>
-      )}
-      {others.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm font-semibold text-muted-foreground">ประวัติ</p>
-          <ul className="flex flex-col gap-2">{others.map(renderRow)}</ul>
-        </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <StatCard label="เอกสารทั้งหมด" value={String(rows.length)} />
+        <StatCard label="อนุมัติแล้ว" value={`${formatBaht(approvedTotal)} บาท`} sub={`${approvedRows.length} ฉบับ`} />
+        <StatCard label="รออนุมัติ" value={`${formatBaht(pendingTotal)} บาท`} sub={`${pendingRows.length} ฉบับ`} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+        >
+          <option value={ALL_FILTER}>ทุกสถานะ</option>
+          {(Object.keys(LEAVE_STATUS_LABELS_TH) as RequestStatusT[]).map((s) => (
+            <option key={s} value={s}>
+              {LEAVE_STATUS_LABELS_TH[s]}
+            </option>
+          ))}
+        </select>
+        <select
+          value={yearFilter}
+          onChange={(e) => setYearFilter(e.target.value)}
+          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+        >
+          <option value={ALL_FILTER}>ทุกปี</option>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              ปี {y}
+            </option>
+          ))}
+        </select>
+        <Input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="ค้นหาชื่อพนักงาน, ชื่อเรื่อง..."
+          className="sm:max-w-xs"
+        />
+      </div>
+
+      {visibleRows.length === 0 ? (
+        <EmptyState icon={Receipt} title="ไม่พบรายการ" description="ลองเปลี่ยนตัวกรองหรือคำค้นหา" />
+      ) : (
+        <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} onRowClick={setDetail} />
       )}
 
       <Dialog open={!!detail} onOpenChange={(o) => !o && setDetail(null)}>
