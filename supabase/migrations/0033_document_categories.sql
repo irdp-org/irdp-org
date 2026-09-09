@@ -68,13 +68,13 @@ insert into document_categories (department_id, code, label, sort_order)
 select d.id, v.code, v.label, v.sort_order
 from departments d
 cross join (values
-  ('04.1', 'บช.', 1),
-  ('04.2', 'บค.', 2),
+  ('04.1', 'บัญชี', 1),
+  ('04.2', 'บุคคล', 2),
   ('04.3', 'จัดซื้อ', 3),
-  ('04.4', 'ธก.', 4),
+  ('04.4', 'ธุรการ', 4),
   ('04.5', 'IT', 5),
   ('04.6', 'เลขา', 6),
-  (null, 'Pay Slip บค.', 7)
+  (null, 'Pay Slip', 7)
 ) as v(code, label, sort_order)
 where d.name = 'ธุรการ'
 on conflict (department_id, label) do nothing;
