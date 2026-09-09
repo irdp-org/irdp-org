@@ -10,6 +10,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { createDocumentNumber, updateDocumentNumber, deleteDocumentNumber } from "@/app/(app)/document-numbers/actions";
+import { compressImage } from "@/lib/image-compress";
+
+/** Server actions on this platform reject request bodies over a few MB — a raw
+ * phone photo attachment can blow past that and the failure surfaces as a full
+ * page reload instead of an in-app error, so compress before submitting. */
+async function compressAttachment(formData: FormData) {
+  const file = formData.get("attachment");
+  if (file instanceof File && file.size > 0) {
+    formData.set("attachment", await compressImage(file));
+  }
+}
 
 export type DocNumberRow = {
   id: string;
@@ -78,6 +89,7 @@ export function DocumentNumbersClient({
   function handleCreate(formData: FormData) {
     setError(null);
     startTransition(async () => {
+      await compressAttachment(formData);
       const res = await createDocumentNumber(formData);
       if ("error" in res) {
         setError(res.error ?? "เกิดข้อผิดพลาด");
@@ -92,6 +104,7 @@ export function DocumentNumbersClient({
     if (!editing) return;
     setError(null);
     startTransition(async () => {
+      await compressAttachment(formData);
       const res = await updateDocumentNumber(editing.id, formData);
       if ("error" in res) {
         setError(res.error ?? "เกิดข้อผิดพลาด");
