@@ -3,14 +3,48 @@ import { OrganizationsClient, type OrgParticipantRow } from "@/components/traini
 
 export const dynamic = "force-dynamic";
 
+type ParticipantSelectRow = {
+  id: string;
+  prefix: string | null;
+  first_name: string;
+  last_name: string;
+  nickname: string | null;
+  position: string | null;
+  organization: string | null;
+  phone: string | null;
+  email: string | null;
+  photo_url: string | null;
+  course_id: string;
+  batch_id: string | null;
+};
+
+/** PostgREST caps a plain select at 1000 rows — with 2000+ participants this
+ * silently dropped everyone past the first page, making them unsearchable
+ * here. Page through in batches of 1000 to fetch every row. */
+async function fetchAllParticipants(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any
+): Promise<ParticipantSelectRow[]> {
+  const pageSize = 1000;
+  let from = 0;
+  const all: ParticipantSelectRow[] = [];
+  while (true) {
+    const { data, error } = await admin
+      .from("training_participants")
+      .select("id, prefix, first_name, last_name, nickname, position, organization, phone, email, photo_url, course_id, batch_id")
+      .range(from, from + pageSize - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+  return all;
+}
+
 export default async function OrganizationsPage() {
   const admin = createAdminClient();
 
-  const { data: parts } = await admin
-    .from("training_participants")
-    .select("id, prefix, first_name, last_name, nickname, position, organization, phone, email, photo_url, course_id, batch_id");
-
-  const rows = parts ?? [];
+  const rows = await fetchAllParticipants(admin);
   const courseIds = [...new Set(rows.map((r) => r.course_id))];
   const batchIds = [...new Set(rows.map((r) => r.batch_id).filter(Boolean) as string[])];
 
