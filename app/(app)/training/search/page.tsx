@@ -37,7 +37,7 @@ export default async function TrainingSearchPage({
       .from("training_participants")
       .select("*")
       .or(
-        `first_name.ilike.%${query}%,last_name.ilike.%${query}%,organization.ilike.%${query}%`
+        `first_name.ilike.%${query}%,last_name.ilike.%${query}%,nickname.ilike.%${query}%,organization.ilike.%${query}%`
       )
       .order("organization", { ascending: true });
 
@@ -114,7 +114,7 @@ export default async function TrainingSearchPage({
       {query && results.length === 0 && (
         <div className="flex flex-col items-center gap-2 py-12 text-center">
           <User className="h-10 w-10 text-muted-foreground/40" />
-          <p className="text-sm text-muted-foreground">ไม่พบรายชื่อที่ตรงกับ "{query}"</p>
+          <p className="text-sm text-muted-foreground">ไม่พบรายชื่อที่ตรงกับ &quot;{query}&quot;</p>
         </div>
       )}
 
