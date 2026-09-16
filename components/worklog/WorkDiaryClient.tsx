@@ -183,7 +183,7 @@ function AckBox({
   if (!canAcknowledge && !ack) return null;
 
   return (
-    <div className="mt-2 rounded-lg bg-primary/5 border border-primary/10 px-3 py-2 text-xs">
+    <div className="rounded-lg bg-primary/5 border border-primary/10 px-3 py-2 text-xs min-w-[180px]">
       {ack && !editing && (
         <div className="flex items-start justify-between gap-2">
           <div className="flex flex-col gap-0.5">
@@ -320,95 +320,123 @@ export function WorkDiaryClient({
         </Button>
       )}
 
-      {/* Diary */}
-      <ul className="flex flex-col gap-2">
-        {days.map((d) => {
-          const empty = d.entries.length === 0;
-          const faded = empty && (d.isWeekend || !!d.holidayName);
-          return (
-            <li
-              key={d.date}
-              className={`rounded-xl border border-border px-4 py-3 ${faded ? "bg-background opacity-50" : "bg-surface"}`}
-            >
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-foreground">
-                  {format(new Date(`${d.date}T00:00:00`), "d MMMM yyyy", { locale: th })}
-                  <span className="ml-1.5 font-normal text-muted-foreground">
+      {/* Diary — table view */}
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full min-w-[900px] text-left text-sm">
+          <thead className="bg-surface text-xs text-muted-foreground">
+            <tr>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">วันที่</th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">ประเภท</th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">เวลา</th>
+              <th className="px-3 py-2 font-medium">รายละเอียด / โครงการ</th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">รับทราบ</th>
+              <th className="whitespace-nowrap px-3 py-2 font-medium">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody>
+            {days.map((d) => {
+              const empty = d.entries.length === 0;
+              const faded = empty && (d.isWeekend || !!d.holidayName);
+              const dateLabel = (
+                <>
+                  {format(new Date(`${d.date}T00:00:00`), "d MMM yyyy", { locale: th })}
+                  <span className="block font-normal text-muted-foreground">
                     {format(new Date(`${d.date}T00:00:00`), "EEEE", { locale: th })}
                   </span>
-                </p>
-                {d.holidayName && <Badge variant="outline" className="text-[10px]">{d.holidayName}</Badge>}
-              </div>
+                  {d.holidayName && (
+                    <Badge variant="outline" className="mt-1 text-[10px]">{d.holidayName}</Badge>
+                  )}
+                </>
+              );
+              const rowSpan = Math.max(d.entries.length, 1);
 
-              {empty ? (
-                <p className="text-xs text-muted-foreground">
-                  {d.holidayName ? "วันหยุด" : d.isWeekend ? "วันหยุดสุดสัปดาห์" : "ยังไม่มีบันทึก"}
-                </p>
-              ) : (
-                <ul className="flex flex-col gap-2">
-                  {d.entries.map((e) => (
-                    <li key={e.id} className="flex flex-col gap-0.5 rounded-lg bg-background px-3 py-2 text-sm">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${KIND_BADGE[e.kind]}`}>{e.typeLabel}</span>
-                        <div className="flex items-center gap-2">
-                          {e.timeLabel && <span className="text-xs text-muted-foreground">{e.timeLabel}</span>}
-                          {e.editable && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setEditing({
-                                    id: e.id,
-                                    work_date: d.date,
-                                    start_time: e.timeLabel ? e.timeLabel.split("–")[0].trim() : null,
-                                    end_time: e.timeLabel ? e.timeLabel.split("–")[1]?.replace(" น.", "").trim() ?? null : null,
-                                    tasks: e.detail,
-                                    projectName: e.projectName,
-                                  });
-                                  setSheetOpen(true);
-                                }}
-                                className="rounded p-1 text-muted-foreground hover:text-primary"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <AlertDialog open={confirmId === e.id} onOpenChange={(o) => !o && setConfirmId(null)}>
-                                <AlertDialogTrigger asChild>
-                                  <button type="button" onClick={() => setConfirmId(e.id)} className="rounded p-1 text-muted-foreground hover:text-danger">
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>ลบบันทึกนี้?</AlertDialogTitle>
-                                    <AlertDialogDescription>ไม่สามารถกู้คืนได้หลังลบ</AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>ปิด</AlertDialogCancel>
-                                    <AlertDialogAction onClick={() => handleDelete(e.id)}>ลบ</AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </>
-                          )}
-                        </div>
+              if (empty) {
+                return (
+                  <tr key={d.date} className={`border-t border-border align-top ${faded ? "opacity-50" : ""}`}>
+                    <td className="whitespace-nowrap px-3 py-2 font-semibold text-foreground">{dateLabel}</td>
+                    <td colSpan={3} className="px-3 py-2 text-xs text-muted-foreground">
+                      {d.holidayName ? "วันหยุด" : d.isWeekend ? "วันหยุดสุดสัปดาห์" : "ยังไม่มีบันทึก"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <AckBox date={d.date} employeeId={viewingId} ack={d.ack} canAcknowledge={canAcknowledge} />
+                    </td>
+                    <td className="px-3 py-2" />
+                  </tr>
+                );
+              }
+
+              return d.entries.map((e, i) => (
+                <tr key={e.id} className="border-t border-border align-top">
+                  {i === 0 && (
+                    <td rowSpan={rowSpan} className="whitespace-nowrap px-3 py-2 font-semibold text-foreground">
+                      {dateLabel}
+                    </td>
+                  )}
+                  <td className="whitespace-nowrap px-3 py-2">
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${KIND_BADGE[e.kind]}`}>{e.typeLabel}</span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-foreground">{e.timeLabel ?? "-"}</td>
+                  <td className="px-3 py-2">
+                    {e.projectName && <p className="text-xs text-primary">โครงการ: {e.projectName}</p>}
+                    {e.detail && <p className="text-foreground">{e.detail}</p>}
+                    {e.attachmentUrl && (
+                      <a href={e.attachmentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline w-fit">
+                        <FileText className="h-3 w-3" /> เปิดไฟล์แนบ
+                      </a>
+                    )}
+                    {!e.projectName && !e.detail && !e.attachmentUrl && "-"}
+                  </td>
+                  {i === 0 && (
+                    <td rowSpan={rowSpan} className="px-3 py-2">
+                      <AckBox date={d.date} employeeId={viewingId} ack={d.ack} canAcknowledge={canAcknowledge} />
+                    </td>
+                  )}
+                  <td className="px-3 py-2">
+                    {e.editable && (
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditing({
+                              id: e.id,
+                              work_date: d.date,
+                              start_time: e.timeLabel ? e.timeLabel.split("–")[0].trim() : null,
+                              end_time: e.timeLabel ? e.timeLabel.split("–")[1]?.replace(" น.", "").trim() ?? null : null,
+                              tasks: e.detail,
+                              projectName: e.projectName,
+                            });
+                            setSheetOpen(true);
+                          }}
+                          className="rounded p-1 text-muted-foreground hover:text-primary"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <AlertDialog open={confirmId === e.id} onOpenChange={(o) => !o && setConfirmId(null)}>
+                          <AlertDialogTrigger asChild>
+                            <button type="button" onClick={() => setConfirmId(e.id)} className="rounded p-1 text-muted-foreground hover:text-danger">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>ลบบันทึกนี้?</AlertDialogTitle>
+                              <AlertDialogDescription>ไม่สามารถกู้คืนได้หลังลบ</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>ปิด</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(e.id)}>ลบ</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
-                      {e.projectName && <p className="text-xs text-primary">โครงการ: {e.projectName}</p>}
-                      {e.detail && <p className="text-xs text-muted-foreground">{e.detail}</p>}
-                      {e.attachmentUrl && (
-                        <a href={e.attachmentUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-primary hover:underline w-fit">
-                          <FileText className="h-3 w-3" /> เปิดไฟล์แนบ
-                        </a>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-
-              <AckBox date={d.date} employeeId={viewingId} ack={d.ack} canAcknowledge={canAcknowledge} />
-            </li>
-          );
-        })}
-      </ul>
+                    )}
+                  </td>
+                </tr>
+              ));
+            })}
+          </tbody>
+        </table>
+      </div>
 
       <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">

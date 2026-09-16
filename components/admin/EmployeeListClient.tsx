@@ -173,6 +173,7 @@ export function EmployeeListClient({
       )}
 
       <EmployeeSheet
+        key={editing?.id ?? "new"}
         open={sheetOpen}
         onOpenChange={setSheetOpen}
         departments={departments}
