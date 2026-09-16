@@ -29,24 +29,22 @@ const LOGO_MIME: Record<string, string> = {
   svg: "image/svg+xml",
 };
 
+// Course logos and participant photos live on Google Drive (like every other
+// attachment in this app) rather than Supabase Storage, so a large training
+// roster with photos for everyone can't run into a storage quota.
 async function uploadLogoIfPresent(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  admin: any,
   courseId: string,
   formData: FormData
 ): Promise<{ logo_url?: string; error?: string }> {
   const file = formData.get("logoFile");
   if (!(file instanceof File) || file.size === 0) return {};
   if (file.size > MAX_LOGO_BYTES) return { error: "ไฟล์โลโก้ใหญ่เกินไป (จำกัด 3MB)" };
+  const { getOrCreatePath, uploadToDrive, driveThumbUrl } = await import("@/lib/google-drive");
   const ext = (file.name.split(".").pop() || "png").toLowerCase();
-  const path = `${courseId}/logo.${ext}`;
-  const { error } = await admin.storage.from("training-logos").upload(path, file, {
-    contentType: file.type || LOGO_MIME[ext] || "application/octet-stream",
-    upsert: true,
-  });
-  if (error) return { error: error.message };
-  const { data } = admin.storage.from("training-logos").getPublicUrl(path);
-  return { logo_url: data.publicUrl };
+  const folderId = await getOrCreatePath(["หลักสูตรอบรม", "โลโก้หลักสูตร", courseId]);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const up = await uploadToDrive(buffer, `logo-${Date.now()}.${ext}`, file.type || LOGO_MIME[ext] || "application/octet-stream", folderId);
+  return { logo_url: driveThumbUrl(up.id) };
 }
 
 export async function createCourse(formData: FormData) {
@@ -76,7 +74,7 @@ export async function createCourse(formData: FormData) {
 
   if (error) return { error: error.message };
 
-  const logo = await uploadLogoIfPresent(admin, data.id, formData);
+  const logo = await uploadLogoIfPresent(data.id, formData);
   if (logo.error) return { error: logo.error };
   if (logo.logo_url) await admin.from("training_courses").update({ logo_url: logo.logo_url }).eq("id", data.id);
 
@@ -104,7 +102,7 @@ export async function updateCourse(id: string, formData: FormData) {
 
   const admin = createAdminClient();
 
-  const logo = await uploadLogoIfPresent(admin, id, formData);
+  const logo = await uploadLogoIfPresent(id, formData);
   if (logo.error) return { error: logo.error };
 
   const { error } = await admin
@@ -199,23 +197,19 @@ const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 const PHOTO_MIME: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
 
 async function uploadParticipantPhotoIfPresent(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  admin: any,
+  courseId: string,
   participantId: string,
   formData: FormData
 ): Promise<{ photo_url?: string; error?: string }> {
   const file = formData.get("photoFile");
   if (!(file instanceof File) || file.size === 0) return {};
   if (file.size > MAX_PHOTO_BYTES) return { error: "ไฟล์รูปใหญ่เกินไป (จำกัด 3MB)" };
+  const { getOrCreatePath, uploadToDrive, driveThumbUrl } = await import("@/lib/google-drive");
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-  const path = `${participantId}/photo.${ext}`;
-  const { error } = await admin.storage.from("training-photos").upload(path, file, {
-    contentType: file.type || PHOTO_MIME[ext] || "application/octet-stream",
-    upsert: true,
-  });
-  if (error) return { error: error.message };
-  const { data } = admin.storage.from("training-photos").getPublicUrl(path);
-  return { photo_url: data.publicUrl };
+  const folderId = await getOrCreatePath(["หลักสูตรอบรม", "รูปผู้เข้าอบรม", courseId]);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const up = await uploadToDrive(buffer, `${participantId}.${ext}`, file.type || PHOTO_MIME[ext] || "application/octet-stream", folderId);
+  return { photo_url: driveThumbUrl(up.id) };
 }
 
 // ── Participant actions ──────────────────────────────────────────────────────
@@ -261,7 +255,7 @@ export async function addParticipant(courseId: string, batchId: string, formData
 
   if (error || !row) return { error: error?.message ?? "บันทึกไม่สำเร็จ" };
 
-  const photo = await uploadParticipantPhotoIfPresent(admin, row.id, formData);
+  const photo = await uploadParticipantPhotoIfPresent(courseId, row.id, formData);
   if (photo.error) return { error: photo.error };
   if (photo.photo_url) await admin.from("training_participants").update({ photo_url: photo.photo_url }).eq("id", row.id);
 
@@ -290,7 +284,7 @@ export async function updateParticipant(id: string, courseId: string, batchId: s
 
   const admin = createAdminClient();
 
-  const photo = await uploadParticipantPhotoIfPresent(admin, id, formData);
+  const photo = await uploadParticipantPhotoIfPresent(courseId, id, formData);
   if (photo.error) return { error: photo.error };
 
   const { error } = await admin
