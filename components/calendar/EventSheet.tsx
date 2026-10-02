@@ -34,6 +34,8 @@ export type ExistingOrgEvent = {
   start_at: string;
   end_at: string | null;
   all_day: boolean;
+  location: string | null;
+  is_training: boolean;
 };
 
 export function EventSheet({
@@ -49,6 +51,7 @@ export function EventSheet({
   const formRef = useRef<HTMLFormElement>(null);
   const [allDay, setAllDay] = useState(existing?.all_day ?? true);
   const [type, setType] = useState<CalType>(existing?.type ?? "holiday");
+  const [isTraining, setIsTraining] = useState(existing?.is_training ?? false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +67,7 @@ export function EventSheet({
     if (!formRef.current) return;
     const formData = new FormData(formRef.current);
     formData.set("allDay", String(allDay));
+    formData.set("isTraining", String(type === "activity" && isTraining));
 
     startTransition(async () => {
       const action = existing ? updateOrgEvent.bind(null, existing.id) : createOrgEvent;
@@ -143,6 +147,19 @@ export function EventSheet({
                 <Input type="time" name="endTime" defaultValue={toTimeInput(existing?.end_at)} />
               </div>
             </div>
+          )}
+
+          {type === "activity" && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label>สถานที่จัดกิจกรรม</Label>
+                <Input name="location" defaultValue={existing?.location ?? ""} placeholder="เช่น ห้องประชุมใหญ่ ชั้น 5" />
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={isTraining} onChange={(e) => setIsTraining(e.target.checked)} />
+                เป็นการจัดอบรม (พนักงานเช็คอินจะถูกบันทึกลงประวัติการอบรมด้วย)
+              </label>
+            </>
           )}
 
           <div className="flex flex-col gap-1.5">

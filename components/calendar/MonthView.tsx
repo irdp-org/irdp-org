@@ -29,6 +29,8 @@ export type CalendarEventRow = {
   start_at: string;
   end_at: string | null;
   all_day: boolean;
+  location: string | null;
+  is_training: boolean;
 };
 
 const TYPE_DOT: Record<CalendarEventRow["type"], string> = {
