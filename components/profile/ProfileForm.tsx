@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, GraduationCap } from "lucide-react";
+import { Plus, Trash2, GraduationCap, Briefcase, Award } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { updateProfile } from "@/app/(app)/profile/actions";
 import type { Employee } from "@/lib/auth";
-import type { EducationEntry } from "@/lib/database.types";
+import type { EducationEntry, WorkHistoryEntry, TrainingHistoryEntry } from "@/lib/database.types";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
@@ -41,6 +41,8 @@ export function ProfileForm({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(avatarUrl);
   const [education, setEducation] = useState<EducationEntry[]>(employee.education ?? []);
+  const [workHistory, setWorkHistory] = useState<WorkHistoryEntry[]>(employee.work_history ?? []);
+  const [trainingHistory, setTrainingHistory] = useState<TrainingHistoryEntry[]>(employee.training_history ?? []);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
@@ -68,12 +70,34 @@ export function ProfileForm({
     setEducation((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function addWorkHistory() {
+    setWorkHistory((prev) => [...prev, { company: "", position: "", startYear: "", endYear: "", description: "" }]);
+  }
+  function updateWorkHistory(index: number, patch: Partial<WorkHistoryEntry>) {
+    setWorkHistory((prev) => prev.map((w, i) => (i === index ? { ...w, ...patch } : w)));
+  }
+  function removeWorkHistory(index: number) {
+    setWorkHistory((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  function addTrainingHistory() {
+    setTrainingHistory((prev) => [...prev, { name: "", organizer: "", year: "", note: "" }]);
+  }
+  function updateTrainingHistory(index: number, patch: Partial<TrainingHistoryEntry>) {
+    setTrainingHistory((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
+  }
+  function removeTrainingHistory(index: number) {
+    setTrainingHistory((prev) => prev.filter((_, i) => i !== index));
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!formRef.current) return;
     setError(null);
     const formData = new FormData(formRef.current);
     formData.set("education", JSON.stringify(education));
+    formData.set("workHistory", JSON.stringify(workHistory));
+    formData.set("trainingHistory", JSON.stringify(trainingHistory));
     const file = fileInputRef.current?.files?.[0];
     if (file) formData.set("avatarFile", file);
 
@@ -169,6 +193,102 @@ export function ProfileForm({
           ))}
           <Button type="button" variant="outline" size="sm" className="self-start" onClick={addEducation}>
             <Plus className="h-4 w-4" /> เพิ่มประวัติการศึกษา
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Briefcase className="h-4 w-4 text-primary" /> ประวัติการทำงาน
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {workHistory.map((entry, i) => (
+            <div key={i} className="flex flex-col gap-2 rounded-xl bg-surface p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">รายการที่ {i + 1}</span>
+                <Button type="button" variant="ghost" size="icon" onClick={() => removeWorkHistory(i)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <Input
+                placeholder="บริษัท/หน่วยงาน"
+                value={entry.company}
+                onChange={(e) => updateWorkHistory(i, { company: e.target.value })}
+              />
+              <Input
+                placeholder="ตำแหน่ง"
+                value={entry.position}
+                onChange={(e) => updateWorkHistory(i, { position: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="ปีที่เริ่ม"
+                  value={entry.startYear}
+                  onChange={(e) => updateWorkHistory(i, { startYear: e.target.value })}
+                />
+                <Input
+                  placeholder="ปีที่สิ้นสุด (ถ้ายังทำงานอยู่เว้นว่าง)"
+                  value={entry.endYear}
+                  onChange={(e) => updateWorkHistory(i, { endYear: e.target.value })}
+                />
+              </div>
+              <Textarea
+                placeholder="รายละเอียดงาน (ไม่บังคับ)"
+                rows={2}
+                value={entry.description ?? ""}
+                onChange={(e) => updateWorkHistory(i, { description: e.target.value })}
+              />
+            </div>
+          ))}
+          <Button type="button" variant="outline" size="sm" className="self-start" onClick={addWorkHistory}>
+            <Plus className="h-4 w-4" /> เพิ่มประวัติการทำงาน
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Award className="h-4 w-4 text-primary" /> ประวัติการอบรม
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {trainingHistory.map((entry, i) => (
+            <div key={i} className="flex flex-col gap-2 rounded-xl bg-surface p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">รายการที่ {i + 1}</span>
+                <Button type="button" variant="ghost" size="icon" onClick={() => removeTrainingHistory(i)}>
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+              <Input
+                placeholder="ชื่อหลักสูตร/การอบรม"
+                value={entry.name}
+                onChange={(e) => updateTrainingHistory(i, { name: e.target.value })}
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="จัดโดย (ไม่บังคับ)"
+                  value={entry.organizer ?? ""}
+                  onChange={(e) => updateTrainingHistory(i, { organizer: e.target.value })}
+                />
+                <Input
+                  placeholder="ปีที่อบรม"
+                  value={entry.year}
+                  onChange={(e) => updateTrainingHistory(i, { year: e.target.value })}
+                />
+              </div>
+              <Input
+                placeholder="หมายเหตุ (ไม่บังคับ)"
+                value={entry.note ?? ""}
+                onChange={(e) => updateTrainingHistory(i, { note: e.target.value })}
+              />
+            </div>
+          ))}
+          <Button type="button" variant="outline" size="sm" className="self-start" onClick={addTrainingHistory}>
+            <Plus className="h-4 w-4" /> เพิ่มประวัติการอบรม
           </Button>
         </CardContent>
       </Card>

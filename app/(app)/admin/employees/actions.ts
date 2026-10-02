@@ -26,6 +26,21 @@ const educationEntrySchema = z.object({
   year: z.string().min(1),
 });
 
+const workHistoryEntrySchema = z.object({
+  company: z.string().min(1),
+  position: z.string().min(1),
+  startYear: z.string().min(1),
+  endYear: z.string().optional().default(""),
+  description: z.string().optional(),
+});
+
+const trainingHistoryEntrySchema = z.object({
+  name: z.string().min(1),
+  organizer: z.string().optional().default(""),
+  year: z.string().min(1),
+  note: z.string().optional(),
+});
+
 const employeeSchema = z.object({
   email: z
     .string()
@@ -43,14 +58,22 @@ const employeeSchema = z.object({
   birthdate: z.string().optional(),
   status: z.enum(["active", "inactive"]).optional(),
   education: z.array(educationEntrySchema).optional(),
+  workHistory: z.array(workHistoryEntrySchema).optional(),
+  trainingHistory: z.array(trainingHistoryEntrySchema).optional(),
 });
 
 function parseForm(formData: FormData) {
   let education: unknown = [];
+  let workHistory: unknown = [];
+  let trainingHistory: unknown = [];
   try {
     education = JSON.parse(String(formData.get("education") || "[]"));
+    workHistory = JSON.parse(String(formData.get("workHistory") || "[]"));
+    trainingHistory = JSON.parse(String(formData.get("trainingHistory") || "[]"));
   } catch {
     education = [];
+    workHistory = [];
+    trainingHistory = [];
   }
   return employeeSchema.safeParse({
     email: formData.get("email"),
@@ -66,6 +89,8 @@ function parseForm(formData: FormData) {
     birthdate: formData.get("birthdate") || undefined,
     status: formData.get("status") || undefined,
     education,
+    workHistory,
+    trainingHistory,
   });
 }
 
@@ -113,6 +138,8 @@ export async function createEmployee(formData: FormData) {
       address: parsed.data.address || null,
       birthdate: parsed.data.birthdate || null,
       education: parsed.data.education ?? [],
+      work_history: parsed.data.workHistory ?? [],
+      training_history: parsed.data.trainingHistory ?? [],
     })
     .select("id")
     .single();
@@ -163,6 +190,8 @@ export async function updateEmployee(id: string, formData: FormData) {
       address: parsed.data.address || null,
       birthdate: parsed.data.birthdate || null,
       education: parsed.data.education ?? [],
+      work_history: parsed.data.workHistory ?? [],
+      training_history: parsed.data.trainingHistory ?? [],
       status: parsed.data.status ?? "active",
       ...(avatarPath ? { avatar_url: avatarPath } : {}),
     })

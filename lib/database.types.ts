@@ -7,6 +7,9 @@
 
 // employees.education jsonb shape (0005_phase1_5.sql)
 export type EducationEntry = { degree: string; institution: string; year: string };
+// employees.work_history / training_history jsonb shape (0034_history_and_activity_checkin.sql)
+export type WorkHistoryEntry = { company: string; position: string; startYear: string; endYear: string; description?: string };
+export type TrainingHistoryEntry = { name: string; organizer: string; year: string; note?: string };
 
 export type RoleT = "employee" | "dept_head" | "hr" | "admin" | "exec";
 export type EmployeeStatusT = "active" | "inactive" | "pending";
@@ -62,6 +65,8 @@ export interface Database {
           status: EmployeeStatusT;
           employee_code: string | null;
           education: EducationEntry[];
+          work_history: WorkHistoryEntry[];
+          training_history: TrainingHistoryEntry[];
           created_at: string;
           updated_at: string;
         },
@@ -83,6 +88,8 @@ export interface Database {
           status?: EmployeeStatusT;
           employee_code?: string | null;
           education?: EducationEntry[];
+          work_history?: WorkHistoryEntry[];
+          training_history?: TrainingHistoryEntry[];
         }
       >;
       attachments: TableShape<{
@@ -384,9 +391,28 @@ export interface Database {
         google_event_id: string | null;
         google_etag: string | null;
         last_synced_at: string | null;
+        location: string | null;
+        is_training: boolean;
         created_at: string;
         updated_at: string;
       }>;
+      activity_checkins: TableShape<
+        {
+          id: string;
+          calendar_event_id: string;
+          employee_id: string;
+          location: string | null;
+          checked_in_at: string;
+          created_at: string;
+        },
+        {
+          id?: string;
+          calendar_event_id: string;
+          employee_id: string;
+          location?: string | null;
+          checked_in_at?: string;
+        }
+      >;
       assets: TableShape<{
         id: string;
         asset_tag: string | null;

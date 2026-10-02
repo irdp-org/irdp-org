@@ -17,7 +17,7 @@ export default async function EmployeesAdminPage() {
     supabase
       .from("employees")
       .select(
-        "id, email, full_name, nickname, department_id, role, position, status, hire_date, phone, birthdate, avatar_url, address, desk_phone, education"
+        "id, email, full_name, nickname, department_id, role, position, status, hire_date, phone, birthdate, avatar_url, address, desk_phone, education, work_history, training_history"
       )
       .order("full_name"),
     supabase.from("departments").select("id, name").order("name"),

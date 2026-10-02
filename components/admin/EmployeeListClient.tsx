@@ -9,7 +9,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmployeeSheet } from "./EmployeeSheet";
 import { roleLabelTh } from "@/lib/rbac";
-import type { RoleT, EmployeeStatusT, EducationEntry } from "@/lib/database.types";
+import type { RoleT, EmployeeStatusT, EducationEntry, WorkHistoryEntry, TrainingHistoryEntry } from "@/lib/database.types";
 
 function initialsOf(fullName: string) {
   return fullName.trim().split(/\s+/).map((part) => part[0]).slice(0, 2).join("").toUpperCase();
@@ -39,6 +39,8 @@ export type EmployeeRow = {
   address?: string | null;
   desk_phone?: string | null;
   education?: EducationEntry[] | null;
+  work_history?: WorkHistoryEntry[] | null;
+  training_history?: TrainingHistoryEntry[] | null;
 };
 
 export function EmployeeListClient({

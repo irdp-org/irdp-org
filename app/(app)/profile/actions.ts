@@ -25,6 +25,21 @@ const educationEntrySchema = z.object({
   year: z.string().min(1),
 });
 
+const workHistoryEntrySchema = z.object({
+  company: z.string().min(1),
+  position: z.string().min(1),
+  startYear: z.string().min(1),
+  endYear: z.string().optional().default(""),
+  description: z.string().optional(),
+});
+
+const trainingHistoryEntrySchema = z.object({
+  name: z.string().min(1),
+  organizer: z.string().optional().default(""),
+  year: z.string().min(1),
+  note: z.string().optional(),
+});
+
 const profileSchema = z.object({
   fullName: z.string().min(1, "กรุณากรอกชื่อ-นามสกุล"),
   address: z.string().optional(),
@@ -32,11 +47,14 @@ const profileSchema = z.object({
   phone: z.string().optional(),
   deskPhone: z.string().optional(),
   education: z.array(educationEntrySchema),
+  workHistory: z.array(workHistoryEntrySchema),
+  trainingHistory: z.array(trainingHistoryEntrySchema),
 });
 
 /**
  * Self-service profile update — only ever touches this safe field subset
- * (full_name, address, birthdate, phone, education, avatar_url). RLS's
+ * (full_name, address, birthdate, phone, education, work_history,
+ * training_history, avatar_url). RLS's
  * emp_update intentionally allows broad self-update at the row level and
  * defers column-level care to the app (see 0001_init.sql comment), so
  * role/department_id/hire_date/status are never read from the submitted
@@ -47,10 +65,14 @@ export async function updateProfile(formData: FormData) {
   if (!employee) return { error: "unauthorized" };
 
   let education: unknown = [];
+  let workHistory: unknown = [];
+  let trainingHistory: unknown = [];
   try {
     education = JSON.parse(String(formData.get("education") || "[]"));
+    workHistory = JSON.parse(String(formData.get("workHistory") || "[]"));
+    trainingHistory = JSON.parse(String(formData.get("trainingHistory") || "[]"));
   } catch {
-    return { error: "ข้อมูลประวัติการศึกษาไม่ถูกต้อง" };
+    return { error: "ข้อมูลประวัติไม่ถูกต้อง" };
   }
 
   const parsed = profileSchema.safeParse({
@@ -60,6 +82,8 @@ export async function updateProfile(formData: FormData) {
     phone: formData.get("phone") || undefined,
     deskPhone: formData.get("deskPhone") || undefined,
     education,
+    workHistory,
+    trainingHistory,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "ข้อมูลไม่ถูกต้อง" };
 
@@ -88,6 +112,8 @@ export async function updateProfile(formData: FormData) {
       phone: parsed.data.phone || null,
       desk_phone: parsed.data.deskPhone || null,
       education: parsed.data.education,
+      work_history: parsed.data.workHistory,
+      training_history: parsed.data.trainingHistory,
       ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
     })
     .eq("id", employee.id);
