@@ -35,6 +35,8 @@ export type NavItem = {
   trainingAccess?: boolean;
   // If true, visible only to admin/hr OR employees in the ธุรการ dept.
   documentAccess?: boolean;
+  // If true, visible only to admin/hr OR employees in the training/research/ธุรการ depts.
+  stockAccess?: boolean;
 };
 
 export const NAV_ITEMS: NavItem[] = [
@@ -61,6 +63,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/training", label: "ระบบอบรม (TMS)", icon: GraduationCap, trainingAccess: true },
   { href: "/documents", label: "ลงรับเอกสาร", icon: Inbox, documentAccess: true },
   { href: "/document-numbers", label: "ออกเลขเอกสาร", icon: Hash },
+  { href: "/stock", label: "จัดการสต๊อค", icon: Package, stockAccess: true },
 ];
 
 // Primary tabs shown directly in the mobile bottom bar (iOS-style, keep ≤5
@@ -76,5 +79,6 @@ export function isNavItemVisible(
 ): boolean {
   if (item.trainingAccess) return role === "admin" || isTrainingDept;
   if (item.documentAccess) return role === "admin" || role === "hr" || isDocumentDept;
+  if (item.stockAccess) return role === "admin" || role === "hr" || isTrainingDept || isDocumentDept;
   return !item.roles || item.roles.includes(role);
 }

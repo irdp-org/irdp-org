@@ -413,6 +413,43 @@ export interface Database {
           checked_in_at?: string;
         }
       >;
+      stock_items: TableShape<
+        {
+          id: string;
+          name: string;
+          unit: string | null;
+          quantity_on_hand: number;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          name: string;
+          unit?: string | null;
+          quantity_on_hand?: number;
+          created_by?: string | null;
+        }
+      >;
+      stock_transactions: TableShape<
+        {
+          id: string;
+          item_id: string;
+          employee_id: string;
+          delta: number;
+          remaining_after: number;
+          note: string | null;
+          created_at: string;
+        },
+        {
+          id?: string;
+          item_id: string;
+          employee_id: string;
+          delta: number;
+          remaining_after: number;
+          note?: string | null;
+        }
+      >;
       assets: TableShape<{
         id: string;
         asset_tag: string | null;
@@ -710,7 +747,11 @@ export interface Database {
         Returns: number;
       };
       fn_next_docnum_seq: {
-        Args: { p_department_id: string; p_year: number };
+        Args: { p_department_id: string; p_year: number; p_category_id?: string | null };
+        Returns: number;
+      };
+      fn_adjust_stock: {
+        Args: { p_item_id: string; p_delta: number; p_employee_id: string; p_note: string | null };
         Returns: number;
       };
     };
