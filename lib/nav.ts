@@ -25,10 +25,13 @@ import {
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
 
+export type NavGroup = "ทั่วไป" | "เวลาและการลา" | "งานและการจอง" | "เอกสาร" | "ฝึกอบรม" | "การจัดการ";
+
 export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  group: NavGroup;
   // Omit for "everyone"; otherwise only these roles see the entry.
   roles?: RoleT[];
   // If true, visible only to admin role OR employees in the training dept.
@@ -39,31 +42,44 @@ export type NavItem = {
   stockAccess?: boolean;
 };
 
+export const NAV_GROUP_ORDER: NavGroup[] = ["ทั่วไป", "เวลาและการลา", "งานและการจอง", "เอกสาร", "ฝึกอบรม", "การจัดการ"];
+
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "หน้าหลัก", icon: Home },
-  { href: "/qr", label: "สร้าง QR Code", icon: QrCode },
-  { href: "/worklog", label: "บันทึกเวลาทำงาน", icon: Clock },
-  { href: "/leave", label: "ลา", icon: CalendarDays },
-  { href: "/checkin", label: "เช็คอิน", icon: ScanLine },
-  { href: "/field", label: "นอกสถานที่/OT", icon: MapPin },
-  { href: "/booking", label: "จอง", icon: CalendarPlus },
-  { href: "/travel-expense", label: "เบิกค่าเดินทาง", icon: Receipt },
-  { href: "/calendar", label: "ปฏิทิน", icon: CalendarRange },
-  { href: "/assets", label: "ทรัพย์สิน", icon: Package },
-  { href: "/notifications", label: "การแจ้งเตือน", icon: Bell },
-  { href: "/admin/employees", label: "จัดการพนักงาน", icon: Users, roles: ["admin", "hr"] },
-  { href: "/admin/work-locations", label: "สถานที่ทำงาน", icon: Map, roles: ["admin", "hr"] },
-  { href: "/admin/assets", label: "คลังทรัพย์สิน", icon: Package, roles: ["admin", "hr", "exec", "dept_head"] },
-  { href: "/announcements", label: "ข่าวสาร", icon: Megaphone },
-  { href: "/directory", label: "สมุดรายชื่อ", icon: BookUser },
-  { href: "/org", label: "ข้อมูลองค์กร", icon: Building2 },
-  { href: "/reports", label: "รีพอร์ต", icon: BarChart2, roles: ["admin", "hr", "exec", "dept_head"] },
-  { href: "/admin/logs", label: "บันทึกกิจกรรม", icon: ScrollText, roles: ["admin", "hr"] },
-  { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, roles: ["admin"] },
-  { href: "/training", label: "ระบบอบรม (TMS)", icon: GraduationCap, trainingAccess: true },
-  { href: "/documents", label: "ลงรับเอกสาร", icon: Inbox, documentAccess: true },
-  { href: "/document-numbers", label: "ออกเลขเอกสาร", icon: Hash },
-  { href: "/stock", label: "จัดการสต๊อค", icon: Package, stockAccess: true },
+  // ทั่วไป
+  { href: "/", label: "หน้าหลัก", icon: Home, group: "ทั่วไป" },
+  { href: "/qr", label: "สร้าง QR Code", icon: QrCode, group: "ทั่วไป" },
+  { href: "/notifications", label: "การแจ้งเตือน", icon: Bell, group: "ทั่วไป" },
+  { href: "/announcements", label: "ข่าวสาร", icon: Megaphone, group: "ทั่วไป" },
+  { href: "/directory", label: "สมุดรายชื่อ", icon: BookUser, group: "ทั่วไป" },
+  { href: "/org", label: "ข้อมูลองค์กร", icon: Building2, group: "ทั่วไป" },
+
+  // เวลาและการลา
+  { href: "/worklog", label: "บันทึกเวลาทำงาน", icon: Clock, group: "เวลาและการลา" },
+  { href: "/leave", label: "ลา", icon: CalendarDays, group: "เวลาและการลา" },
+  { href: "/checkin", label: "เช็คอิน", icon: ScanLine, group: "เวลาและการลา" },
+  { href: "/field", label: "นอกสถานที่/OT", icon: MapPin, group: "เวลาและการลา" },
+  { href: "/calendar", label: "ปฏิทิน", icon: CalendarRange, group: "เวลาและการลา" },
+
+  // งานและการจอง
+  { href: "/booking", label: "จอง", icon: CalendarPlus, group: "งานและการจอง" },
+  { href: "/travel-expense", label: "เบิกค่าเดินทาง", icon: Receipt, group: "งานและการจอง" },
+  { href: "/assets", label: "ทรัพย์สิน", icon: Package, group: "งานและการจอง" },
+  { href: "/stock", label: "จัดการสต๊อค", icon: Package, group: "งานและการจอง", stockAccess: true },
+
+  // เอกสาร
+  { href: "/documents", label: "ลงรับเอกสาร", icon: Inbox, group: "เอกสาร", documentAccess: true },
+  { href: "/document-numbers", label: "ออกเลขเอกสาร", icon: Hash, group: "เอกสาร" },
+
+  // ฝึกอบรม
+  { href: "/training", label: "ระบบอบรม (TMS)", icon: GraduationCap, group: "ฝึกอบรม", trainingAccess: true },
+
+  // การจัดการ (admin/hr/exec/dept_head)
+  { href: "/admin/employees", label: "จัดการพนักงาน", icon: Users, group: "การจัดการ", roles: ["admin", "hr"] },
+  { href: "/admin/work-locations", label: "สถานที่ทำงาน", icon: Map, group: "การจัดการ", roles: ["admin", "hr"] },
+  { href: "/admin/assets", label: "คลังทรัพย์สิน", icon: Package, group: "การจัดการ", roles: ["admin", "hr", "exec", "dept_head"] },
+  { href: "/reports", label: "รีพอร์ต", icon: BarChart2, group: "การจัดการ", roles: ["admin", "hr", "exec", "dept_head"] },
+  { href: "/admin/logs", label: "บันทึกกิจกรรม", icon: ScrollText, group: "การจัดการ", roles: ["admin", "hr"] },
+  { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, group: "การจัดการ", roles: ["admin"] },
 ];
 
 // Primary tabs shown directly in the mobile bottom bar (iOS-style, keep ≤5

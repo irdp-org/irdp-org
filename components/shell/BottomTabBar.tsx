@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS, PRIMARY_TAB_HREFS, isNavItemVisible } from "@/lib/nav";
+import { NAV_ITEMS, NAV_GROUP_ORDER, PRIMARY_TAB_HREFS, isNavItemVisible } from "@/lib/nav";
 import type { RoleT } from "@/lib/database.types";
 import {
   Sheet,
@@ -56,22 +56,33 @@ export function BottomTabBar({ role, isTrainingDept = false, isDocumentDept = fa
               เพิ่มเติม
             </button>
           </SheetTrigger>
-          <SheetContent side="bottom" className="rounded-t-2xl">
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-2xl">
             <SheetHeader>
               <SheetTitle>เพิ่มเติม</SheetTitle>
             </SheetHeader>
-            <div className="grid grid-cols-3 gap-3 p-4 pt-0">
-              {moreItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-surface py-5 text-sm text-foreground"
-                >
-                  <item.icon className="h-6 w-6" strokeWidth={1.75} />
-                  {item.label}
-                </Link>
-              ))}
+            <div className="flex flex-col gap-4 p-4 pt-0">
+              {NAV_GROUP_ORDER.map((group) => {
+                const groupItems = moreItems.filter((item) => item.group === group);
+                if (groupItems.length === 0) return null;
+                return (
+                  <div key={group} className="flex flex-col gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">{group}</p>
+                    <div className="grid grid-cols-3 gap-3">
+                      {groupItems.map((item) => (
+                        <Link
+                          key={item.href}
+                          href={item.href}
+                          onClick={() => setOpen(false)}
+                          className="flex flex-col items-center justify-center gap-2 rounded-xl border border-border bg-surface py-5 text-sm text-foreground"
+                        >
+                          <item.icon className="h-6 w-6" strokeWidth={1.75} />
+                          {item.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </SheetContent>
         </Sheet>

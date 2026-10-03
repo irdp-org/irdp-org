@@ -7,7 +7,6 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { FieldRequestsClient, type OwnFieldRequest } from "@/components/field/FieldRequestsClient";
 import { FieldApprovalList, type FieldApprovalQueueRow } from "@/components/field/FieldApprovalList";
 import { ExportPanel } from "@/components/field/ExportPanel";
-import { ActivityCheckinList, type UpcomingActivity } from "@/components/field/ActivityCheckinList";
 import { RequestTabs } from "@/components/shared/RequestTabs";
 
 const CAN_SEE_APPROVALS = ["dept_head", "hr", "admin", "exec"];
@@ -36,36 +35,6 @@ export default async function FieldPage({
 
   const locationById = new Map((locations ?? []).map((l) => [l.id, l]));
   const locationOptions = (locations ?? []).map((l) => ({ id: l.id, name: l.name }));
-
-  // Org "activity" calendar events happening in the next 14 days (or still
-  // ongoing from yesterday) that the employee can check in to — e.g. an
-  // upcoming training session HR/admin scheduled.
-  const now = new Date();
-  const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
-  const windowEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: upcomingEvents } = await supabase
-    .from("calendar_events")
-    .select("id, title, start_at, location, is_training")
-    .eq("type", "activity")
-    .eq("scope", "org")
-    .gte("start_at", windowStart)
-    .lte("start_at", windowEnd)
-    .order("start_at", { ascending: true });
-
-  const eventIds = (upcomingEvents ?? []).map((e) => e.id);
-  const { data: myActivityCheckins } = eventIds.length
-    ? await supabase.from("activity_checkins").select("calendar_event_id").eq("employee_id", employee.id).in("calendar_event_id", eventIds)
-    : { data: [] };
-  const checkedInEventIds = new Set((myActivityCheckins ?? []).map((c) => c.calendar_event_id));
-
-  const upcomingActivities: UpcomingActivity[] = (upcomingEvents ?? []).map((e) => ({
-    id: e.id,
-    title: e.title,
-    start_at: e.start_at,
-    location: e.location,
-    is_training: e.is_training,
-    checkedIn: checkedInEventIds.has(e.id),
-  }));
 
   const requestIds = (requests ?? []).map((r) => r.id);
   const { data: myCheckins } = requestIds.length
@@ -198,12 +167,7 @@ export default async function FieldPage({
       <div className="px-4 md:px-6">
         <RequestTabs
           defaultTab={defaultTab}
-          mine={
-            <div className="flex flex-col gap-3">
-              <ActivityCheckinList activities={upcomingActivities} />
-              <FieldRequestsClient requests={ownRequests} locations={locationOptions} />
-            </div>
-          }
+          mine={<FieldRequestsClient requests={ownRequests} locations={locationOptions} />}
           approvals={
             showApprovals ? (
               <div className="flex flex-col gap-3">

@@ -23,7 +23,7 @@ const TYPE_OPTIONS: { value: CalType; label: string }[] = [
   { value: "holiday", label: "วันหยุดประจำปี" },
   { value: "merit", label: "วันทำบุญ" },
   { value: "meeting", label: "วันประชุม" },
-  { value: "activity", label: "กิจกรรมองค์กร" },
+  { value: "activity", label: "จัดอบรมภายใน" },
 ];
 
 export type ExistingOrgEvent = {

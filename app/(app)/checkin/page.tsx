@@ -1,10 +1,10 @@
 import { redirect } from "next/navigation";
-import { format } from "date-fns";
 import { Clock, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { CheckinPageClient } from "@/components/field/CheckinPageClient";
+import { ActivityCheckinList, type UpcomingActivity } from "@/components/field/ActivityCheckinList";
 import Link from "next/link";
 
 const TZ = "Asia/Bangkok";
@@ -94,6 +94,36 @@ export default async function CheckinPage() {
     };
   });
 
+  // Org "activity" calendar events happening in the next 14 days (or still
+  // ongoing from yesterday) that the employee can check in to — e.g. an
+  // upcoming internal training session HR/admin scheduled.
+  const now = new Date();
+  const windowStart = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const windowEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: upcomingEvents } = await supabase
+    .from("calendar_events")
+    .select("id, title, start_at, location, is_training")
+    .eq("type", "activity")
+    .eq("scope", "org")
+    .gte("start_at", windowStart)
+    .lte("start_at", windowEnd)
+    .order("start_at", { ascending: true });
+
+  const eventIds = (upcomingEvents ?? []).map((e) => e.id);
+  const { data: myActivityCheckins } = eventIds.length
+    ? await supabase.from("activity_checkins").select("calendar_event_id").eq("employee_id", employee.id).in("calendar_event_id", eventIds)
+    : { data: [] };
+  const checkedInEventIds = new Set((myActivityCheckins ?? []).map((c) => c.calendar_event_id));
+
+  const upcomingActivities: UpcomingActivity[] = (upcomingEvents ?? []).map((e) => ({
+    id: e.id,
+    title: e.title,
+    start_at: e.start_at,
+    location: e.location,
+    is_training: e.is_training,
+    checkedIn: checkedInEventIds.has(e.id),
+  }));
+
   const dateDisplay = thaiDateDisplay(today);
   const timeDisplay = nowBangkokTime();
 
@@ -108,6 +138,8 @@ export default async function CheckinPage() {
           <p className="text-4xl font-bold tabular-nums text-primary">{timeDisplay}</p>
           <p className="mt-1 text-sm text-muted-foreground">{dateDisplay}</p>
         </div>
+
+        <ActivityCheckinList activities={upcomingActivities} />
 
         <CheckinPageClient requests={enriched} locations={locationOptions} />
 

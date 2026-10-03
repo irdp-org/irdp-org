@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { NAV_ITEMS, isNavItemVisible } from "@/lib/nav";
+import { NAV_ITEMS, NAV_GROUP_ORDER, isNavItemVisible } from "@/lib/nav";
 import type { RoleT } from "@/lib/database.types";
 
 export function SideNav({ role, isTrainingDept = false, isDocumentDept = false }: { role: RoleT; isTrainingDept?: boolean; isDocumentDept?: boolean }) {
@@ -11,23 +11,32 @@ export function SideNav({ role, isTrainingDept = false, isDocumentDept = false }
   const items = NAV_ITEMS.filter((item) => isNavItemVisible(item, role, isTrainingDept, isDocumentDept));
 
   return (
-    <nav className="hidden w-60 shrink-0 flex-col gap-1 border-r border-border bg-background p-4 md:flex">
-      {items.map((item) => {
-        const active = pathname === item.href;
+    <nav className="hidden w-60 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border bg-background p-4 md:flex">
+      {NAV_GROUP_ORDER.map((group) => {
+        const groupItems = items.filter((item) => item.group === group);
+        if (groupItems.length === 0) return null;
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-              active
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:bg-surface hover:text-foreground"
-            )}
-          >
-            <item.icon className="h-4 w-4" strokeWidth={active ? 2.25 : 1.75} />
-            {item.label}
-          </Link>
+          <div key={group} className="flex flex-col gap-1">
+            <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">{group}</p>
+            {groupItems.map((item) => {
+              const active = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                    active
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-surface hover:text-foreground"
+                  )}
+                >
+                  <item.icon className="h-4 w-4" strokeWidth={active ? 2.25 : 1.75} />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
         );
       })}
     </nav>
