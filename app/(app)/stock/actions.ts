@@ -48,3 +48,17 @@ export async function adjustStock(itemId: string, delta: number, note: string) {
   revalidatePath("/stock");
   return { ok: true, remaining: data as number };
 }
+
+/** Admin-only (RLS also enforces this) — e.g. removing a test item. Cascades
+ * to that item's stock_transactions. */
+export async function deleteStockItem(itemId: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee || employee.role !== "admin") return { error: "unauthorized" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("stock_items").delete().eq("id", itemId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/stock");
+  return { ok: true };
+}

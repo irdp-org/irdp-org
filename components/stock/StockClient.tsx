@@ -4,14 +4,14 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
-import { Plus, PackageMinus, PackagePlus, History } from "lucide-react";
+import { Plus, PackageMinus, PackagePlus, History, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
-import { createStockItem, adjustStock } from "@/app/(app)/stock/actions";
+import { createStockItem, adjustStock, deleteStockItem } from "@/app/(app)/stock/actions";
 
 export type StockTxRow = {
   id: string;
@@ -32,13 +32,30 @@ export type StockItemRow = {
   transactions: StockTxRow[];
 };
 
-export function StockClient({ items, currentEmployeeName }: { items: StockItemRow[]; currentEmployeeName: string }) {
+export function StockClient({
+  items,
+  currentEmployeeName,
+  canDelete = false,
+}: {
+  items: StockItemRow[];
+  currentEmployeeName: string;
+  canDelete?: boolean;
+}) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
   const [adjustTarget, setAdjustTarget] = useState<{ item: StockItemRow; mode: "in" | "out" } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<StockItemRow | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function handleDelete(itemId: string) {
+    startTransition(async () => {
+      await deleteStockItem(itemId);
+      setConfirmDeleteId(null);
+      router.refresh();
+    });
+  }
 
   function handleCreate(formData: FormData) {
     setError(null);
@@ -105,6 +122,28 @@ export function StockClient({ items, currentEmployeeName }: { items: StockItemRo
           <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setHistoryTarget(i)}>
             <History className="h-3.5 w-3.5" /> ประวัติ
           </Button>
+          {canDelete &&
+            (confirmDeleteId === i.id ? (
+              <span className="flex items-center gap-1.5 text-xs">
+                <span className="text-muted-foreground">ลบ?</span>
+                <button type="button" onClick={() => handleDelete(i.id)} disabled={isPending} className="font-medium text-danger">
+                  ยืนยัน
+                </button>
+                <button type="button" onClick={() => setConfirmDeleteId(null)} className="text-muted-foreground">
+                  ยกเลิก
+                </button>
+              </span>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="gap-1 text-xs text-danger hover:text-danger"
+                onClick={() => setConfirmDeleteId(i.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" /> ลบ
+              </Button>
+            ))}
         </div>
       ),
     },

@@ -65,7 +65,7 @@ export default async function StockPage() {
     <div>
       <PageHeader title="จัดการสต๊อค" description="สำหรับฝ่ายฝึกอบรม วิจัยและพัฒนา และบัญชี (ธุรการ)" />
       <div className="px-4 md:px-6">
-        <StockClient items={itemRows} currentEmployeeName={employee.full_name} />
+        <StockClient items={itemRows} currentEmployeeName={employee.full_name} canDelete={employee.role === "admin"} />
       </div>
     </div>
   );
