@@ -38,9 +38,9 @@ export default async function StockPage() {
     supabase.from("stock_items").select("id, name, unit, quantity_on_hand, created_at").order("name"),
     supabase
       .from("stock_transactions")
-      .select("id, item_id, employee_id, delta, remaining_after, note, created_at")
+      .select("id, item_id, employee_id, delta, remaining_after, note, kind, total_price, vendor, purchase_date, project, created_at")
       .order("created_at", { ascending: false })
-      .limit(500),
+      .limit(2000),
   ]);
 
   const employeeIds = [...new Set((txRows ?? []).map((t) => t.employee_id))];

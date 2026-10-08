@@ -4,7 +4,21 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 
-export async function createStockItem(name: string, unit: string, initialQty: number) {
+function friendlyRpcError(error: { message: string }): string {
+  if (error.message.includes("quantity_on_hand")) return "จำนวนคงเหลือไม่พอให้ตัด";
+  if (error.message.includes("ไม่มีสิทธิ์")) return "ไม่มีสิทธิ์ทำรายการนี้";
+  return error.message;
+}
+
+export async function createStockItem(
+  name: string,
+  unit: string,
+  initialQty: number,
+  totalPrice: number | null,
+  vendor: string,
+  purchaseDate: string,
+  note: string
+) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "unauthorized" };
   const trimmedName = name.trim();
@@ -12,38 +26,99 @@ export async function createStockItem(name: string, unit: string, initialQty: nu
   if (!Number.isFinite(initialQty) || initialQty < 0) return { error: "จำนวนไม่ถูกต้อง" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("stock_items").insert({
-    name: trimmedName,
-    unit: unit.trim() || null,
-    quantity_on_hand: Math.floor(initialQty),
-    created_by: employee.id,
-  });
-  if (error) return { error: error.message };
+  const { data: item, error } = await supabase
+    .from("stock_items")
+    .insert({ name: trimmedName, unit: unit.trim() || null, quantity_on_hand: 0, created_by: employee.id })
+    .select("id")
+    .single();
+  if (error || !item) return { error: error?.message ?? "บันทึกไม่สำเร็จ" };
+
+  const qty = Math.floor(initialQty);
+  if (qty > 0) {
+    const { error: rpcError } = await supabase.rpc("fn_adjust_stock", {
+      p_item_id: item.id,
+      p_delta: qty,
+      p_employee_id: employee.id,
+      p_note: note.trim() || null,
+      p_kind: "purchase",
+      p_total_price: totalPrice,
+      p_vendor: vendor.trim() || null,
+      p_purchase_date: purchaseDate || null,
+    });
+    if (rpcError) return { error: friendlyRpcError(rpcError) };
+  }
 
   revalidatePath("/stock");
   return { ok: true };
 }
 
-/** delta > 0 = นำเข้าเพิ่ม, delta < 0 = ตัดสต๊อค. Runs through fn_adjust_stock
- * (security definer) so the read-modify-write stays atomic under concurrent use. */
-export async function adjustStock(itemId: string, delta: number, note: string) {
+/** นำเข้า (ซื้อเพิ่ม) — บันทึกราคารวม VAT / ร้านค้า / วันที่ซื้อไว้ด้วย */
+export async function purchaseStock(
+  itemId: string,
+  qty: number,
+  totalPrice: number | null,
+  vendor: string,
+  purchaseDate: string,
+  note: string
+) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "unauthorized" };
-  if (!Number.isFinite(delta) || delta === 0) return { error: "จำนวนไม่ถูกต้อง" };
+  if (!Number.isFinite(qty) || qty <= 0) return { error: "จำนวนไม่ถูกต้อง" };
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("fn_adjust_stock", {
     p_item_id: itemId,
-    p_delta: Math.trunc(delta),
+    p_delta: Math.trunc(qty),
     p_employee_id: employee.id,
     p_note: note.trim() || null,
+    p_kind: "purchase",
+    p_total_price: totalPrice,
+    p_vendor: vendor.trim() || null,
+    p_purchase_date: purchaseDate || null,
   });
+  if (error) return { error: friendlyRpcError(error) };
 
-  if (error) {
-    if (error.message.includes("quantity_on_hand"))
-      return { error: "จำนวนคงเหลือไม่พอให้ตัด" };
-    return { error: error.message };
-  }
+  revalidatePath("/stock");
+  return { ok: true, remaining: data as number };
+}
+
+/** ตัดสต๊อค (เบิกไปใช้) — ระบุโครงการ/หลักสูตรที่เบิกไปใช้ */
+export async function deductStock(itemId: string, qty: number, project: string, note: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+  if (!Number.isFinite(qty) || qty <= 0) return { error: "จำนวนไม่ถูกต้อง" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_adjust_stock", {
+    p_item_id: itemId,
+    p_delta: -Math.trunc(qty),
+    p_employee_id: employee.id,
+    p_note: note.trim() || null,
+    p_kind: "deduct",
+    p_project: project.trim() || null,
+  });
+  if (error) return { error: friendlyRpcError(error) };
+
+  revalidatePath("/stock");
+  return { ok: true, remaining: data as number };
+}
+
+/** คืนสต๊อค — ของที่เบิกไปแล้วใช้ไม่หมด นำกลับเข้าคลัง ระบุว่าคืนจากโครงการไหน */
+export async function returnStock(itemId: string, qty: number, project: string, note: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+  if (!Number.isFinite(qty) || qty <= 0) return { error: "จำนวนไม่ถูกต้อง" };
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("fn_adjust_stock", {
+    p_item_id: itemId,
+    p_delta: Math.trunc(qty),
+    p_employee_id: employee.id,
+    p_note: note.trim() || null,
+    p_kind: "return",
+    p_project: project.trim() || null,
+  });
+  if (error) return { error: friendlyRpcError(error) };
 
   revalidatePath("/stock");
   return { ok: true, remaining: data as number };

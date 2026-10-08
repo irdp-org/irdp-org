@@ -30,6 +30,7 @@ export type AssignStatusT = "pending_accept" | "accepted" | "returned";
 export type BookingStatusT = "booked" | "cancelled";
 export type CalTypeT = "holiday" | "meeting" | "merit" | "activity" | "leave" | "booking";
 export type CalScopeT = "org" | "dept" | "personal";
+export type StockTxKindT = "purchase" | "deduct" | "return" | "adjust";
 
 type TableShape<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
@@ -441,6 +442,11 @@ export interface Database {
           delta: number;
           remaining_after: number;
           note: string | null;
+          kind: StockTxKindT;
+          total_price: number | null;
+          vendor: string | null;
+          purchase_date: string | null;
+          project: string | null;
           created_at: string;
         },
         {
@@ -450,6 +456,11 @@ export interface Database {
           delta: number;
           remaining_after: number;
           note?: string | null;
+          kind?: StockTxKindT;
+          total_price?: number | null;
+          vendor?: string | null;
+          purchase_date?: string | null;
+          project?: string | null;
         }
       >;
       assets: TableShape<{
@@ -754,7 +765,17 @@ export interface Database {
         Returns: number;
       };
       fn_adjust_stock: {
-        Args: { p_item_id: string; p_delta: number; p_employee_id: string; p_note: string | null };
+        Args: {
+          p_item_id: string;
+          p_delta: number;
+          p_employee_id: string;
+          p_note: string | null;
+          p_kind?: StockTxKindT;
+          p_total_price?: number | null;
+          p_vendor?: string | null;
+          p_purchase_date?: string | null;
+          p_project?: string | null;
+        };
         Returns: number;
       };
     };
