@@ -17,7 +17,12 @@ export default async function DocumentNumbersPage() {
     supabase
       .from("document_numbers")
       .select("id, department_id, category_id, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at")
-      .order("doc_no", { ascending: false }),
+      // doc_no is text and its format changed over time (old rows: "year/code/seq",
+      // current generator: "code/year/seq") — sorting by it lexicographically pushes
+      // every newly-issued number below ~1000 legacy rows, past PostgREST's default
+      // row cap, so it never even reaches the browser. created_at sorts correctly
+      // regardless of doc_no format.
+      .order("created_at", { ascending: false }),
     supabase.from("document_categories").select("id, department_id, label").order("sort_order"),
     supabase.from("document_recipients").select("name").order("name"),
   ]);
