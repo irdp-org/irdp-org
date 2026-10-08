@@ -7,6 +7,8 @@ import { CheckinPageClient } from "@/components/field/CheckinPageClient";
 import { ActivityCheckinList, type UpcomingActivity } from "@/components/field/ActivityCheckinList";
 import Link from "next/link";
 
+export const dynamic = "force-dynamic";
+
 const TZ = "Asia/Bangkok";
 
 function todayBangkok(): string {

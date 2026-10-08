@@ -24,7 +24,9 @@ export async function checkInActivity(calendarEventId: string, locationText: str
     .single();
   if (!event || event.scope !== "org") return { error: "ไม่พบกิจกรรม" };
 
-  if (new Date() < new Date(event.start_at)) return { error: "ยังไม่ถึงเวลาเริ่มกิจกรรม เช็คอินไม่ได้" };
+  const now0 = new Date();
+  if (now0 < new Date(event.start_at)) return { error: "ยังไม่ถึงเวลาเริ่มกิจกรรม เช็คอินไม่ได้" };
+  if (event.end_at && now0 > new Date(event.end_at)) return { error: "กิจกรรมนี้สิ้นสุดไปแล้ว เช็คอินไม่ได้" };
 
   const location = locationText.trim() || event.location || null;
 
@@ -63,21 +65,29 @@ export async function checkOutActivity(calendarEventId: string) {
 
   if (!event.end_at || new Date() < new Date(event.end_at)) return { error: "กิจกรรมยังไม่สิ้นสุด เช็คเอ้าท์ไม่ได้" };
 
-  const { data: checkin } = await supabase
-    .from("activity_checkins")
-    .select("id, checked_in_at, checked_out_at, location")
-    .eq("calendar_event_id", calendarEventId)
-    .eq("employee_id", employee.id)
-    .maybeSingle();
-  if (!checkin) return { error: "คุณยังไม่ได้เช็คอินกิจกรรมนี้" };
-  if (checkin.checked_out_at) return { error: "คุณเช็คเอ้าท์ไปแล้ว" };
-
+  // Atomic claim: the WHERE checked_out_at IS NULL means only one of any
+  // concurrent/repeated clicks actually updates a row (Postgres serializes
+  // concurrent UPDATEs on the same row) — the rest get 0 rows back and bail
+  // out below instead of each writing their own work_logs/training_history.
   const now = new Date().toISOString();
-  const { error: coError } = await supabase
+  const { data: checkin, error: coError } = await supabase
     .from("activity_checkins")
     .update({ checked_out_at: now })
-    .eq("id", checkin.id);
+    .eq("calendar_event_id", calendarEventId)
+    .eq("employee_id", employee.id)
+    .is("checked_out_at", null)
+    .select("id, checked_in_at, location")
+    .maybeSingle();
   if (coError) return { error: coError.message };
+  if (!checkin) {
+    const { data: existing } = await supabase
+      .from("activity_checkins")
+      .select("id")
+      .eq("calendar_event_id", calendarEventId)
+      .eq("employee_id", employee.id)
+      .maybeSingle();
+    return { error: existing ? "คุณเช็คเอ้าท์ไปแล้ว" : "คุณยังไม่ได้เช็คอินกิจกรรมนี้" };
+  }
 
   const workDate = checkin.checked_in_at.slice(0, 10);
   const startTime = checkin.checked_in_at.slice(11, 16);
