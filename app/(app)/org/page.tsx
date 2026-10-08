@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import Image from "next/image";
-import { MapPin, Phone, Mail, Globe, Building2, FileText, ExternalLink, CreditCard } from "lucide-react";
+import { MapPin, Phone, Mail, Globe, FileText, ExternalLink, CreditCard } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { getSignedOrgDocUrl } from "@/lib/storage";
@@ -141,12 +141,49 @@ export default async function OrgPage() {
               จดทะเบียนเป็นมูลนิธิถูกต้องตามกฎหมาย
             </p>
             <p>
-              IRDP ได้รับการจดทะเบียนเป็น <strong className="text-foreground">ศูนย์ที่ปรึกษาไทย</strong> กับกระทรวงการคลัง
-              ทำให้มีสถานะเป็นที่ปรึกษาที่ได้รับการรับรองสำหรับโครงการภาครัฐ
+              IRDP ได้รับการจดทะเบียนเป็น <strong className="text-foreground">ศูนย์ที่ปรึกษาไทย</strong> ระดับ 1 เลขที่ 3527
+              กับกระทรวงการคลัง (ปี 2564) ทำให้มีสถานะเป็นที่ปรึกษาที่ได้รับการรับรองสำหรับโครงการภาครัฐ
             </p>
             <p>
               ได้รับยกเว้นภาษีเงินได้และภาษีมูลค่าเพิ่ม ตามประกาศกระทรวงการคลัง
               เนื่องจากเป็นองค์กรสาธารณประโยชน์
+            </p>
+            <p>
+              <strong className="text-foreground">บทบาทหลัก:</strong> สร้างความแข็งแกร่งและเพิ่มขีดความสามารถในการบริหารงานขององค์กรภาครัฐ
+              ผ่านการประเมินผล การฝึกอบรม และการวิจัยและพัฒนา
+            </p>
+
+            {/* เส้นเวลา */}
+            <ul className="mt-1 flex flex-col gap-2.5 border-t border-border pt-3">
+              {[
+                { year: "2538", text: "เริ่มใช้ระบบประเมินผลการดำเนินงานรัฐวิสาหกิจ" },
+                { year: "2555", text: "ก่อตั้ง IRDP เป็นหน่วยงานอิสระในรูปแบบมูลนิธิ" },
+                { year: "2564", text: "ขึ้นทะเบียนที่ปรึกษาไทยระดับ 1 เลขที่ 3527" },
+                { year: "2569", text: "ยกระดับทิศทางองค์กรและระบบบริหารคุณภาพ (ISO 9001:2026)" },
+              ].map(({ year, text }) => (
+                <li key={year} className="flex items-start gap-3">
+                  <span className="flex h-9 w-12 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-xs font-bold text-primary tabular-nums">
+                    {year}
+                  </span>
+                  <p className="pt-1.5 text-sm text-muted-foreground leading-snug">{text}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        {/* วิสัยทัศน์ */}
+        <div className="rounded-2xl border border-border bg-white overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-surface">
+            <p className="text-sm font-semibold text-foreground">วิสัยทัศน์ (Vision)</p>
+          </div>
+          <div className="px-4 py-4 flex flex-col gap-2 text-sm leading-relaxed">
+            <p className="font-semibold text-foreground">
+              “เป็นองค์กรชั้นนำด้านการประเมินผล วิจัยและพัฒนา และการเสริมสร้างศักยภาพองค์กรภาครัฐอย่างยั่งยืน”
+            </p>
+            <p className="text-xs italic text-muted-foreground">
+              To be a leading organization in performance assessment, research and development, and sustainable
+              capability enhancement for public sector organizations.
             </p>
           </div>
         </div>
@@ -154,61 +191,125 @@ export default async function OrgPage() {
         {/* พันธกิจ */}
         <div className="rounded-2xl border border-border bg-white overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-surface">
-            <p className="text-sm font-semibold text-foreground">พันธกิจ</p>
+            <p className="text-sm font-semibold text-foreground">พันธกิจ (Mission)</p>
+          </div>
+          <div className="px-4 py-4 flex flex-col gap-3 text-sm leading-relaxed">
+            <p className="font-semibold text-foreground">
+              “ยกระดับขีดความสามารถและผลการดำเนินงานขององค์กรภาครัฐ เพื่อสร้างคุณค่าอย่างยั่งยืน”
+            </p>
+            <p className="text-xs italic text-muted-foreground">
+              To enhance the capabilities and performance of public sector organizations, enabling them to create
+              sustainable public value.
+            </p>
+          </div>
+          <ul className="divide-y divide-border border-t border-border">
+            {[
+              { no: "M1", text: "พัฒนาระบบและดำเนินการประเมินผลการดำเนินงานของรัฐวิสาหกิจและองค์กรภาครัฐ อย่างเป็นธรรม น่าเชื่อถือ และเป็นมาตรฐาน" },
+              { no: "M2", text: "ศึกษา วิจัย วิเคราะห์ และให้คำปรึกษาด้านการบริหารจัดการองค์กร เพื่อสนับสนุนการกำหนดนโยบายและเพิ่มประสิทธิภาพ-ประสิทธิผล" },
+              { no: "M3", text: "พัฒนาหลักสูตรและจัดการฝึกอบรม เพื่อเสริมสร้างความรู้ ทักษะ และขีดความสามารถของกรรมการ ผู้บริหาร และบุคลากรองค์กรภาครัฐ" },
+              { no: "M4", text: "รวบรวม บูรณาการ และต่อยอดองค์ความรู้จากงานประเมินผล วิจัย ที่ปรึกษา และฝึกอบรม สู่แนวปฏิบัติที่ดีและนวัตกรรม" },
+            ].map(({ no, text }) => (
+              <li key={no} className="flex items-start gap-3 px-4 py-3">
+                <span className="flex h-6 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                  {no}
+                </span>
+                <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* ค่านิยมองค์กร */}
+        <div className="rounded-2xl border border-border bg-white overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-surface">
+            <p className="text-sm font-semibold text-foreground">ค่านิยมองค์กร (Core Values) — Reaching New Boundaries</p>
+          </div>
+          <ul className="divide-y divide-border">
+            {[
+              { letter: "I", name: "Integrity", th: "ยึดมั่นความซื่อสัตย์และความเที่ยงธรรม", desc: "ปฏิบัติงานด้วยความซื่อสัตย์ โปร่งใส เป็นธรรม รับผิดชอบ และยึดมั่นในจริยธรรม มาตรฐานวิชาชีพ และประโยชน์ส่วนรวม" },
+              { letter: "R", name: "Resilience", th: "พร้อมรับและปรับตัวต่อการเปลี่ยนแปลง", desc: "มีความยืดหยุ่น เข้มแข็ง พร้อมรับมือความไม่แน่นอน ปรับวิธีทำงาน และฟื้นตัวจากอุปสรรคเพื่อรักษาความต่อเนื่องและบรรลุเป้าหมาย" },
+              { letter: "D", name: "Development", th: "เรียนรู้ พัฒนา และสร้างสรรค์สิ่งใหม่", desc: "พัฒนาตนเอง ทีมงาน กระบวนการ และองค์ความรู้อย่างต่อเนื่อง พร้อมต่อยอดความรู้จากทุกภารกิจไปสู่แนวปฏิบัติที่ดีและนวัตกรรม" },
+              { letter: "P", name: "Professionalism", th: "ปฏิบัติงานอย่างมืออาชีพ มุ่งมั่นสู่ความเป็นเลิศ", desc: "มีความรู้และความเชี่ยวชาญ รับผิดชอบต่อผลลัพธ์ ส่งมอบงานที่มีคุณภาพ ตรงเวลา สร้างคุณค่าแก่ผู้รับบริการ และรักษามาตรฐานวิชาชีพ" },
+            ].map(({ letter, name, th, desc }) => (
+              <li key={letter} className="flex items-start gap-3 px-4 py-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-bold text-accent">
+                  {letter}
+                </span>
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-sm font-semibold text-foreground">
+                    {name} <span className="font-normal text-muted-foreground">— {th}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* วัตถุประสงค์การจัดตั้ง */}
+        <div className="rounded-2xl border border-border bg-white overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-surface">
+            <p className="text-sm font-semibold text-foreground">วัตถุประสงค์การจัดตั้ง</p>
+          </div>
+          <ul className="divide-y divide-border">
+            {[
+              "พัฒนานโยบายและหลักเกณฑ์ประเมินผล",
+              "ประสานเครือข่ายเพื่อระบบประเมินที่เป็นธรรมและได้มาตรฐาน",
+              "พัฒนาบุคลากรที่เกี่ยวข้องกับการประเมินผล",
+              "วิจัยและพัฒนาหลักสูตร/การฝึกอบรม",
+              "ศึกษา วิเคราะห์ และวิจัยการบริหารงานภาครัฐ",
+              "วิจัย ให้คำปรึกษา และเผยแพร่ผลการศึกษา",
+              "ส่งเสริมธรรมาภิบาลและยกย่องแนวปฏิบัติที่ดี",
+              "สนับสนุนทรัพยากร ข้อมูล และการวิจัยที่เป็นประโยชน์",
+              "ร่วมมือด้านการกุศลและสาธารณประโยชน์",
+              "ดำรงความเป็นกลาง ไม่เกี่ยวข้องกับการเมือง",
+            ].map((text, i) => (
+              <li key={i} className="flex items-start gap-3 px-4 py-3">
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
+                  {i + 1}
+                </span>
+                <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* นโยบายคุณภาพ */}
+        <div className="rounded-2xl border border-border bg-white overflow-hidden">
+          <div className="px-4 py-3 border-b border-border bg-surface">
+            <p className="text-sm font-semibold text-foreground">นโยบายคุณภาพ (Quality Policy) — ISO 9001:2026</p>
           </div>
           <div className="px-4 py-4 text-sm text-muted-foreground leading-relaxed">
             <p>
-              มูลนิธิฯ มุ่งมั่นส่งเสริม สนับสนุน และพัฒนาองค์กรภาครัฐและรัฐวิสาหกิจให้มีสมรรถนะสูง
-              ด้วยการวิจัย การให้คำปรึกษา และการพัฒนาบุคลากร เพื่อยกระดับประสิทธิภาพการบริการสาธารณะ
-              และสร้างคุณค่าที่ยั่งยืนให้แก่สังคมและประเทศชาติ
+              “IRDP มุ่งมั่นส่งมอบบริการด้านการประเมินผล วิจัยและพัฒนา การให้คำปรึกษา และการพัฒนาศักยภาพที่มีคุณภาพ
+              เที่ยงธรรม และเชื่อถือได้ ตอบสนองข้อกำหนดและความคาดหวังของผู้รับบริการและผู้มีส่วนได้ส่วนเสีย
+              พร้อมพัฒนาและปรับปรุงระบบบริหารคุณภาพอย่างต่อเนื่อง เพื่อสร้างคุณค่าอย่างยั่งยืน”
             </p>
           </div>
         </div>
 
-        {/* ภารกิจ */}
+        {/* โครงสร้างองค์กร */}
         <div className="rounded-2xl border border-border bg-white overflow-hidden">
           <div className="px-4 py-3 border-b border-border bg-surface">
-            <p className="text-sm font-semibold text-foreground">ภารกิจหลัก</p>
+            <p className="text-sm font-semibold text-foreground">โครงสร้างองค์กร</p>
           </div>
-          <ul className="divide-y divide-border">
-            {[
-              { no: "1", text: "ให้คำปรึกษาและให้คำแนะนำด้านการบริหารจัดการและพัฒนาองค์กรภาครัฐและรัฐวิสาหกิจ" },
-              { no: "2", text: "ดำเนินการวิจัยและพัฒนาองค์ความรู้ด้านการบริหารจัดการภาครัฐ" },
-              { no: "3", text: "ฝึกอบรมและพัฒนาบุคลากรของหน่วยงานภาครัฐและรัฐวิสาหกิจ" },
-              { no: "4", text: "จัดทำและเผยแพร่ผลงานวิชาการ รายงาน และสื่อความรู้ด้านการพัฒนาองค์กรภาครัฐ" },
-              { no: "5", text: "ส่งเสริมความร่วมมือระหว่างหน่วยงานภาครัฐและภาคเอกชนในการพัฒนาองค์กร" },
-            ].map(({ no, text }) => (
-              <li key={no} className="flex items-start gap-3 px-4 py-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                  {no}
-                </span>
-                <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
+          <div className="px-4 py-4 text-sm leading-relaxed">
+            <ul className="flex flex-col gap-1.5">
+              <li className="font-semibold text-foreground">คณะกรรมการ IRDP</li>
+              <li className="pl-4 text-muted-foreground">ที่ปรึกษา</li>
+              <li className="pl-4 font-medium text-foreground">กรรมการผู้จัดการ</li>
+              <li className="pl-8 text-muted-foreground">รองกรรมการผู้จัดการอาวุโส</li>
+              <li className="pl-8 text-muted-foreground">รองกรรมการผู้จัดการ</li>
+              <li className="pl-12 text-muted-foreground">สำนักกรรมการผู้จัดการ</li>
+              <li className="pl-12 font-medium text-foreground">ฝ่ายประเมินผล</li>
+              <li className="pl-12 font-medium text-foreground">ฝ่ายฝึกอบรม</li>
+              <li className="pl-12 font-medium text-foreground">ฝ่ายวิจัยและพัฒนา</li>
+              <li className="pl-12 font-medium text-foreground">ฝ่ายธุรการ</li>
+              <li className="pl-16 text-xs text-muted-foreground">
+                ส่วนงานบัญชีและการเงิน · ส่วนงานบุคคล · ส่วนงานจัดซื้อ · ส่วนงานธุรการ · ส่วนงาน IT · ส่วนงานเลขานุการ
               </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* วัตถุประสงค์ */}
-        <div className="rounded-2xl border border-border bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-border bg-surface">
-            <p className="text-sm font-semibold text-foreground">วัตถุประสงค์</p>
+            </ul>
           </div>
-          <ul className="divide-y divide-border">
-            {[
-              { no: "1", text: "เพื่อส่งเสริมและสนับสนุนการวิจัยและพัฒนาองค์กรภาครัฐและรัฐวิสาหกิจให้มีประสิทธิภาพและประสิทธิผลสูงขึ้น" },
-              { no: "2", text: "เพื่อเสริมสร้างขีดความสามารถและสมรรถนะของบุคลากรภาครัฐในการบริหารจัดการองค์กรอย่างมืออาชีพ" },
-              { no: "3", text: "เพื่อพัฒนาองค์ความรู้และนวัตกรรมด้านการบริหารจัดการภาครัฐที่สามารถนำไปประยุกต์ใช้ได้จริง" },
-              { no: "4", text: "เพื่อเป็นศูนย์กลางการแลกเปลี่ยนเรียนรู้และเครือข่ายความร่วมมือระหว่างหน่วยงานภาครัฐทั้งในและต่างประเทศ" },
-              { no: "5", text: "เพื่อดำเนินกิจกรรมสาธารณประโยชน์โดยไม่มุ่งหวังผลกำไร และเป็นองค์กรที่มีธรรมาภิบาล" },
-            ].map(({ no, text }) => (
-              <li key={no} className="flex items-start gap-3 px-4 py-3">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold text-accent">
-                  {no}
-                </span>
-                <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
-              </li>
-            ))}
-          </ul>
         </div>
 
         {/* เอกสารสำคัญ */}
