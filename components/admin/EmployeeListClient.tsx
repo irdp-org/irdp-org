@@ -27,6 +27,7 @@ export type EmployeeRow = {
   email: string;
   full_name: string;
   nickname?: string | null;
+  employee_code?: string | null;
   department_id: string | null;
   role: RoleT;
   position: string | null;

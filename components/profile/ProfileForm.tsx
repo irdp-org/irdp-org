@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, GraduationCap, Briefcase, Award } from "lucide-react";
+import { Plus, Trash2, GraduationCap, Briefcase, Award, Pencil } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,7 @@ export function ProfileForm({
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<"view" | "edit">("view");
   const [avatarPreview, setAvatarPreview] = useState<string | null>(avatarUrl);
   const [education, setEducation] = useState<EducationEntry[]>(employee.education ?? []);
   const [workHistory, setWorkHistory] = useState<WorkHistoryEntry[]>(employee.work_history ?? []);
@@ -107,8 +108,152 @@ export function ProfileForm({
         setError(res.error);
         return;
       }
+      setMode("view");
       router.refresh();
     });
+  }
+
+  if (mode === "view") {
+    return (
+      <div className="flex flex-col gap-4 pb-6">
+        <Card>
+          <CardContent className="flex flex-col items-center gap-3 pt-4">
+            <Avatar className="h-20 w-20">
+              {avatarPreview && <AvatarImage src={avatarPreview} alt={employee.full_name} />}
+              <AvatarFallback className="text-lg">{initialsOf(employee.full_name)}</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col items-center gap-0.5">
+              <span className="font-medium text-foreground">{employee.full_name}</span>
+              {employee.employee_code && (
+                <span className="text-xs text-muted-foreground">รหัสพนักงาน {employee.employee_code}</span>
+              )}
+            </div>
+            <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setMode("edit")}>
+              <Pencil className="h-3.5 w-3.5" /> แก้ไขข้อมูล
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">ข้อมูลส่วนตัว</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">ที่อยู่</span>
+              <span className="text-right text-foreground">{employee.address || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">วันเกิด</span>
+              <span className="text-foreground">{employee.birthdate || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">เบอร์โทร</span>
+              <span className="text-foreground">{employee.phone || "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">เบอร์โต๊ะ (ภายใน)</span>
+              <span className="text-foreground">{employee.desk_phone || "—"}</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {education.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <GraduationCap className="h-4 w-4 text-primary" /> ประวัติการศึกษา
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {education.map((entry, i) => (
+                <div key={i} className="rounded-xl bg-surface p-3 text-sm">
+                  <p className="text-foreground">{entry.degree || "—"}</p>
+                  <p className="text-muted-foreground">
+                    {entry.institution} {entry.year && `(${entry.year})`}
+                  </p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {workHistory.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Briefcase className="h-4 w-4 text-primary" /> ประวัติการทำงาน
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {workHistory.map((entry, i) => (
+                <div key={i} className="rounded-xl bg-surface p-3 text-sm">
+                  <p className="text-foreground">
+                    {entry.position} {entry.company && `· ${entry.company}`}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {entry.startYear} – {entry.endYear || "ปัจจุบัน"}
+                  </p>
+                  {entry.description && <p className="mt-1 text-muted-foreground">{entry.description}</p>}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {trainingHistory.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Award className="h-4 w-4 text-primary" /> ประวัติการอบรม
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {trainingHistory.map((entry, i) => (
+                <div key={i} className="rounded-xl bg-surface p-3 text-sm">
+                  <p className="text-foreground">{entry.name}</p>
+                  <p className="text-muted-foreground">
+                    {entry.organizer} {entry.year && `· ปี ${entry.year}`}
+                  </p>
+                  {entry.instructor && <p className="text-muted-foreground">วิทยากร: {entry.instructor}</p>}
+                  {entry.note && <p className="mt-1 text-muted-foreground">{entry.note}</p>}
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">ข้อมูลการทำงาน</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm">
+            {employee.employee_code && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">รหัสพนักงาน</span>
+                <span className="text-foreground">{employee.employee_code}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">บทบาท</span>
+              <span className="text-foreground">{roleLabel}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">ฝ่าย</span>
+              <span className="text-foreground">{departmentName}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">วันเริ่มงาน</span>
+              <span className="text-foreground">{employee.hire_date ?? "—"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">สถานะ</span>
+              <span className="text-foreground">{employee.status === "active" ? "ใช้งานอยู่" : employee.status}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   return (
@@ -324,9 +469,14 @@ export function ProfileForm({
 
       {error && <p className="text-sm text-danger">{error}</p>}
 
-      <Button type="submit" disabled={isPending}>
-        บันทึกข้อมูล
-      </Button>
+      <div className="flex gap-2">
+        <Button type="button" variant="outline" className="flex-1" onClick={() => setMode("view")} disabled={isPending}>
+          ยกเลิก
+        </Button>
+        <Button type="submit" className="flex-1" disabled={isPending}>
+          บันทึกข้อมูล
+        </Button>
+      </div>
     </form>
   );
 }

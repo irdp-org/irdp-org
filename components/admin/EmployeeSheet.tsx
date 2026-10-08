@@ -164,6 +164,11 @@ export function EmployeeSheet({
           </div>
 
           <div className="flex flex-col gap-1.5">
+            <Label>รหัสพนักงาน</Label>
+            <Input name="employeeCode" defaultValue={existing?.employee_code ?? ""} placeholder="เช่น 001/2555" />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
             <Label>ฝ่าย</Label>
             <Select value={departmentId} onValueChange={setDepartmentId}>
               <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
