@@ -124,6 +124,20 @@ export async function returnStock(itemId: string, qty: number, project: string, 
   return { ok: true, remaining: data as number };
 }
 
+/** Admin-only — removes a single transaction (e.g. a test/mistaken entry)
+ * and reverses its effect on the item's quantity_on_hand atomically. */
+export async function deleteStockTransaction(txId: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee || employee.role !== "admin") return { error: "unauthorized" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("fn_delete_stock_transaction", { p_tx_id: txId });
+  if (error) return { error: error.message };
+
+  revalidatePath("/stock");
+  return { ok: true };
+}
+
 /** Admin-only (RLS also enforces this) — e.g. removing a test item. Cascades
  * to that item's stock_transactions. */
 export async function deleteStockItem(itemId: string) {

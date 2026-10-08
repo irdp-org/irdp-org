@@ -9,7 +9,7 @@
 export type EducationEntry = { degree: string; institution: string; year: string };
 // employees.work_history / training_history jsonb shape (0034_history_and_activity_checkin.sql)
 export type WorkHistoryEntry = { company: string; position: string; startYear: string; endYear: string; description?: string };
-export type TrainingHistoryEntry = { name: string; organizer: string; year: string; note?: string };
+export type TrainingHistoryEntry = { name: string; organizer: string; year: string; note?: string; instructor?: string };
 
 export type RoleT = "employee" | "dept_head" | "hr" | "admin" | "exec";
 export type EmployeeStatusT = "active" | "inactive" | "pending";
@@ -396,6 +396,8 @@ export interface Database {
         last_synced_at: string | null;
         location: string | null;
         is_training: boolean;
+        organizer: string | null;
+        instructor: string | null;
         created_at: string;
         updated_at: string;
       }>;
@@ -406,6 +408,7 @@ export interface Database {
           employee_id: string;
           location: string | null;
           checked_in_at: string;
+          checked_out_at: string | null;
           created_at: string;
         },
         {
@@ -413,6 +416,7 @@ export interface Database {
           calendar_event_id: string;
           employee_id: string;
           location?: string | null;
+          checked_out_at?: string | null;
           checked_in_at?: string;
         }
       >;
@@ -777,6 +781,10 @@ export interface Database {
           p_project?: string | null;
         };
         Returns: number;
+      };
+      fn_delete_stock_transaction: {
+        Args: { p_tx_id: string };
+        Returns: undefined;
       };
     };
     Enums: {

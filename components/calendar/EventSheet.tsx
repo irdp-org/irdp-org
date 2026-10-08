@@ -36,6 +36,8 @@ export type ExistingOrgEvent = {
   all_day: boolean;
   location: string | null;
   is_training: boolean;
+  organizer: string | null;
+  instructor: string | null;
 };
 
 export function EventSheet({
@@ -67,7 +69,9 @@ export function EventSheet({
     if (!formRef.current) return;
     const formData = new FormData(formRef.current);
     formData.set("allDay", String(allDay));
-    formData.set("isTraining", String(type === "activity" && isTraining));
+    const training = type === "activity" && isTraining;
+    formData.set("isTraining", String(training));
+    if (training) formData.set("allDay", "false"); // เช็คอิน/เช็คเอ้าท์ต้องมีเวลาเริ่ม-สิ้นสุดเสมอ
 
     startTransition(async () => {
       const action = existing ? updateOrgEvent.bind(null, existing.id) : createOrgEvent;
@@ -116,14 +120,16 @@ export function EventSheet({
             <input type="hidden" name="type" value={type} />
           </div>
 
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={allDay}
-              onChange={(e) => setAllDay(e.target.checked)}
-            />
-            ทั้งวัน
-          </label>
+          {!(type === "activity" && isTraining) && (
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={allDay}
+                onChange={(e) => setAllDay(e.target.checked)}
+              />
+              ทั้งวัน
+            </label>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -136,15 +142,15 @@ export function EventSheet({
             </div>
           </div>
 
-          {!allDay && (
+          {(!allDay || (type === "activity" && isTraining)) && (
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label>เวลาเริ่ม</Label>
-                <Input type="time" name="startTime" defaultValue={toTimeInput(existing?.start_at)} />
+                <Label>เวลาเริ่ม{type === "activity" && isTraining ? " (เปิดให้เช็คอินได้)" : ""}</Label>
+                <Input type="time" name="startTime" defaultValue={toTimeInput(existing?.start_at)} required={type === "activity" && isTraining} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>เวลาสิ้นสุด</Label>
-                <Input type="time" name="endTime" defaultValue={toTimeInput(existing?.end_at)} />
+                <Label>เวลาสิ้นสุด{type === "activity" && isTraining ? " (เปิดให้เช็คเอ้าท์ได้)" : ""}</Label>
+                <Input type="time" name="endTime" defaultValue={toTimeInput(existing?.end_at)} required={type === "activity" && isTraining} />
               </div>
             </div>
           )}
@@ -157,8 +163,20 @@ export function EventSheet({
               </div>
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={isTraining} onChange={(e) => setIsTraining(e.target.checked)} />
-                เป็นการจัดอบรม (พนักงานเช็คอินจะถูกบันทึกลงประวัติการอบรมด้วย)
+                เป็นการจัดอบรม (พนักงานเช็คอิน/เช็คเอ้าท์จะถูกบันทึกลงประวัติการอบรมด้วย)
               </label>
+              {isTraining && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <Label>จัดโดย</Label>
+                    <Input name="organizer" defaultValue={existing?.organizer ?? ""} placeholder="เช่น ฝ่ายฝึกอบรม IRDP" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>วิทยากร</Label>
+                    <Input name="instructor" defaultValue={existing?.instructor ?? ""} placeholder="ชื่อวิทยากร" />
+                  </div>
+                </div>
+              )}
             </>
           )}
 

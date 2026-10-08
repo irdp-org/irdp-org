@@ -102,7 +102,7 @@ export default async function CheckinPage() {
   const windowEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const { data: upcomingEvents } = await supabase
     .from("calendar_events")
-    .select("id, title, start_at, location, is_training")
+    .select("id, title, start_at, end_at, location, is_training, organizer, instructor")
     .eq("type", "activity")
     .eq("scope", "org")
     .gte("start_at", windowStart)
@@ -111,17 +111,25 @@ export default async function CheckinPage() {
 
   const eventIds = (upcomingEvents ?? []).map((e) => e.id);
   const { data: myActivityCheckins } = eventIds.length
-    ? await supabase.from("activity_checkins").select("calendar_event_id").eq("employee_id", employee.id).in("calendar_event_id", eventIds)
+    ? await supabase
+        .from("activity_checkins")
+        .select("calendar_event_id, checked_in_at, checked_out_at")
+        .eq("employee_id", employee.id)
+        .in("calendar_event_id", eventIds)
     : { data: [] };
-  const checkedInEventIds = new Set((myActivityCheckins ?? []).map((c) => c.calendar_event_id));
+  const checkinByEventId = new Map((myActivityCheckins ?? []).map((c) => [c.calendar_event_id, c]));
 
   const upcomingActivities: UpcomingActivity[] = (upcomingEvents ?? []).map((e) => ({
     id: e.id,
     title: e.title,
     start_at: e.start_at,
+    end_at: e.end_at,
     location: e.location,
     is_training: e.is_training,
-    checkedIn: checkedInEventIds.has(e.id),
+    organizer: e.organizer,
+    instructor: e.instructor,
+    checkedInAt: checkinByEventId.get(e.id)?.checked_in_at ?? null,
+    checkedOutAt: checkinByEventId.get(e.id)?.checked_out_at ?? null,
   }));
 
   const dateDisplay = thaiDateDisplay(today);

@@ -81,7 +81,7 @@ export function ProfileForm({
   }
 
   function addTrainingHistory() {
-    setTrainingHistory((prev) => [...prev, { name: "", organizer: "", year: "", note: "" }]);
+    setTrainingHistory((prev) => [...prev, { name: "", organizer: "", year: "", note: "", instructor: "" }]);
   }
   function updateTrainingHistory(index: number, patch: Partial<TrainingHistoryEntry>) {
     setTrainingHistory((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
@@ -280,6 +280,11 @@ export function ProfileForm({
                   onChange={(e) => updateTrainingHistory(i, { year: e.target.value })}
                 />
               </div>
+              <Input
+                placeholder="วิทยากร (ไม่บังคับ)"
+                value={entry.instructor ?? ""}
+                onChange={(e) => updateTrainingHistory(i, { instructor: e.target.value })}
+              />
               <Input
                 placeholder="หมายเหตุ (ไม่บังคับ)"
                 value={entry.note ?? ""}

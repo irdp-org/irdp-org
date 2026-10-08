@@ -38,6 +38,7 @@ const trainingHistoryEntrySchema = z.object({
   organizer: z.string().optional().default(""),
   year: z.string().min(1),
   note: z.string().optional(),
+  instructor: z.string().optional(),
 });
 
 const profileSchema = z.object({

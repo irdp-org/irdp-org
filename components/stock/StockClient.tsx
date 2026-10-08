@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
-import { createStockItem, purchaseStock, deductStock, returnStock, deleteStockItem } from "@/app/(app)/stock/actions";
+import { createStockItem, purchaseStock, deductStock, returnStock, deleteStockItem, deleteStockTransaction } from "@/app/(app)/stock/actions";
 import type { StockTxKindT } from "@/lib/database.types";
 
 export type StockTxRow = {
@@ -86,6 +86,7 @@ export function StockClient({
   const [historyMonth, setHistoryMonth] = useState(format(new Date(), "yyyy-MM"));
   const [historyYear, setHistoryYear] = useState(String(new Date().getFullYear()));
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmDeleteTxId, setConfirmDeleteTxId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -93,6 +94,14 @@ export function StockClient({
     startTransition(async () => {
       await deleteStockItem(itemId);
       setConfirmDeleteId(null);
+      router.refresh();
+    });
+  }
+
+  function handleDeleteTx(txId: string) {
+    startTransition(async () => {
+      await deleteStockTransaction(txId);
+      setConfirmDeleteTxId(null);
       router.refresh();
     });
   }
@@ -462,8 +471,30 @@ export function StockClient({
                             {t.delta > 0 ? "+" : ""}{t.delta.toLocaleString()} {historyTarget.unit ?? ""}
                           </span>
                         </span>
-                        <span className="text-xs text-muted-foreground">
-                          {format(new Date(t.created_at), "d MMM yyyy HH:mm", { locale: th })}
+                        <span className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(t.created_at), "d MMM yyyy HH:mm", { locale: th })}
+                          </span>
+                          {canDelete &&
+                            (confirmDeleteTxId === t.id ? (
+                              <span className="flex items-center gap-1 text-xs">
+                                <button type="button" onClick={() => handleDeleteTx(t.id)} disabled={isPending} className="font-medium text-danger">
+                                  ยืนยัน
+                                </button>
+                                <button type="button" onClick={() => setConfirmDeleteTxId(null)} className="text-muted-foreground">
+                                  ยกเลิก
+                                </button>
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteTxId(t.id)}
+                                className="text-muted-foreground hover:text-danger"
+                                aria-label="ลบรายการนี้"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            ))}
                         </span>
                       </div>
                       <span className="text-xs text-muted-foreground">

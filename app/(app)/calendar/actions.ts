@@ -22,8 +22,11 @@ function parseForm(formData: FormData) {
   const endTime = String(formData.get("endTime") ?? "10:00");
   const location = (String(formData.get("location") ?? "").trim() || null) as string | null;
   const isTraining = formData.get("isTraining") === "true";
+  const organizer = (String(formData.get("organizer") ?? "").trim() || null) as string | null;
+  const instructor = (String(formData.get("instructor") ?? "").trim() || null) as string | null;
 
   if (!title || !startDate) return { error: "กรอกชื่อกิจกรรมและวันที่ให้ครบ" } as const;
+  if (isTraining && (!startTime || !endTime)) return { error: "กิจกรรมที่เป็นการจัดอบรมต้องระบุเวลาเริ่ม-สิ้นสุด" } as const;
 
   const startAt = allDay
     ? fromZonedTime(`${startDate}T00:00:00`, TZ).toISOString()
@@ -32,7 +35,7 @@ function parseForm(formData: FormData) {
     ? fromZonedTime(`${endDate}T23:59:59`, TZ).toISOString()
     : fromZonedTime(`${endDate}T${endTime}:00`, TZ).toISOString();
 
-  return { ok: true, title, type, description, startAt, endAt, allDay, location, isTraining } as const;
+  return { ok: true, title, type, description, startAt, endAt, allDay, location, isTraining, organizer, instructor } as const;
 }
 
 export async function createOrgEvent(formData: FormData) {
@@ -55,6 +58,8 @@ export async function createOrgEvent(formData: FormData) {
       all_day: parsed.allDay,
       location: parsed.location,
       is_training: parsed.isTraining,
+      organizer: parsed.organizer,
+      instructor: parsed.instructor,
       owner_id: employee.id,
       source_module: "manual",
     })
@@ -106,6 +111,8 @@ export async function updateOrgEvent(id: string, formData: FormData) {
       all_day: parsed.allDay,
       location: parsed.location,
       is_training: parsed.isTraining,
+      organizer: parsed.organizer,
+      instructor: parsed.instructor,
     })
     .eq("id", id)
     .eq("scope", "org");

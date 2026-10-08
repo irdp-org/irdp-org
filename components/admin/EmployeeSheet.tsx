@@ -87,7 +87,7 @@ export function EmployeeSheet({
   }
 
   function addTrainingHistory() {
-    setTrainingHistory((prev) => [...prev, { name: "", organizer: "", year: "", note: "" }]);
+    setTrainingHistory((prev) => [...prev, { name: "", organizer: "", year: "", note: "", instructor: "" }]);
   }
   function updateTrainingHistory(index: number, patch: Partial<TrainingHistoryEntry>) {
     setTrainingHistory((prev) => prev.map((t, i) => (i === index ? { ...t, ...patch } : t)));
@@ -295,6 +295,7 @@ export function EmployeeSheet({
                   <Input placeholder="จัดโดย (ไม่บังคับ)" value={entry.organizer ?? ""} onChange={(e) => updateTrainingHistory(i, { organizer: e.target.value })} />
                   <Input placeholder="ปีที่อบรม" value={entry.year} onChange={(e) => updateTrainingHistory(i, { year: e.target.value })} />
                 </div>
+                <Input placeholder="วิทยากร (ไม่บังคับ)" value={entry.instructor ?? ""} onChange={(e) => updateTrainingHistory(i, { instructor: e.target.value })} />
                 <Input placeholder="หมายเหตุ (ไม่บังคับ)" value={entry.note ?? ""} onChange={(e) => updateTrainingHistory(i, { note: e.target.value })} />
               </div>
             ))}
