@@ -655,6 +655,14 @@ export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
   const { data: b } = await admin.from("van_bookings").select("*").eq("id", bookingId).single();
   if (!b) return { error: "ไม่พบการจอง" };
 
+  // Reuse the doc already generated for this booking (e.g. by the requester)
+  // instead of creating a new copy every time someone — including an
+  // approver just opening it — clicks "ออกเอกสาร".
+  if (b.generated_doc_url) {
+    await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองรถ ${dLabel(b.start_at)}`, b.generated_doc_url);
+    return { ok: true, url: b.generated_doc_url };
+  }
+
   const { data: pax } = await admin.from("van_passengers").select("employee_id").eq("booking_id", bookingId);
   const paxIds = (pax ?? []).map((p) => p.employee_id);
   const lookupIds = [...new Set([b.requester_id, ...(b.driver_id ? [b.driver_id] : []), ...paxIds])];
@@ -682,6 +690,7 @@ export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
     หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
   });
 
+  await admin.from("van_bookings").update({ generated_doc_url: url }).eq("id", bookingId);
   await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองรถ ${dLabel(b.start_at)}`, url);
   return { ok: true, url };
 }
@@ -695,6 +704,11 @@ export async function generateRoomDoc(bookingId: string, sendEmail: boolean) {
   const admin = createAdminClient();
   const { data: b } = await admin.from("room_bookings").select("*").eq("id", bookingId).single();
   if (!b) return { error: "ไม่พบการจอง" };
+
+  if (b.generated_doc_url) {
+    await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองห้องประชุม ${dLabel(b.start_at)}`, b.generated_doc_url);
+    return { ok: true, url: b.generated_doc_url };
+  }
 
   const { data: reqEmp } = await admin.from("employees").select("full_name, position").eq("id", b.requester_id).single();
   const { data: room } = await admin.from("rooms").select("name").eq("id", b.room_id).single();
@@ -713,6 +727,7 @@ export async function generateRoomDoc(bookingId: string, sendEmail: boolean) {
     หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
   });
 
+  await admin.from("room_bookings").update({ generated_doc_url: url }).eq("id", bookingId);
   await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองห้องประชุม ${dLabel(b.start_at)}`, url);
   return { ok: true, url };
 }

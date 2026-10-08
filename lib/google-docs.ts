@@ -36,9 +36,11 @@ export async function generateDocFromTemplate(
     await docsClient().documents.batchUpdate({ documentId: id, requestBody: { requests } });
   }
 
+  // Anyone with the link can edit — these are internal forms meant to be
+  // filled in/corrected by whoever created them, approvers, and admins.
   await drive.permissions.create({
     fileId: id,
-    requestBody: { role: "reader", type: "anyone" },
+    requestBody: { role: "writer", type: "anyone" },
     supportsAllDrives: true,
   });
 

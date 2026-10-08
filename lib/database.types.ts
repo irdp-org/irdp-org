@@ -339,6 +339,7 @@ export interface Database {
         has_tollway: boolean;
         has_fuel: boolean;
         other_expense: string | null;
+        generated_doc_url: string | null;
         created_at: string;
         updated_at: string;
       }>;
@@ -361,6 +362,7 @@ export interface Database {
         end_at: string;
         status: BookingStatusT;
         equipment: string[];
+        generated_doc_url: string | null;
         created_at: string;
         updated_at: string;
       }>;
@@ -583,6 +585,7 @@ export interface Database {
           decided_at: string | null;
           total_amount: number;
           attachment_urls: string[];
+          generated_doc_url: string | null;
           created_at: string;
           updated_at: string;
         },

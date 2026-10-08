@@ -208,10 +208,17 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   const supabase = await createClient();
   const { data: claim } = await supabase
     .from("travel_expense_claims")
-    .select("employee_id, title, total_amount, attachment_urls")
+    .select("employee_id, title, total_amount, attachment_urls, generated_doc_url")
     .eq("id", id)
     .single();
   if (!claim) return { error: "ไม่พบเอกสาร" };
+
+  // Reuse the doc already generated for this claim instead of creating a
+  // new copy every time someone (e.g. an approver) opens it.
+  if (claim.generated_doc_url) {
+    await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", claim.generated_doc_url);
+    return { ok: true, url: claim.generated_doc_url };
+  }
 
   const { data: items } = await supabase
     .from("travel_expense_items")
@@ -252,6 +259,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   const attachments = (claim.attachment_urls ?? []) as string[];
   if (attachments.length > 0) await appendImagesToDoc(docId, attachments);
 
+  await supabase.from("travel_expense_claims").update({ generated_doc_url: url }).eq("id", id);
   await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", url);
   return { ok: true, url };
 }
