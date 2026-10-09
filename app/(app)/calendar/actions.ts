@@ -68,7 +68,9 @@ export async function createOrgEvent(formData: FormData) {
 
   if (error || !row) return { error: error?.message ?? "บันทึกไม่สำเร็จ" };
 
-  const google = await createEvent({
+  // Manual org events (holiday/meeting/merit/activity/leave) all go to the
+  // one "other activities" calendar — they're not van/room/camera bookings.
+  const google = await createEvent("holiday", {
     title: parsed.title,
     description: parsed.description,
     startAt: parsed.startAt,
@@ -128,7 +130,7 @@ export async function updateOrgEvent(id: string, formData: FormData) {
   };
 
   if (existing?.google_event_id) {
-    const google = await updateEvent(existing.google_event_id, eventInput);
+    const google = await updateEvent("holiday", existing.google_event_id, eventInput);
     if (google) {
       await supabase
         .from("calendar_events")
@@ -136,7 +138,7 @@ export async function updateOrgEvent(id: string, formData: FormData) {
         .eq("id", id);
     }
   } else {
-    const google = await createEvent(eventInput);
+    const google = await createEvent("holiday", eventInput);
     if (google) {
       await supabase
         .from("calendar_events")
@@ -168,7 +170,7 @@ export async function deleteOrgEvent(id: string) {
   if (error) return { error: error.message };
 
   if (existing?.google_event_id) {
-    await deleteEvent(existing.google_event_id);
+    await deleteEvent("holiday", existing.google_event_id);
   }
 
   revalidatePath("/calendar");

@@ -12,8 +12,28 @@ function getClient() {
   return google.calendar({ version: "v3", auth: oauth2Client });
 }
 
-function calendarId() {
-  return process.env.GOOGLE_CALENDAR_ID!;
+/** One calendar per resource category, per org request (4 separate Google
+ * Calendar IDs: car/room/camera/holiday) instead of a single shared one. */
+export type CalendarKey = "van" | "room" | "camera" | "holiday";
+
+const CALENDAR_ENV_VAR: Record<CalendarKey, string> = {
+  van: "GOOGLE_CALENDAR_ID_VAN",
+  room: "GOOGLE_CALENDAR_ID_ROOM",
+  camera: "GOOGLE_CALENDAR_ID_CAMERA",
+  holiday: "GOOGLE_CALENDAR_ID_HOLIDAY",
+};
+
+/** Falls back to the legacy single GOOGLE_CALENDAR_ID if a specific one
+ * isn't set yet, so this doesn't break existing deployments mid-migration. */
+function calendarId(key: CalendarKey): string {
+  const specific = process.env[CALENDAR_ENV_VAR[key]];
+  const id = specific || process.env.GOOGLE_CALENDAR_ID;
+  if (!id) {
+    throw new Error(
+      `[google-calendar] missing ${CALENDAR_ENV_VAR[key]} (and no GOOGLE_CALENDAR_ID fallback) for calendar key "${key}"`
+    );
+  }
+  return id;
 }
 
 export type GoogleEventInput = {
@@ -48,42 +68,46 @@ function toGoogleEvent(input: GoogleEventInput): calendar_v3.Schema$Event {
  * pull cycle or a manual retry can reconcile later.
  */
 
-export async function createEvent(input: GoogleEventInput): Promise<{ id: string; etag: string } | null> {
+export async function createEvent(
+  key: CalendarKey,
+  input: GoogleEventInput
+): Promise<{ id: string; etag: string } | null> {
   try {
     const res = await getClient().events.insert({
-      calendarId: calendarId(),
+      calendarId: calendarId(key),
       requestBody: toGoogleEvent(input),
     });
     return res.data.id && res.data.etag ? { id: res.data.id, etag: res.data.etag } : null;
   } catch (err) {
-    console.error("[google-calendar] createEvent failed", err);
+    console.error(`[google-calendar] createEvent (${key}) failed`, err);
     return null;
   }
 }
 
 export async function updateEvent(
+  key: CalendarKey,
   googleEventId: string,
   input: GoogleEventInput
 ): Promise<{ etag: string } | null> {
   try {
     const res = await getClient().events.update({
-      calendarId: calendarId(),
+      calendarId: calendarId(key),
       eventId: googleEventId,
       requestBody: toGoogleEvent(input),
     });
     return res.data.etag ? { etag: res.data.etag } : null;
   } catch (err) {
-    console.error("[google-calendar] updateEvent failed", err);
+    console.error(`[google-calendar] updateEvent (${key}) failed`, err);
     return null;
   }
 }
 
-export async function deleteEvent(googleEventId: string): Promise<boolean> {
+export async function deleteEvent(key: CalendarKey, googleEventId: string): Promise<boolean> {
   try {
-    await getClient().events.delete({ calendarId: calendarId(), eventId: googleEventId });
+    await getClient().events.delete({ calendarId: calendarId(key), eventId: googleEventId });
     return true;
   } catch (err) {
-    console.error("[google-calendar] deleteEvent failed", err);
+    console.error(`[google-calendar] deleteEvent (${key}) failed`, err);
     return false;
   }
 }
@@ -91,10 +115,13 @@ export async function deleteEvent(googleEventId: string): Promise<boolean> {
 /** Simple time-window pull (events.list with updatedMin), not a stored
  * syncToken — agreed-simple approach per the Phase 1 plan. showDeleted
  * surfaces cancellations so the caller can remove its local copy too. */
-export async function listEventsUpdatedSince(sinceISO: string): Promise<calendar_v3.Schema$Event[]> {
+export async function listEventsUpdatedSince(
+  key: CalendarKey,
+  sinceISO: string
+): Promise<calendar_v3.Schema$Event[]> {
   try {
     const res = await getClient().events.list({
-      calendarId: calendarId(),
+      calendarId: calendarId(key),
       updatedMin: sinceISO,
       showDeleted: true,
       singleEvents: true,
@@ -102,7 +129,7 @@ export async function listEventsUpdatedSince(sinceISO: string): Promise<calendar
     });
     return res.data.items ?? [];
   } catch (err) {
-    console.error("[google-calendar] listEventsUpdatedSince failed", err);
+    console.error(`[google-calendar] listEventsUpdatedSince (${key}) failed`, err);
     return [];
   }
 }

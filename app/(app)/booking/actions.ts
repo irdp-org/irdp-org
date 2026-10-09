@@ -60,10 +60,10 @@ async function pushVanToGoogle(bookingId: string, destination: string | null, pu
 
   const title = `จองรถ: ${destination ?? "ไม่ระบุปลายทาง"}`;
   if (ce.google_event_id) {
-    const r = await updateEvent(ce.google_event_id, { title, description: purpose, startAt, endAt, allDay: false });
+    const r = await updateEvent("van", ce.google_event_id, { title, description: purpose, startAt, endAt, allDay: false });
     if (r?.etag) await admin.from("calendar_events").update({ google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
   } else {
-    const r = await createEvent({ title, description: purpose, startAt, endAt, allDay: false });
+    const r = await createEvent("van", { title, description: purpose, startAt, endAt, allDay: false });
     if (r?.id) await admin.from("calendar_events").update({ google_event_id: r.id, google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
   }
 }
@@ -76,7 +76,7 @@ async function deleteVanFromGoogle(bookingId: string) {
     .eq("source_module", "van")
     .eq("source_id", bookingId)
     .maybeSingle();
-  if (ce?.google_event_id) await deleteEvent(ce.google_event_id);
+  if (ce?.google_event_id) await deleteEvent("van", ce.google_event_id);
   // DB trigger (0007) deletes the calendar_events row automatically after the van_bookings update
 }
 
@@ -92,10 +92,10 @@ async function pushRoomToGoogle(bookingId: string, roomName: string | null, titl
 
   const evTitle = `จองห้อง${roomName ? " " + roomName : ""}: ${title ?? "ไม่ระบุหัวข้อ"}`;
   if (ce.google_event_id) {
-    const r = await updateEvent(ce.google_event_id, { title: evTitle, startAt, endAt, allDay: false });
+    const r = await updateEvent("room", ce.google_event_id, { title: evTitle, startAt, endAt, allDay: false });
     if (r?.etag) await admin.from("calendar_events").update({ google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
   } else {
-    const r = await createEvent({ title: evTitle, startAt, endAt, allDay: false });
+    const r = await createEvent("room", { title: evTitle, startAt, endAt, allDay: false });
     if (r?.id) await admin.from("calendar_events").update({ google_event_id: r.id, google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
   }
 }
@@ -108,7 +108,7 @@ async function deleteRoomFromGoogle(bookingId: string) {
     .eq("source_module", "room")
     .eq("source_id", bookingId)
     .maybeSingle();
-  if (ce?.google_event_id) await deleteEvent(ce.google_event_id);
+  if (ce?.google_event_id) await deleteEvent("room", ce.google_event_id);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -417,10 +417,10 @@ async function pushCameraToGoogle(bookingId: string, purpose: string | null, sta
 
   const title = `จองกล้อง: ${purpose ?? "ไม่ระบุงาน"}`;
   if (ce.google_event_id) {
-    const r = await updateEvent(ce.google_event_id, { title, startAt, endAt, allDay: false });
+    const r = await updateEvent("camera", ce.google_event_id, { title, startAt, endAt, allDay: false });
     if (r?.etag) await admin.from("calendar_events").update({ google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
   } else {
-    const r = await createEvent({ title, startAt, endAt, allDay: false });
+    const r = await createEvent("camera", { title, startAt, endAt, allDay: false });
     if (r?.id) await admin.from("calendar_events").update({ google_event_id: r.id, google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
   }
 }
@@ -433,7 +433,7 @@ async function deleteCameraFromGoogle(bookingId: string) {
     .eq("source_module", "camera")
     .eq("source_id", bookingId)
     .maybeSingle();
-  if (ce?.google_event_id) await deleteEvent(ce.google_event_id);
+  if (ce?.google_event_id) await deleteEvent("camera", ce.google_event_id);
 }
 
 async function getCameraConflict(startAt: string, endAt: string, excludeId?: string) {

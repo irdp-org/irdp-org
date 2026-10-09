@@ -95,7 +95,9 @@ export async function decideLeaveRequest(id: string, action: ApprovalAction, not
         .single();
 
       if (calRow) {
-        const google = await createEvent({
+        // Leave isn't van/room/camera — goes on the same "other activities"
+        // calendar as holidays/meetings.
+        const google = await createEvent("holiday", {
           title: `ลา: ${requester.full_name}`,
           startAt: row.start_at,
           endAt: row.end_at,
@@ -192,7 +194,7 @@ export async function adminCancelApprovedLeave(id: string, reason: string) {
   if (calRow) {
     await admin.from("calendar_events").delete().eq("id", calRow.id);
     if (calRow.google_event_id) {
-      await deleteEvent(calRow.google_event_id);
+      await deleteEvent("holiday", calRow.google_event_id);
     }
   }
 
@@ -223,7 +225,7 @@ export async function adminDeleteLeaveRequest(id: string) {
 
   if (calRow) {
     await admin.from("calendar_events").delete().eq("id", calRow.id);
-    if (calRow.google_event_id) await deleteEvent(calRow.google_event_id);
+    if (calRow.google_event_id) await deleteEvent("holiday", calRow.google_event_id);
   }
 
   // Delete related approvals and the request itself
