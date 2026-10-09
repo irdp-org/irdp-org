@@ -103,8 +103,8 @@ export async function createDocumentNumber(formData: FormData) {
   });
   if (seqErr || seq == null) return { error: seqErr?.message ?? "ออกเลขไม่สำเร็จ" };
   const docNo = categoryCode
-    ? `${categoryCode}/${yearBe}/${String(seq).padStart(4, "0")}`
-    : `${deptName}/${yearBe}/${String(seq).padStart(3, "0")}`;
+    ? `${yearBe}/${categoryCode}/${String(seq).padStart(4, "0")}`
+    : `${yearBe}/${deptName}/${String(seq).padStart(3, "0")}`;
 
   let attachmentDriveId: string | null = null;
   let attachmentUrl: string | null = null;
