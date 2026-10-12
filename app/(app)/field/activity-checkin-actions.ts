@@ -24,9 +24,9 @@ export async function checkInActivity(calendarEventId: string, locationText: str
     .single();
   if (!event || event.scope !== "org") return { error: "ไม่พบกิจกรรม" };
 
-  const now0 = new Date();
-  if (now0 < new Date(event.start_at)) return { error: "ยังไม่ถึงเวลาเริ่มกิจกรรม เช็คอินไม่ได้" };
-  if (event.end_at && now0 > new Date(event.end_at)) return { error: "กิจกรรมนี้สิ้นสุดไปแล้ว เช็คอินไม่ได้" };
+  // Check-in retroactively is allowed (e.g. forgot to tap in during the
+  // event) — only block checking in before the event has even started.
+  if (new Date() < new Date(event.start_at)) return { error: "ยังไม่ถึงเวลาเริ่มกิจกรรม เช็คอินไม่ได้" };
 
   const location = locationText.trim() || event.location || null;
 
@@ -110,10 +110,11 @@ export async function checkOutActivity(calendarEventId: string) {
     };
     const { data: emp } = await supabase.from("employees").select("training_history").eq("id", employee.id).single();
     const current = (emp?.training_history ?? []) as TrainingHistoryEntry[];
-    await supabase
+    const { error: thError } = await supabase
       .from("employees")
       .update({ training_history: [...current, entry] })
       .eq("id", employee.id);
+    if (thError) console.error("[activity-checkin] training_history update failed", thError);
   }
 
   revalidatePath("/checkin");
