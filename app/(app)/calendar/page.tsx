@@ -24,7 +24,9 @@ export default async function CalendarPage({
   // RLS already scopes visibility correctly per role (org / own dept / own / oversight).
   const { data: events } = await supabase
     .from("calendar_events")
-    .select("id, title, description, type, scope, start_at, end_at, all_day, location, is_training")
+    .select(
+      "id, title, description, type, scope, start_at, end_at, all_day, location, is_training, organizer, instructor, source_module, source_id"
+    )
     .lte("start_at", rangeEnd)
     .or(`end_at.gte.${rangeStart},end_at.is.null`)
     .order("start_at", { ascending: true });

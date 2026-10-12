@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   startOfMonth,
   endOfMonth,
@@ -14,11 +15,18 @@ import {
   addMonths,
   subMonths,
 } from "date-fns";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import type { Database } from "@/lib/database.types";
+import { EventSheet, type ExistingOrgEvent } from "./EventSheet";
+import {
+  adminDeleteVanBooking,
+  adminDeleteRoomBooking,
+  adminDeleteCameraBooking,
+} from "@/app/(app)/booking/actions";
+import { deleteOrgEvent } from "@/app/(app)/calendar/actions";
 
 export type CalendarEventRow = {
   id: string;
@@ -31,6 +39,17 @@ export type CalendarEventRow = {
   all_day: boolean;
   location: string | null;
   is_training: boolean;
+  organizer: string | null;
+  instructor: string | null;
+  source_module: string | null;
+  source_id: string | null;
+};
+
+const MANUAL_EVENT_TYPES = new Set<CalendarEventRow["type"]>(["holiday", "merit", "meeting", "activity"]);
+const BOOKING_SOURCE_TAB: Record<string, "van" | "room" | "camera"> = {
+  van: "van",
+  room: "room",
+  camera: "camera",
 };
 
 const TYPE_DOT: Record<CalendarEventRow["type"], string> = {
@@ -57,8 +76,35 @@ function ymKey(d: Date) {
   return format(d, "yyyy-MM");
 }
 
-export function MonthView({ month, events }: { month: Date; events: CalendarEventRow[] }) {
+export function MonthView({
+  month,
+  events,
+  canManage,
+}: {
+  month: Date;
+  events: CalendarEventRow[];
+  canManage: boolean;
+}) {
+  const router = useRouter();
   const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [editingEvent, setEditingEvent] = useState<CalendarEventRow | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleDelete(ev: CalendarEventRow) {
+    startTransition(async () => {
+      const bookingTab = ev.source_module ? BOOKING_SOURCE_TAB[ev.source_module] : undefined;
+      if (bookingTab && ev.source_id) {
+        const action =
+          bookingTab === "van" ? adminDeleteVanBooking : bookingTab === "room" ? adminDeleteRoomBooking : adminDeleteCameraBooking;
+        await action(ev.source_id);
+      } else {
+        await deleteOrgEvent(ev.id);
+      }
+      setConfirmDeleteId(null);
+      router.refresh();
+    });
+  }
 
   const gridStart = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
   const gridEnd = endOfWeek(endOfMonth(month), { weekStartsOn: 1 });
@@ -137,27 +183,96 @@ export function MonthView({ month, events }: { month: Date; events: CalendarEven
             {selectedEvents.length === 0 ? (
               <p className="py-4 text-center text-sm text-muted-foreground">ไม่มีกิจกรรมในวันนี้</p>
             ) : (
-              selectedEvents.map((ev) => (
-                <div key={ev.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-3 text-sm">
-                  <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", TYPE_DOT[ev.type])} />
-                  <div className="flex flex-col gap-0.5 min-w-0">
-                    <p className="font-semibold text-foreground">{ev.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {TYPE_LABEL_TH[ev.type]}
-                      {ev.all_day
-                        ? " · ทั้งวัน"
-                        : ` · ${format(new Date(ev.start_at), "HH:mm")}${ev.end_at ? `–${format(new Date(ev.end_at), "HH:mm")}` : ""}`}
-                    </p>
-                    {ev.description && (
-                      <p className="text-xs text-foreground/70 mt-0.5">{ev.description}</p>
-                    )}
+              selectedEvents.map((ev) => {
+                const bookingTab = ev.source_module ? BOOKING_SOURCE_TAB[ev.source_module] : undefined;
+                const isManual = MANUAL_EVENT_TYPES.has(ev.type) && !bookingTab;
+                return (
+                  <div key={ev.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-3 text-sm">
+                    <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", TYPE_DOT[ev.type])} />
+                    <div className="flex flex-1 flex-col gap-0.5 min-w-0">
+                      <p className="font-semibold text-foreground">{ev.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {TYPE_LABEL_TH[ev.type]}
+                        {ev.all_day
+                          ? " · ทั้งวัน"
+                          : ` · ${format(new Date(ev.start_at), "HH:mm")}${ev.end_at ? `–${format(new Date(ev.end_at), "HH:mm")}` : ""}`}
+                      </p>
+                      {ev.description && (
+                        <p className="text-xs text-foreground/70 mt-0.5">{ev.description}</p>
+                      )}
+                      {canManage && (bookingTab || isManual) && (
+                        <div className="mt-2 flex items-center gap-2">
+                          {isManual ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="gap-1 text-xs"
+                              onClick={() => setEditingEvent(ev)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" /> แก้ไข
+                            </Button>
+                          ) : (
+                            bookingTab && (
+                              <Button asChild type="button" variant="outline" size="sm" className="gap-1 text-xs">
+                                <Link href={`/booking?tab=${bookingTab}`}>
+                                  <Pencil className="h-3.5 w-3.5" /> ไปแก้ไขที่หน้าจอง
+                                </Link>
+                              </Button>
+                            )
+                          )}
+                          {confirmDeleteId === ev.id ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                size="sm"
+                                className="text-xs"
+                                disabled={isPending}
+                                onClick={() => handleDelete(ev)}
+                              >
+                                ยืนยันลบ
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs"
+                                disabled={isPending}
+                                onClick={() => setConfirmDeleteId(null)}
+                              >
+                                ยกเลิก
+                              </Button>
+                            </>
+                          ) : (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="gap-1 text-xs text-danger"
+                              onClick={() => setConfirmDeleteId(ev.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" /> ลบ
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </DialogContent>
       </Dialog>
+
+      {canManage && (
+        <EventSheet
+          open={!!editingEvent}
+          onOpenChange={(open) => !open && setEditingEvent(null)}
+          existing={editingEvent as ExistingOrgEvent | null}
+        />
+      )}
     </div>
   );
 }
