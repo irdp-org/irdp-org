@@ -77,7 +77,10 @@ async function deleteVanFromGoogle(bookingId: string) {
     .eq("source_id", bookingId)
     .maybeSingle();
   if (ce?.google_event_id) await deleteEvent("van", ce.google_event_id);
-  // DB trigger (0007) deletes the calendar_events row automatically after the van_bookings update
+  // The 0007 trigger deletes calendar_events on a status→cancelled UPDATE, but
+  // not on a hard DELETE (adminDeleteVanBooking) — the trigger never fires for
+  // that, so clean it up explicitly here too (harmless no-op on the cancel path).
+  await admin.from("calendar_events").delete().eq("source_module", "van").eq("source_id", bookingId);
 }
 
 async function pushRoomToGoogle(bookingId: string, roomName: string | null, title: string | null, startAt: string, endAt: string) {
@@ -109,6 +112,8 @@ async function deleteRoomFromGoogle(bookingId: string) {
     .eq("source_id", bookingId)
     .maybeSingle();
   if (ce?.google_event_id) await deleteEvent("room", ce.google_event_id);
+  // See deleteVanFromGoogle — the 0007 trigger only fires on UPDATE, not DELETE.
+  await admin.from("calendar_events").delete().eq("source_module", "room").eq("source_id", bookingId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -434,6 +439,7 @@ async function deleteCameraFromGoogle(bookingId: string) {
     .eq("source_id", bookingId)
     .maybeSingle();
   if (ce?.google_event_id) await deleteEvent("camera", ce.google_event_id);
+  await admin.from("calendar_events").delete().eq("source_module", "camera").eq("source_id", bookingId);
 }
 
 async function getCameraConflict(startAt: string, endAt: string, excludeId?: string) {
