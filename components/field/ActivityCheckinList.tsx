@@ -6,9 +6,14 @@ import { format } from "date-fns";
 import { th } from "date-fns/locale";
 import { CalendarCheck, MapPin, CheckCircle2, GraduationCap, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { checkInActivity, checkOutActivity } from "@/app/(app)/field/activity-checkin-actions";
+
+const LOCATION_OPTIONS = [
+  "ออนไลน์ (Zoom Meeting)",
+  "onsite ที่สำนักงานใหญ่ มูลนิธิสถาบันวิจัยและพัฒนาองค์กรภาครัฐ (IRDP)",
+];
 
 export type UpcomingActivity = {
   id: string;
@@ -146,11 +151,27 @@ export function ActivityCheckinList({ activities }: { activities: UpcomingActivi
                 <label className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                   <MapPin className="h-3.5 w-3.5" /> สถานที่
                 </label>
-                <Input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="สถานที่จัดกิจกรรม" />
+                <div className="flex flex-col gap-2">
+                  {LOCATION_OPTIONS.map((opt) => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setLocation(opt)}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        location === opt
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-background hover:bg-muted"
+                      )}
+                    >
+                      {opt}
+                    </button>
+                  ))}
+                </div>
               </div>
               {error && <p className="text-xs text-danger">{error}</p>}
               <DialogFooter>
-                <Button type="button" disabled={isPending} onClick={submitCheckIn}>
+                <Button type="button" disabled={isPending || !location} onClick={submitCheckIn}>
                   {isPending ? "กำลังเช็คอิน..." : "ยืนยันเช็คอิน"}
                 </Button>
               </DialogFooter>
