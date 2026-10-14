@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
       // any real photo attached to the leave-cert upload (HEIC from an
       // iPhone camera is routinely several MB). Match the leave-certs
       // bucket's actual file_size_limit (10MB, see 0002_storage.sql).
-      bodySizeLimit: "10mb",
+      bodySizeLimit: "20mb",
     },
   },
 };

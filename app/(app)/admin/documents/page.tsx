@@ -22,7 +22,8 @@ export type OrgDoc = {
   title: string;
   description: string | null;
   category: string;
-  storage_path: string;
+  google_file_id: string | null;
+  google_view_url: string | null;
   file_size_bytes: number | null;
   sort_order: number;
 };
@@ -34,7 +35,7 @@ export default async function AdminDocumentsPage() {
   const supabase = await createClient();
   const { data: docs } = await supabase
     .from("org_documents")
-    .select("id, title, description, category, storage_path, file_size_bytes, sort_order")
+    .select("id, title, description, category, google_file_id, google_view_url, file_size_bytes, sort_order")
     .order("category")
     .order("sort_order")
     .order("title");

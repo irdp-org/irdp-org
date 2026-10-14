@@ -50,9 +50,9 @@ export function OrgDocumentsClient({
     });
   }
 
-  function handleDelete(id: string, storagePath: string) {
+  function handleDelete(id: string, googleFileId: string | null) {
     startTransition(async () => {
-      await deleteOrgDocument(id, storagePath);
+      await deleteOrgDocument(id, googleFileId);
       setConfirmId(null);
       router.refresh();
     });
@@ -131,7 +131,7 @@ export function OrgDocumentsClient({
                 </div>
                 {confirmId === doc.id ? (
                   <div className="flex items-center gap-2 shrink-0">
-                    <button onClick={() => handleDelete(doc.id, doc.storage_path)}
+                    <button onClick={() => handleDelete(doc.id, doc.google_file_id)}
                       disabled={isPending}
                       className="text-xs font-medium text-danger">ยืนยัน</button>
                     <button onClick={() => setConfirmId(null)}

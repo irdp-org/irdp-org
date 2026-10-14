@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const DEFAULT_SIGNED_URL_TTL = 60 * 60; // 1 hour
 
-/** Private buckets (leave-certs, checkin-photos, asset-docs, org-docs) —
+/** Private buckets (leave-certs, checkin-photos, asset-docs) —
  * served via signed URL from server. Never expose raw storage URLs to clients. */
 export async function getSignedUrl(
   bucket: string,
@@ -41,8 +41,4 @@ export async function getSignedCheckinPhotoUrl(path: string | null): Promise<str
 
 export async function getSignedAssetDocUrl(path: string | null, ttl = DEFAULT_SIGNED_URL_TTL): Promise<string | null> {
   return getSignedUrl("asset-docs", path, ttl);
-}
-
-export async function getSignedOrgDocUrl(path: string | null, ttl = 60 * 60 * 24): Promise<string | null> {
-  return getSignedUrl("org-docs", path, ttl);
 }

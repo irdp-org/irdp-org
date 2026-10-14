@@ -689,7 +689,9 @@ export interface Database {
         title: string;
         description: string | null;
         category: string;
-        storage_path: string;
+        storage_path: string | null;
+        google_file_id: string | null;
+        google_view_url: string | null;
         file_size_bytes: number | null;
         sort_order: number;
         uploaded_by: string | null;

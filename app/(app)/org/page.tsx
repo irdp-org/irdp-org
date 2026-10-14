@@ -3,7 +3,6 @@ import Image from "next/image";
 import { MapPin, Phone, Mail, Globe, FileText, ExternalLink, CreditCard } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
-import { getSignedOrgDocUrl } from "@/lib/storage";
 import { PageHeader } from "@/components/shell/PageHeader";
 import Link from "next/link";
 
@@ -33,21 +32,16 @@ export default async function OrgPage() {
   const supabase = await createClient();
   const { data: docs } = await supabase
     .from("org_documents")
-    .select("id, title, description, category, storage_path, file_size_bytes, sort_order")
+    .select("id, title, description, category, google_view_url, file_size_bytes, sort_order")
     .order("category")
     .order("sort_order")
     .order("title");
 
-  // Generate signed URLs (24 h TTL) for all documents in parallel
-  const signedUrls = await Promise.all(
-    (docs ?? []).map((d) => getSignedOrgDocUrl(d.storage_path))
-  );
-  const docsWithUrls = (docs ?? []).map((d, i) => ({ ...d, signedUrl: signedUrls[i] }));
-
   // Group by category
-  const grouped = new Map<string, typeof docsWithUrls>();
+  type DocRow = NonNullable<typeof docs>[number];
+  const grouped = new Map<string, DocRow[]>();
   for (const cat of CATEGORY_ORDER) grouped.set(cat, []);
-  for (const doc of docsWithUrls) {
+  for (const doc of docs ?? []) {
     const cat = doc.category ?? "other";
     if (!grouped.has(cat)) grouped.set(cat, []);
     grouped.get(cat)!.push(doc);
@@ -337,9 +331,9 @@ export default async function OrgPage() {
                   <ul className="divide-y divide-border">
                     {catDocs.map((doc) => (
                       <li key={doc.id}>
-                        {doc.signedUrl ? (
+                        {doc.google_view_url ? (
                           <a
-                            href={doc.signedUrl}
+                            href={doc.google_view_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-3 px-4 py-3 active:bg-surface"

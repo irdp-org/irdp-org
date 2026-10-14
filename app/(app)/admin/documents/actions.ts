@@ -1,10 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 import { canEdit } from "@/lib/rbac";
+import { getOrCreatePath, uploadToDrive, deleteFromDrive } from "@/lib/google-drive";
+
+const CATEGORY_LABELS: Record<string, string> = {
+  regulation: "ระเบียบ",
+  directive: "คำสั่ง",
+  announcement: "ประกาศ",
+  founding: "เอกสารจัดตั้ง",
+  tax: "ภาษี / เลขประจำตัว",
+  consultant: "ที่ปรึกษาไทย",
+  other: "อื่นๆ",
+};
 
 async function assertEditor() {
   const employee = await getCurrentEmployee();
@@ -23,21 +33,17 @@ export async function uploadOrgDocument(formData: FormData) {
     if (!file || file.size === 0) return { error: "กรุณาเลือกไฟล์" };
     if (!title) return { error: "กรุณากรอกชื่อเอกสาร" };
 
-    const supabase = await createClient();
-    const ext = file.name.split(".").pop() ?? "pdf";
-    const storagePath = `${category}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9ก-๙._-]/g, "_")}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("org-docs")
-      .upload(storagePath, file, { upsert: false });
-    if (uploadError) return { error: uploadError.message };
+    const folderId = await getOrCreatePath(["เอกสารองค์กร", CATEGORY_LABELS[category] ?? "อื่นๆ"]);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const uploaded = await uploadToDrive(buffer, file.name, file.type || "application/octet-stream", folderId);
 
     const admin = createAdminClient();
     const { error } = await admin.from("org_documents").insert({
       title,
       description,
       category,
-      storage_path: storagePath,
+      google_file_id: uploaded.id,
+      google_view_url: uploaded.webViewLink,
       file_size_bytes: file.size,
       uploaded_by: employee.id,
     });
@@ -46,17 +52,17 @@ export async function uploadOrgDocument(formData: FormData) {
     revalidatePath("/org");
     revalidatePath("/admin/documents");
     return {};
-  } catch {
-    return { error: "ไม่มีสิทธิ์" };
+  } catch (err) {
+    console.error("[org-documents] upload failed", err);
+    return { error: "อัปโหลดไม่สำเร็จ" };
   }
 }
 
-export async function deleteOrgDocument(id: string, storagePath: string) {
+export async function deleteOrgDocument(id: string, googleFileId: string | null) {
   try {
     await assertEditor();
-    const supabase = await createClient();
 
-    await supabase.storage.from("org-docs").remove([storagePath]);
+    if (googleFileId) await deleteFromDrive(googleFileId);
 
     const admin = createAdminClient();
     const { error } = await admin.from("org_documents").delete().eq("id", id);
