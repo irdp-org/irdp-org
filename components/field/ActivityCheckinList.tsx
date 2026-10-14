@@ -14,6 +14,7 @@ import {
   GraduationCap,
   User,
   Users,
+  Download,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -52,6 +53,22 @@ type RosterEntry = {
 // the server recomputes this itself against work_locations before trusting it.
 const HQ_COORDS = { lat: 13.7787884919528, lng: 100.543693900108 };
 const HQ_RADIUS_M = 200;
+
+function csvEscape(v: string | number | null | undefined): string {
+  const s = v == null ? "" : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = rows.map((r) => r.map(csvEscape).join(",")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function useGeo() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -160,6 +177,22 @@ export function ActivityCheckinList({
       }
       setRoster(res.roster);
     });
+  }
+
+  function exportRosterCsv() {
+    if (!rosterFor || !roster) return;
+    const rows = [
+      ["ชื่อ-นามสกุล", "เวลาเช็คอิน", "เวลาเช็คเอ้าท์", "รูปแบบ", "ระยะห่าง (ม.)", "อยู่ในรัศมี"],
+      ...roster.map((r) => [
+        r.employeeName,
+        format(new Date(r.checkedInAt), "dd/MM/yyyy HH:mm"),
+        r.checkedOutAt ? format(new Date(r.checkedOutAt), "dd/MM/yyyy HH:mm") : "",
+        r.location ?? "",
+        r.distanceM != null ? String(r.distanceM) : "",
+        r.withinRadius == null ? "" : r.withinRadius ? "ใช่" : "ไม่",
+      ]),
+    ];
+    downloadCsv(`ผู้ลงทะเบียน-${rosterFor.title}-${format(new Date(), "yyyyMMdd")}.csv`, rows);
   }
 
   const distance = geo.coords ? haversineDistanceMeters(geo.coords.lat, geo.coords.lng, HQ_COORDS.lat, HQ_COORDS.lng) : null;
@@ -338,6 +371,11 @@ export function ActivityCheckinList({
                   {roster && ` (${roster.length} คน)`}
                 </DialogTitle>
               </DialogHeader>
+              {roster && roster.length > 0 && (
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 self-start" onClick={exportRosterCsv}>
+                  <Download className="h-3.5 w-3.5" /> ดาวน์โหลด CSV
+                </Button>
+              )}
               <div className="flex flex-col gap-2">
                 {rosterLoading ? (
                   <p className="py-4 text-center text-sm text-muted-foreground">กำลังโหลด...</p>

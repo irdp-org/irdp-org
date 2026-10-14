@@ -1,4 +1,4 @@
-import { startOfMonth, endOfMonth, parse, isValid } from "date-fns";
+import { startOfMonth, endOfMonth, subMonths, addMonths, parse, isValid } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { canEdit } from "@/lib/rbac";
@@ -31,11 +31,30 @@ export default async function CalendarPage({
     .or(`end_at.gte.${rangeStart},end_at.is.null`)
     .order("start_at", { ascending: true });
 
+  // Activity history — not bound to the selected month, so "ประวัติกิจกรรม"
+  // shows what's coming up / recently happened regardless of which month the
+  // grid above is currently showing.
+  const activityWindowStart = startOfMonth(subMonths(new Date(), 3)).toISOString();
+  const activityWindowEnd = endOfMonth(addMonths(new Date(), 6)).toISOString();
+  const { data: activities } = await supabase
+    .from("calendar_events")
+    .select("id, title, description, start_at, end_at, all_day, location, is_training, organizer, instructor")
+    .eq("type", "activity")
+    .eq("scope", "org")
+    .gte("start_at", activityWindowStart)
+    .lte("start_at", activityWindowEnd)
+    .order("start_at", { ascending: true });
+
   return (
     <div>
       <PageHeader title="ปฏิทิน" description="ปฏิทินองค์กร วันลา และการจอง" />
       <div className="px-4 md:px-6">
-        <CalendarClient month={month} events={events ?? []} canManage={canEdit(employee.role)} />
+        <CalendarClient
+          month={month}
+          events={events ?? []}
+          activities={activities ?? []}
+          canManage={canEdit(employee.role)}
+        />
       </div>
     </div>
   );
