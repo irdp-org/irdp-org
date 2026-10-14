@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Plus, Pencil, Users, Search } from "lucide-react";
+import { Plus, Users, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { EmployeeSheet } from "./EmployeeSheet";
+import { EmployeeDetailDialog } from "./EmployeeDetailDialog";
 import { roleLabelTh } from "@/lib/rbac";
 import type { RoleT, EmployeeStatusT, EducationEntry, WorkHistoryEntry, TrainingHistoryEntry } from "@/lib/database.types";
 
@@ -53,6 +54,7 @@ export function EmployeeListClient({
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<EmployeeRow | null>(null);
+  const [detailEmployee, setDetailEmployee] = useState<EmployeeRow | null>(null);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | EmployeeStatusT>("all");
@@ -140,7 +142,11 @@ export function EmployeeListClient({
               key={emp.id}
               className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3"
             >
-              <div className="flex min-w-0 items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setDetailEmployee(emp)}
+                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              >
                 <Avatar className="h-9 w-9 shrink-0">
                   {emp.avatarUrl && <AvatarImage src={emp.avatarUrl} alt={emp.full_name} />}
                   <AvatarFallback className="text-xs">{initialsOf(emp.full_name)}</AvatarFallback>
@@ -153,22 +159,10 @@ export function EmployeeListClient({
                     {emp.position ? ` · ${emp.position}` : ""}
                   </span>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
+              </button>
+              <div className="flex shrink-0 items-center gap-2">
                 {emp.status === "inactive" && <Badge variant="outline">ปิดการใช้งาน</Badge>}
                 {emp.status === "pending" && <Badge variant="secondary">รอเชื่อมบัญชี</Badge>}
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  aria-label="แก้ไข"
-                  onClick={() => {
-                    setEditing(emp);
-                    setSheetOpen(true);
-                  }}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
               </div>
             </li>
           ))}
@@ -181,6 +175,20 @@ export function EmployeeListClient({
         onOpenChange={setSheetOpen}
         departments={departments}
         existing={editing}
+      />
+
+      <EmployeeDetailDialog
+        employee={detailEmployee}
+        departmentName={
+          detailEmployee?.department_id ? (departmentNameById.get(detailEmployee.department_id) ?? "—") : "—"
+        }
+        onOpenChange={(open) => !open && setDetailEmployee(null)}
+        onEdit={() => {
+          if (!detailEmployee) return;
+          setEditing(detailEmployee);
+          setDetailEmployee(null);
+          setSheetOpen(true);
+        }}
       />
     </div>
   );

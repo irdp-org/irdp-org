@@ -208,6 +208,23 @@ export async function updateEmployee(id: string, formData: FormData) {
 }
 
 /**
+ * Quick status toggle from the detail popup — never a hard delete (would
+ * orphan contracts/leave/bookings FK'd to this row), status flip is the
+ * established pattern here (see updateEmployee above).
+ */
+export async function setEmployeeStatus(id: string, status: "active" | "inactive") {
+  const employee = await getCurrentEmployee();
+  if (!employee || !canEdit(employee.role)) return { error: "unauthorized" };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("employees").update({ status }).eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin/employees");
+  return { ok: true };
+}
+
+/**
  * Force-recompute leave balances for a specific employee and year.
  * Needed when hire_date is edited — the DB trigger (migration 0014) handles
  * future edits automatically; this action provides a manual escape hatch for
