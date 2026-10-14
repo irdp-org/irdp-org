@@ -99,7 +99,13 @@ export default async function WorkLogPage({
     : { data: [] };
   const ackNameById = new Map((ackByPeople ?? []).map((p) => [p.id, p.full_name]));
 
-  const holidayByDate = new Map((holidayRows ?? []).map((h) => [h.start_at.slice(0, 10), h.title]));
+  // calendar_events.start_at is stored as a UTC instant (Bangkok midnight is
+  // 17:00 the previous day in UTC) — slicing the raw string would key every
+  // holiday to the wrong (previous) calendar day. Convert to the Bangkok
+  // local date instead.
+  const holidayByDate = new Map(
+    (holidayRows ?? []).map((h) => [new Date(h.start_at).toLocaleDateString("en-CA", { timeZone: "Asia/Bangkok" }), h.title])
+  );
   const ackByDate = new Map(
     (ackRows ?? []).map((a) => [
       a.log_date,
