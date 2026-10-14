@@ -37,6 +37,17 @@ export type DocNumberRow = {
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const ALL_TAB = "ทั้งหมด";
 
+// Two physical registers — a category belongs to "ภายนอก" if its label was
+// imported with that prefix (see the external-register migration script);
+// everything else is "ภายใน". Keeping this as a label check rather than a
+// new DB column since it's the same distinction the source spreadsheets
+// already encoded in their tab names.
+const BOOK_INTERNAL = "เล่มภายใน";
+const BOOK_EXTERNAL = "เล่มภายนอก";
+function bookOf(label: string): typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL {
+  return label.startsWith("ภายนอก") ? BOOK_EXTERNAL : BOOK_INTERNAL;
+}
+
 export function DocumentNumbersClient({
   rows,
   showDeptColumn,
@@ -55,10 +66,20 @@ export function DocumentNumbersClient({
   const [editing, setEditing] = useState<DocNumberRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [activeBook, setActiveBook] = useState<typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL>(BOOK_INTERNAL);
   const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [yearFilter, setYearFilter] = useState(ALL_TAB);
   const [search, setSearch] = useState("");
+
+  function rowBook(r: DocNumberRow) {
+    return r.category_label ? bookOf(r.category_label) : BOOK_INTERNAL;
+  }
+
+  function selectBook(book: typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL) {
+    setActiveBook(book);
+    setActiveTab(ALL_TAB);
+  }
 
   function handleDelete(id: string) {
     startTransition(async () => {
@@ -69,12 +90,15 @@ export function DocumentNumbersClient({
     });
   }
 
-  const tabs = [ALL_TAB, ...categoryLabels, ...([...new Set(rows.map((r) => r.category_label).filter(Boolean))] as string[]).filter((l) => !categoryLabels.includes(l))];
+  const allLabels = [...categoryLabels, ...([...new Set(rows.map((r) => r.category_label).filter(Boolean))] as string[]).filter((l) => !categoryLabels.includes(l))];
+  const tabs = [ALL_TAB, ...allLabels.filter((l) => bookOf(l) === activeBook)];
+  const booksPresent = new Set(rows.map(rowBook));
 
   const years = [...new Set(rows.map((r) => String(new Date(r.issued_date).getFullYear() + 543)))].sort((a, b) => Number(b) - Number(a));
 
   const searchLower = search.trim().toLowerCase();
   const visibleRows = rows
+    .filter((r) => rowBook(r) === activeBook)
     .filter((r) => activeTab === ALL_TAB || r.category_label === activeTab)
     .filter((r) => yearFilter === ALL_TAB || String(new Date(r.issued_date).getFullYear() + 543) === yearFilter)
     .filter(
@@ -196,6 +220,24 @@ export function DocumentNumbersClient({
         <Button type="button" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" /> ออกเลขเอกสาร
         </Button>
+      </div>
+
+      <div className="flex gap-2">
+        {[BOOK_INTERNAL, BOOK_EXTERNAL].map((book) => (
+          <button
+            key={book}
+            type="button"
+            onClick={() => selectBook(book as typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL)}
+            disabled={!booksPresent.has(book as typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL)}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+              activeBook === book
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border bg-background text-muted-foreground hover:bg-surface"
+            }`}
+          >
+            {book}
+          </button>
+        ))}
       </div>
 
       {tabs.length > 1 && (
