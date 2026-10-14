@@ -2,16 +2,29 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
+import { canEdit } from "@/lib/rbac";
+import { haversineDistanceMeters } from "@/lib/geo";
 import type { TrainingHistoryEntry } from "@/lib/database.types";
+
+export type ActivityCheckinMode = "online" | "onsite";
 
 /**
  * Employee checks in to an org calendar activity. Only allowed once the
  * event has actually started — recorded on activity_checkins, but the
  * work-log entry and training-history entry aren't written until check-out
  * (see checkOutActivity), since only then is the actual duration known.
+ *
+ * mode "onsite" verifies GPS against the HQ work_location (never trust a
+ * client-computed distance — recomputed here); mode "online" skips GPS
+ * entirely. Like offsite field check-ins, being outside the radius is
+ * recorded (within_radius) but doesn't block the check-in.
  */
-export async function checkInActivity(calendarEventId: string, locationText: string) {
+export async function checkInActivity(
+  calendarEventId: string,
+  params: { mode: ActivityCheckinMode; lat?: number; lng?: number }
+) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "unauthorized" };
 
@@ -28,12 +41,33 @@ export async function checkInActivity(calendarEventId: string, locationText: str
   // event) — only block checking in before the event has even started.
   if (new Date() < new Date(event.start_at)) return { error: "ยังไม่ถึงเวลาเริ่มกิจกรรม เช็คอินไม่ได้" };
 
-  const location = locationText.trim() || event.location || null;
+  let location: string | null;
+  let workLocationId: string | null = null;
+  let distanceM: number | null = null;
+  let withinRadius: boolean | null = null;
+
+  if (params.mode === "onsite") {
+    if (params.lat == null || params.lng == null) return { error: "กรุณาขอตำแหน่ง GPS ก่อน" };
+    const admin = createAdminClient();
+    const { data: hq } = await admin.from("work_locations").select("id, name, lat, lng, radius_m").eq("is_hq", true).maybeSingle();
+    if (!hq) return { error: "ยังไม่ได้ตั้งค่าสำนักงานใหญ่สำหรับเช็คอิน onsite" };
+    workLocationId = hq.id;
+    location = hq.name;
+    distanceM = haversineDistanceMeters(params.lat, params.lng, hq.lat, hq.lng);
+    withinRadius = distanceM <= hq.radius_m;
+  } else {
+    location = "ออนไลน์ (Zoom Meeting)";
+  }
 
   const { error: ciError } = await supabase.from("activity_checkins").insert({
     calendar_event_id: calendarEventId,
     employee_id: employee.id,
     location,
+    work_location_id: workLocationId,
+    lat: params.lat ?? null,
+    lng: params.lng ?? null,
+    distance_m: distanceM,
+    within_radius: withinRadius,
   });
   if (ciError) {
     if (ciError.code === "23505") return { error: "คุณเช็คอินกิจกรรมนี้ไปแล้ว" };
@@ -42,6 +76,40 @@ export async function checkInActivity(calendarEventId: string, locationText: str
 
   revalidatePath("/checkin");
   return { ok: true };
+}
+
+/**
+ * hr/admin-only roster of who's checked in to a given activity so far —
+ * the "back office" view requested alongside the self-service check-in.
+ */
+export async function getActivityCheckinRoster(calendarEventId: string) {
+  const employee = await getCurrentEmployee();
+  if (!employee || !canEdit(employee.role)) return { error: "unauthorized" } as const;
+
+  const admin = createAdminClient();
+  const { data: checkins, error } = await admin
+    .from("activity_checkins")
+    .select("employee_id, location, checked_in_at, checked_out_at, distance_m, within_radius")
+    .eq("calendar_event_id", calendarEventId)
+    .order("checked_in_at", { ascending: true });
+  if (error) return { error: error.message } as const;
+
+  const employeeIds = [...new Set((checkins ?? []).map((c) => c.employee_id))];
+  const { data: employees } = employeeIds.length
+    ? await admin.from("employees").select("id, full_name").in("id", employeeIds)
+    : { data: [] };
+  const nameById = new Map((employees ?? []).map((e) => [e.id, e.full_name]));
+
+  const roster = (checkins ?? []).map((c) => ({
+    employeeName: nameById.get(c.employee_id) ?? "—",
+    location: c.location,
+    checkedInAt: c.checked_in_at,
+    checkedOutAt: c.checked_out_at,
+    distanceM: c.distance_m,
+    withinRadius: c.within_radius,
+  }));
+
+  return { ok: true, roster } as const;
 }
 
 /**

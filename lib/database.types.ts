@@ -280,6 +280,7 @@ export interface Database {
         radius_m: number;
         required_photos: number;
         active: boolean;
+        is_hq: boolean;
         created_at: string;
       }>;
       field_requests: TableShape<{
@@ -407,6 +408,11 @@ export interface Database {
           calendar_event_id: string;
           employee_id: string;
           location: string | null;
+          work_location_id: string | null;
+          lat: number | null;
+          lng: number | null;
+          distance_m: number | null;
+          within_radius: boolean | null;
           checked_in_at: string;
           checked_out_at: string | null;
           created_at: string;
@@ -416,6 +422,11 @@ export interface Database {
           calendar_event_id: string;
           employee_id: string;
           location?: string | null;
+          work_location_id?: string | null;
+          lat?: number | null;
+          lng?: number | null;
+          distance_m?: number | null;
+          within_radius?: boolean | null;
           checked_out_at?: string | null;
           checked_in_at?: string;
         }

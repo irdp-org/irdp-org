@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { Clock, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
+import { canEdit } from "@/lib/rbac";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { CheckinPageClient } from "@/components/field/CheckinPageClient";
 import { ActivityCheckinList, type UpcomingActivity } from "@/components/field/ActivityCheckinList";
@@ -149,7 +150,7 @@ export default async function CheckinPage() {
           <p className="mt-1 text-sm text-muted-foreground">{dateDisplay}</p>
         </div>
 
-        <ActivityCheckinList activities={upcomingActivities} />
+        <ActivityCheckinList activities={upcomingActivities} canViewRoster={canEdit(employee.role)} />
 
         <CheckinPageClient requests={enriched} locations={locationOptions} />
 
