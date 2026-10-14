@@ -31,6 +31,8 @@ export type BookingStatusT = "booked" | "cancelled";
 export type CalTypeT = "holiday" | "meeting" | "merit" | "activity" | "leave" | "booking";
 export type CalScopeT = "org" | "dept" | "personal";
 export type StockTxKindT = "purchase" | "deduct" | "return" | "adjust";
+export type QmsDocTypeT = "manual" | "procedure" | "work_instruction" | "form";
+export type QmsDocStatusT = "active" | "superseded" | "obsolete";
 
 type TableShape<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
@@ -232,6 +234,47 @@ export interface Database {
           acknowledged_at?: string;
           updated_at?: string;
         }
+      >;
+      qms_documents: TableShape<
+        {
+          id: string;
+          doc_code: string;
+          title: string;
+          doc_type: QmsDocTypeT;
+          department_id: string;
+          version: string;
+          status: QmsDocStatusT;
+          effective_date: string;
+          superseded_by: string | null;
+          google_file_id: string;
+          google_view_url: string;
+          file_size_bytes: number | null;
+          uploaded_by: string;
+          created_at: string;
+        },
+        {
+          id?: string;
+          doc_code: string;
+          title: string;
+          doc_type: QmsDocTypeT;
+          department_id: string;
+          version: string;
+          status?: QmsDocStatusT;
+          effective_date: string;
+          superseded_by?: string | null;
+          google_file_id: string;
+          google_view_url: string;
+          file_size_bytes?: number | null;
+          uploaded_by: string;
+        },
+        {
+          status?: QmsDocStatusT;
+          superseded_by?: string | null;
+        }
+      >;
+      qms_document_controllers: TableShape<
+        { employee_id: string; added_at: string },
+        { employee_id: string }
       >;
       document_numbers: TableShape<{
         id: string;
@@ -814,6 +857,8 @@ export interface Database {
       booking_status_t: BookingStatusT;
       cal_type_t: CalTypeT;
       cal_scope_t: CalScopeT;
+      qms_doc_type_t: QmsDocTypeT;
+      qms_doc_status_t: QmsDocStatusT;
     };
     CompositeTypes: Record<string, never>;
   };

@@ -21,6 +21,7 @@ import {
   Receipt,
   Inbox,
   Hash,
+  BadgeCheck,
   type LucideIcon,
 } from "lucide-react";
 import type { RoleT } from "@/lib/database.types";
@@ -69,6 +70,7 @@ export const NAV_ITEMS: NavItem[] = [
   // เอกสาร
   { href: "/documents", label: "ลงรับเอกสาร", icon: Inbox, group: "เอกสาร", documentAccess: true },
   { href: "/document-numbers", label: "ออกเลขเอกสาร", icon: Hash, group: "เอกสาร" },
+  { href: "/qms", label: "เอกสาร QMS", icon: BadgeCheck, group: "เอกสาร" },
 
   // ฝึกอบรม
   { href: "/training", label: "ระบบอบรม (TMS)", icon: GraduationCap, group: "ฝึกอบรม", trainingAccess: true },
