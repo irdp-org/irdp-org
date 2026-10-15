@@ -37,15 +37,21 @@ export type DocNumberRow = {
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const ALL_TAB = "ทั้งหมด";
 
-// Two physical registers — a category belongs to "ภายนอก" if its label was
-// imported with that prefix (see the external-register migration script);
-// everything else is "ภายใน". Keeping this as a label check rather than a
-// new DB column since it's the same distinction the source spreadsheets
-// already encoded in their tab names.
+// Each physical register ("เล่ม") is identified by a label prefix set when
+// its categories were imported (see the migration import scripts) — not a
+// new DB column, since it's the same distinction the source spreadsheets
+// already encoded in their own tab names.
 const BOOK_INTERNAL = "เล่มภายใน";
 const BOOK_EXTERNAL = "เล่มภายนอก";
-function bookOf(label: string): typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL {
-  return label.startsWith("ภายนอก") ? BOOK_EXTERNAL : BOOK_INTERNAL;
+const BOOK_SECRETARY = "เล่มส่วนรับเลขา";
+const BOOK_HR = "เล่มงานบุคคล";
+const ALL_BOOKS = [BOOK_INTERNAL, BOOK_EXTERNAL, BOOK_SECRETARY, BOOK_HR] as const;
+type Book = (typeof ALL_BOOKS)[number];
+function bookOf(label: string): Book {
+  if (label.startsWith("ภายนอก")) return BOOK_EXTERNAL;
+  if (label.startsWith("ส่วนรับเลขา")) return BOOK_SECRETARY;
+  if (label.startsWith("งานบุคคล")) return BOOK_HR;
+  return BOOK_INTERNAL;
 }
 
 export function DocumentNumbersClient({
@@ -66,7 +72,7 @@ export function DocumentNumbersClient({
   const [editing, setEditing] = useState<DocNumberRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [activeBook, setActiveBook] = useState<typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL>(BOOK_INTERNAL);
+  const [activeBook, setActiveBook] = useState<Book>(BOOK_INTERNAL);
   const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [yearFilter, setYearFilter] = useState(ALL_TAB);
@@ -76,7 +82,7 @@ export function DocumentNumbersClient({
     return r.category_label ? bookOf(r.category_label) : BOOK_INTERNAL;
   }
 
-  function selectBook(book: typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL) {
+  function selectBook(book: Book) {
     setActiveBook(book);
     setActiveTab(ALL_TAB);
   }
@@ -222,14 +228,14 @@ export function DocumentNumbersClient({
         </Button>
       </div>
 
-      <div className="flex gap-2">
-        {[BOOK_INTERNAL, BOOK_EXTERNAL].map((book) => (
+      <div className="flex flex-wrap gap-2">
+        {ALL_BOOKS.map((book) => (
           <button
             key={book}
             type="button"
-            onClick={() => selectBook(book as typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL)}
-            disabled={!booksPresent.has(book as typeof BOOK_INTERNAL | typeof BOOK_EXTERNAL)}
-            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            onClick={() => selectBook(book)}
+            disabled={!booksPresent.has(book)}
+            className={`flex-1 min-w-[45%] rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
               activeBook === book
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border bg-background text-muted-foreground hover:bg-surface"
