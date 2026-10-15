@@ -25,10 +25,11 @@ async function canReceive(deptId: string | null, role: string): Promise<boolean>
 // small instead of loading the whole combined document_numbers table like
 // before (that's what made switching between them feel slow).
 const INTAKE_TABS = [
-  { key: "camera", label: "ลงรับพัสดุ (ถ่ายรูป)", categoryLabel: null as string | null },
   { key: "warapat", label: "ส่วนรับเลขา ดร.วรภัทร", categoryLabel: "ส่วนรับเลขา ดร.วรภัทร" },
   { key: "seree", label: "ส่วนรับเลขา ดร.เสรี", categoryLabel: "ส่วนรับเลขา ดร.เสรี" },
   { key: "thurakarn", label: "รับเข้า ธุรการ", categoryLabel: "รับเข้า ธุรการ" },
+  // Least-used tab — kept last.
+  { key: "camera", label: "ลงรับพัสดุ (ถ่ายรูป)", categoryLabel: null as string | null },
 ] as const;
 
 async function loadCameraTab(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -102,7 +103,7 @@ export default async function DocumentsPage({
   if (!(await canReceive(employee.department_id, employee.role))) redirect("/");
 
   const { tab: tabParam } = await searchParams;
-  const activeTab = INTAKE_TABS.find((t) => t.key === tabParam) ?? INTAKE_TABS[0];
+  const activeTab = INTAKE_TABS.find((t) => t.key === tabParam) ?? INTAKE_TABS.find((t) => t.key === "warapat")!;
 
   const supabase = await createClient();
 

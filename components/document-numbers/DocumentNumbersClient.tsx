@@ -24,6 +24,7 @@ async function compressAttachment(formData: FormData) {
 
 export type DocNumberRow = {
   id: string;
+  seq: number;
   doc_no: string;
   title: string;
   recipient: string | null;
@@ -151,7 +152,10 @@ export function DocumentNumbersClient({
     {
       key: "doc_no",
       label: "เลขที่เอกสาร",
-      sortValue: (r) => r.doc_no,
+      // Sort by the running number itself, not the doc_no text — formats
+      // differ across registers (and even across years in the same one), so
+      // a plain string sort doesn't actually order rows newest-first.
+      sortValue: (r) => r.seq,
       render: (r) => <span className="whitespace-nowrap font-medium text-foreground">{r.doc_no}</span>,
     },
     {
@@ -261,7 +265,7 @@ export function DocumentNumbersClient({
                   : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
-              {tab}
+              {tab.replace(/^งานบุคคล - /, "")}
             </button>
           ))}
         </div>
@@ -295,7 +299,7 @@ export function DocumentNumbersClient({
           <EmptyState icon={Hash} title="ไม่พบรายการ" description="ลองเปลี่ยนตัวกรองหรือคำค้นหา" />
         )
       ) : (
-        <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} />
+        <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} defaultSort={{ key: "doc_no", dir: "desc" }} />
       )}
 
       {/* Create */}

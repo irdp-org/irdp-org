@@ -164,7 +164,7 @@ export function IntakeLogClient({
       {visibleRows.length === 0 ? (
         <EmptyState icon={FileText} title="ไม่พบรายการ" description="กดปุ่ม 'เพิ่มรายการ' เพื่อเริ่มลงรายการแรก" />
       ) : (
-        <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} />
+        <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} defaultSort={{ key: "seq", dir: "desc" }} />
       )}
 
       {/* Create */}

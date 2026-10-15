@@ -82,6 +82,15 @@ export async function createDocumentNumber(formData: FormData) {
   const recipientInput = String(formData.get("recipient") ?? "").trim();
   const categoryInput = String(formData.get("category") ?? "").trim();
 
+  // These registers moved to "ลงรับเอกสาร" (they're incoming logs with their
+  // own doc_no format per register) — block re-creating them here so a typed
+  // category name can't silently reuse the real category_id but fall through
+  // to this action's generic doc_no fallback, producing a malformed number.
+  const MOVED_TO_INTAKE = new Set(["ส่วนรับเลขา ดร.วรภัทร", "ส่วนรับเลขา ดร.เสรี", "รับเข้า ธุรการ"]);
+  if (MOVED_TO_INTAKE.has(categoryInput)) {
+    return { error: "ทะเบียนนี้ย้ายไปอยู่ในเมนู \"ลงรับเอกสาร\" แล้ว กรุณาไปออกเลขที่หน้านั้นแทน" };
+  }
+
   const supabase = await createClient();
   const admin = createAdminClient();
 

@@ -20,14 +20,17 @@ export function SortableTable<T>({
   rows,
   rowKey,
   onRowClick,
+  defaultSort,
 }: {
   columns: Column<T>[];
   rows: T[];
   rowKey: (row: T) => string;
   onRowClick?: (row: T) => void;
+  /** Sort applied on first render, before the user clicks any header. */
+  defaultSort?: { key: string; dir: "asc" | "desc" };
 }) {
-  const [sortKey, setSortKey] = useState<string | null>(null);
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortKey, setSortKey] = useState<string | null>(defaultSort?.key ?? null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(defaultSort?.dir ?? "asc");
 
   const sorted = useMemo(() => {
     if (!sortKey) return rows;

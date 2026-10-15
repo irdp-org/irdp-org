@@ -24,7 +24,7 @@ export default async function DocumentNumbersPage() {
     async function fetchPage(rangeFrom: number) {
       return supabase
         .from("document_numbers")
-        .select("id, department_id, category_id, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at")
+        .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at")
         // doc_no is text and its format changed over time (old rows: "year/code/seq",
         // current generator: "code/year/seq") — sorting by it lexicographically pushes
         // newly-issued numbers below legacy rows. created_at sorts correctly
@@ -68,6 +68,7 @@ export default async function DocumentNumbersPage() {
 
   const docRows: DocNumberRow[] = rowsForThisPage.map((r) => ({
     id: r.id,
+    seq: r.seq,
     doc_no: r.doc_no,
     title: r.title,
     recipient: r.recipient,
