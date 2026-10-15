@@ -33,8 +33,10 @@ export default async function CalendarPage({
 
   // Activity history — not bound to the selected month, so "ประวัติกิจกรรม"
   // shows what's coming up / recently happened regardless of which month the
-  // grid above is currently showing.
-  const activityWindowStart = startOfMonth(subMonths(new Date(), 3)).toISOString();
+  // grid above is currently showing. admin/hr get a much wider look-back so
+  // they can still find+edit/view-roster for older trainings.
+  const lookbackMonths = canEdit(employee.role) ? 24 : 3;
+  const activityWindowStart = startOfMonth(subMonths(new Date(), lookbackMonths)).toISOString();
   const activityWindowEnd = endOfMonth(addMonths(new Date(), 6)).toISOString();
   const { data: activities } = await supabase
     .from("calendar_events")

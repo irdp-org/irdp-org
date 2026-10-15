@@ -1,10 +1,8 @@
 import Link from "next/link";
-import { LogOut } from "lucide-react";
 import { Logo, WordmarkLogo } from "./Logo";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
+import { SignOutButton } from "./SignOutButton";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { signOutAction } from "@/lib/auth-actions";
 import { getSignedAvatarUrl } from "@/lib/storage";
 import type { Employee } from "@/lib/auth";
 
@@ -36,11 +34,7 @@ export async function TopBar({ employee }: { employee: Employee }) {
               <AvatarFallback>{initialsOf(employee.full_name)}</AvatarFallback>
             </Avatar>
           </Link>
-          <form action={signOutAction}>
-            <Button type="submit" variant="ghost" size="icon" aria-label="ออกจากระบบ">
-              <LogOut className="h-5 w-5" />
-            </Button>
-          </form>
+          <SignOutButton />
         </div>
       </div>
     </header>

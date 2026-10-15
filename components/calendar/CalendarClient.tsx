@@ -28,7 +28,7 @@ export function CalendarClient({
             <Plus className="h-4 w-4" /> เพิ่มกิจกรรมองค์กร
           </Button>
         )}
-        <ActivityHistoryList activities={activities} />
+        <ActivityHistoryList activities={activities} canManage={canManage} />
       </div>
       <MonthView month={month} events={events} canManage={canManage} />
       {canManage && <EventSheet open={sheetOpen} onOpenChange={setSheetOpen} />}
