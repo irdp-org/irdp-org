@@ -13,16 +13,37 @@ export default async function DocumentNumbersPage() {
   const supabase = await createClient();
 
   // RLS already scopes rows to the caller's department (or all, for oversight roles).
-  const [{ data: rows }, { data: categories }, { data: recipients }] = await Promise.all([
-    supabase
-      .from("document_numbers")
-      .select("id, department_id, category_id, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at")
-      // doc_no is text and its format changed over time (old rows: "year/code/seq",
-      // current generator: "code/year/seq") — sorting by it lexicographically pushes
-      // every newly-issued number below ~1000 legacy rows, past PostgREST's default
-      // row cap, so it never even reaches the browser. created_at sorts correctly
-      // regardless of doc_no format.
-      .order("created_at", { ascending: false }),
+  // PostgREST caps any single request at 1000 rows by default — well past
+  // that now (2,800+ rows after the secretary/HR imports), so a plain
+  // select silently dropped entire "books" worth of older rows past the
+  // cap instead of erroring. Page through with .range() to get everything.
+  async function fetchAllDocumentNumbers() {
+    const pageSize = 1000;
+    let from = 0;
+    const all: NonNullable<Awaited<ReturnType<typeof fetchPage>>["data"]> = [];
+    async function fetchPage(rangeFrom: number) {
+      return supabase
+        .from("document_numbers")
+        .select("id, department_id, category_id, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at")
+        // doc_no is text and its format changed over time (old rows: "year/code/seq",
+        // current generator: "code/year/seq") — sorting by it lexicographically pushes
+        // newly-issued numbers below legacy rows. created_at sorts correctly
+        // regardless of doc_no format.
+        .order("created_at", { ascending: false })
+        .range(rangeFrom, rangeFrom + pageSize - 1);
+    }
+    while (true) {
+      const { data } = await fetchPage(from);
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+    return all;
+  }
+
+  const [rows, { data: categories }, { data: recipients }] = await Promise.all([
+    fetchAllDocumentNumbers(),
     supabase.from("document_categories").select("id, department_id, label").order("sort_order"),
     supabase.from("document_recipients").select("name").order("name"),
   ]);
