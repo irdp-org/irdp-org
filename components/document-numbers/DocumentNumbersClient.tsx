@@ -43,13 +43,11 @@ const ALL_TAB = "ทั้งหมด";
 // already encoded in their own tab names.
 const BOOK_INTERNAL = "เล่มภายใน";
 const BOOK_EXTERNAL = "เล่มภายนอก";
-const BOOK_SECRETARY = "เล่มส่วนรับเลขา";
 const BOOK_HR = "เล่มงานบุคคล";
-const ALL_BOOKS = [BOOK_INTERNAL, BOOK_EXTERNAL, BOOK_SECRETARY, BOOK_HR] as const;
+const ALL_BOOKS = [BOOK_INTERNAL, BOOK_EXTERNAL, BOOK_HR] as const;
 type Book = (typeof ALL_BOOKS)[number];
 function bookOf(label: string): Book {
   if (label.startsWith("ภายนอก")) return BOOK_EXTERNAL;
-  if (label.startsWith("ส่วนรับเลขา")) return BOOK_SECRETARY;
   if (label.startsWith("งานบุคคล")) return BOOK_HR;
   return BOOK_INTERNAL;
 }

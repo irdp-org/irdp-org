@@ -48,19 +48,25 @@ export default async function DocumentNumbersPage() {
     supabase.from("document_recipients").select("name").order("name"),
   ]);
 
-  const deptIds = [...new Set((rows ?? []).map((r) => r.department_id))];
-  const issuerIds = [...new Set((rows ?? []).map((r) => r.issued_by))];
+  // These 3 categories moved to "ลงรับเอกสาร" — they're incoming logs (มี
+  // "จาก"), not outgoing-issued numbers, and don't belong in this book list.
+  const MOVED_TO_INTAKE = new Set(["ส่วนรับเลขา ดร.วรภัทร", "ส่วนรับเลขา ดร.เสรี", "รับเข้า ธุรการ"]);
+  const movedCategoryIds = new Set((categories ?? []).filter((c) => MOVED_TO_INTAKE.has(c.label)).map((c) => c.id));
+  const rowsForThisPage = rows.filter((r) => !r.category_id || !movedCategoryIds.has(r.category_id));
+
+  const deptIds = [...new Set(rowsForThisPage.map((r) => r.department_id))];
+  const issuerIdsForPage = [...new Set(rowsForThisPage.map((r) => r.issued_by))];
   const [{ data: depts }, { data: issuers }] = await Promise.all([
     deptIds.length ? supabase.from("departments").select("id, name").in("id", deptIds) : Promise.resolve({ data: [] }),
-    issuerIds.length
-      ? supabase.from("employee_directory").select("id, full_name").in("id", issuerIds)
+    issuerIdsForPage.length
+      ? supabase.from("employee_directory").select("id, full_name").in("id", issuerIdsForPage)
       : Promise.resolve({ data: [] }),
   ]);
   const deptNameById = new Map((depts ?? []).map((d) => [d.id, d.name]));
   const issuerNameById = new Map((issuers ?? []).map((p) => [p.id, p.full_name]));
   const categoryLabelById = new Map((categories ?? []).map((c) => [c.id, c.label]));
 
-  const docRows: DocNumberRow[] = (rows ?? []).map((r) => ({
+  const docRows: DocNumberRow[] = rowsForThisPage.map((r) => ({
     id: r.id,
     doc_no: r.doc_no,
     title: r.title,
@@ -72,7 +78,13 @@ export default async function DocumentNumbersPage() {
     attachment_url: r.attachment_url,
   }));
 
-  const categoryLabels = [...new Set((categories ?? []).filter((c) => c.department_id === employee.department_id).map((c) => c.label))];
+  const categoryLabels = [
+    ...new Set(
+      (categories ?? [])
+        .filter((c) => c.department_id === employee.department_id && !MOVED_TO_INTAKE.has(c.label))
+        .map((c) => c.label)
+    ),
+  ];
   const recipientNames = (recipients ?? []).map((r) => r.name);
 
   return (

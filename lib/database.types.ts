@@ -285,6 +285,8 @@ export interface Database {
         doc_no: string;
         title: string;
         recipient: string | null;
+        from_name: string | null;
+        ref_no: string | null;
         issued_date: string;
         issued_by: string;
         attachment_drive_id: string | null;
