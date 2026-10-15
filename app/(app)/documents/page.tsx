@@ -6,6 +6,7 @@ import { getCurrentEmployee } from "@/lib/auth";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { DocumentIntakeClient, type ReceivedDoc } from "@/components/documents/DocumentIntakeClient";
 import { IntakeLogClient, type IntakeLogRow } from "@/components/documents/IntakeLogClient";
+import { isAdmin } from "@/lib/rbac";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,7 @@ async function canReceive(deptId: string | null, role: string): Promise<boolean>
 // small instead of loading the whole combined document_numbers table like
 // before (that's what made switching between them feel slow).
 const INTAKE_TABS = [
-  { key: "camera", label: "เช็คอินเอกสาร (ถ่ายรูป)", categoryLabel: null as string | null },
+  { key: "camera", label: "ลงรับพัสดุ (ถ่ายรูป)", categoryLabel: null as string | null },
   { key: "warapat", label: "ส่วนรับเลขา ดร.วรภัทร", categoryLabel: "ส่วนรับเลขา ดร.วรภัทร" },
   { key: "seree", label: "ส่วนรับเลขา ดร.เสรี", categoryLabel: "ส่วนรับเลขา ดร.เสรี" },
   { key: "thurakarn", label: "รับเข้า ธุรการ", categoryLabel: "รับเข้า ธุรการ" },
@@ -85,6 +86,7 @@ async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient
     from_name: r.from_name,
     recipient: r.recipient,
     title: r.title,
+    handler_id: r.issued_by,
     handler_name: nameById.get(r.issued_by) ?? "—",
     attachment_url: r.attachment_url,
   })) as IntakeLogRow[];
@@ -106,6 +108,9 @@ export default async function DocumentsPage({
 
   const camera = activeTab.key === "camera" ? await loadCameraTab(supabase) : null;
   const logRows = activeTab.categoryLabel ? await loadIntakeLogTab(supabase, activeTab.categoryLabel) : null;
+  const { data: allEmployees } = logRows
+    ? await supabase.from("employee_directory").select("id, full_name").eq("status", "active").order("full_name")
+    : { data: null };
 
   return (
     <div>
@@ -129,7 +134,14 @@ export default async function DocumentsPage({
         </div>
 
         {camera && <DocumentIntakeClient docs={camera.rows} employees={camera.employeeOptions} senders={camera.senders} />}
-        {logRows && <IntakeLogClient rows={logRows} />}
+        {logRows && activeTab.categoryLabel && (
+          <IntakeLogClient
+            categoryLabel={activeTab.categoryLabel}
+            rows={logRows}
+            employeeOptions={allEmployees ?? []}
+            canDelete={isAdmin(employee.role)}
+          />
+        )}
       </div>
     </div>
   );

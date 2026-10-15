@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, FileText, Hash, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -73,7 +73,13 @@ export function DocumentNumbersClient({
   const [activeBook, setActiveBook] = useState<Book>(BOOK_INTERNAL);
   const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [yearFilter, setYearFilter] = useState(ALL_TAB);
+  const years = useMemo(
+    () => [...new Set(rows.map((r) => String(new Date(r.issued_date).getFullYear() + 543)))].sort((a, b) => Number(b) - Number(a)),
+    [rows]
+  );
+  // Default to the latest year with data instead of "ทุกปี" — with 2,800+
+  // rows across years, an unfiltered table is unusable to open by default.
+  const [yearFilter, setYearFilter] = useState(() => years[0] ?? String(new Date().getFullYear() + 543));
   const [search, setSearch] = useState("");
 
   function rowBook(r: DocNumberRow) {
@@ -97,8 +103,6 @@ export function DocumentNumbersClient({
   const allLabels = [...categoryLabels, ...([...new Set(rows.map((r) => r.category_label).filter(Boolean))] as string[]).filter((l) => !categoryLabels.includes(l))];
   const tabs = [ALL_TAB, ...allLabels.filter((l) => bookOf(l) === activeBook)];
   const booksPresent = new Set(rows.map(rowBook));
-
-  const years = [...new Set(rows.map((r) => String(new Date(r.issued_date).getFullYear() + 543)))].sort((a, b) => Number(b) - Number(a));
 
   const searchLower = search.trim().toLowerCase();
   const visibleRows = rows
