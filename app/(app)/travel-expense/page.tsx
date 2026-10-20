@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { RequestTabs } from "@/components/shared/RequestTabs";
 import { TravelExpenseClient, type TravelClaim } from "@/components/travel/TravelExpenseClient";
 import { TravelApprovalList, type TravelApprovalRow } from "@/components/travel/TravelApprovalList";
+import { getTravelLocations } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,14 @@ export default async function TravelExpensePage({
 
   const supabase = await createClient();
 
-  const { data: claims } = await supabase
-    .from("travel_expense_claims")
-    .select("id, title, status, total_amount, attachment_urls, created_at")
-    .eq("employee_id", employee.id)
-    .order("created_at", { ascending: false });
+  const [{ data: claims }, savedLocations] = await Promise.all([
+    supabase
+      .from("travel_expense_claims")
+      .select("id, title, status, total_amount, attachment_urls, generated_doc_url, created_at")
+      .eq("employee_id", employee.id)
+      .order("created_at", { ascending: false }),
+    getTravelLocations(),
+  ]);
 
   const claimIds = (claims ?? []).map((c) => c.id);
   const { data: items } = claimIds.length
@@ -86,7 +90,7 @@ export default async function TravelExpensePage({
       <div className="px-4 md:px-6">
         <RequestTabs
           defaultTab={defaultTab}
-          mine={<TravelExpenseClient claims={ownClaims} />}
+          mine={<TravelExpenseClient claims={ownClaims} savedLocations={savedLocations} />}
           approvals={
             showApprovals ? (
               <TravelApprovalList rows={approvalRows} role={employee.role} />

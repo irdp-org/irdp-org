@@ -317,6 +317,10 @@ export interface Database {
         { id: string; name: string; created_by: string | null; created_at: string },
         { id?: string; name: string; created_by?: string | null }
       >;
+      travel_frequent_locations: TableShape<
+        { id: string; employee_id: string; label: string; created_at: string },
+        { id?: string; employee_id: string; label: string }
+      >;
       work_locations: TableShape<{
         id: string;
         name: string;

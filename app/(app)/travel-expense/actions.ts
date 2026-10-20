@@ -45,6 +45,37 @@ function parseItems(raw: string): ItemInput[] {
     .filter((i) => i.travel_date && i.mode);
 }
 
+/** Smart-search: reuse an existing จาก/ถึง location for this employee
+ * (case-insensitive) or save it on first use — mirrors getOrCreateRecipient
+ * in document-numbers/actions.ts. Best-effort: a failed save shouldn't block
+ * the claim itself. */
+async function rememberLocation(employeeId: string, label: string) {
+  const trimmed = label.trim();
+  if (!trimmed) return;
+  const supabase = await createClient();
+  const { data: existing } = await supabase
+    .from("travel_frequent_locations")
+    .select("id")
+    .eq("employee_id", employeeId)
+    .ilike("label", trimmed)
+    .limit(1)
+    .maybeSingle();
+  if (existing) return;
+  await supabase.from("travel_frequent_locations").insert({ employee_id: employeeId, label: trimmed });
+}
+
+export async function getTravelLocations(): Promise<string[]> {
+  const employee = await getCurrentEmployee();
+  if (!employee) return [];
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("travel_frequent_locations")
+    .select("label")
+    .eq("employee_id", employee.id)
+    .order("label");
+  return (data ?? []).map((r) => r.label);
+}
+
 async function notifyHead(submitter: Employee, claimTitle: string) {
   const supabase = await createClient();
   if (!submitter.department_id) return;
@@ -139,6 +170,9 @@ export async function saveClaim(formData: FormData) {
   );
   if (itemsErr) return { error: itemsErr.message };
 
+  const locations = [...new Set(items.flatMap((it) => [it.from_location, it.to_location]).filter(Boolean))];
+  await Promise.allSettled(locations.map((loc) => rememberLocation(employee.id, loc)));
+
   if (submit) await notifyHead(employee, title ?? "");
 
   revalidatePath("/travel-expense");
@@ -231,19 +265,27 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   const head = await deptHeadName(claim.employee_id);
   const dept = await deptNameOf(claim.employee_id);
 
-  // One numbered line per item: date · route+mode · amount — the template's
-  // pre-drawn table rows are a single merged 38-column grid (not a clean
-  // repeating row), too fragile to edit cell-by-cell via the Docs API, so the
-  // breakdown goes into the one {{รายละเอียด}} cell as a formatted list instead.
+  // One numbered line per item: date · route+mode · amount, in a
+  // tab-separated "วันที่ \t รายการ \t จำนวนเงิน" layout so it reads as 3
+  // columns — the template's pre-drawn table rows are a single merged
+  // 38-column grid (inspected directly via the Docs API: 23 rows × 38
+  // columns of near-empty merged cells), too fragile to insert/duplicate
+  // real rows into via the API without risking a corrupted document, so the
+  // breakdown still goes into the one {{รายละเอียด}} cell, just laid out with
+  // real tab stops instead of a flowing sentence.
   const lines = (items ?? []).map((it, i) => {
     const route = [it.from_location, it.to_location].filter(Boolean).join(" - ");
     const mode = MODE_LABELS[it.mode] ?? it.mode;
     const km = it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : "";
-    return `${i + 1}. ${dLabel(it.travel_date)}  ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}  —  ${formatBaht(it.amount)} บาท`;
+    const desc = `${i + 1}. ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}`;
+    return `${dLabel(it.travel_date)}\t${desc}\t${formatBaht(it.amount)} บาท`;
   });
   const detail = lines.join("\n");
 
-  const { id: docId, url } = await generateDocFromTemplate(templateId, `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}`, {
+  // Filenames collide easily (same person, same day, multiple trips) since
+  // the name used to be just "ใบรับรองแทนใบเสร็จ-<ชื่อ>" — stamp date+time.
+  const stamp = dLabel(new Date().toISOString()).replace(/\s+/g, "") + "-" + new Date().toISOString().slice(11, 16).replace(":", "");
+  const { id: docId, url } = await generateDocFromTemplate(templateId, `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}-${stamp}`, {
     รายละเอียด: detail,
     ได้ปฏิบัติงานเกี่ยวกับ: claim.title ?? "การเดินทางปฏิบัติงาน",
     ชื่อ: emp?.full_name ?? "",

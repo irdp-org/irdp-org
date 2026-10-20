@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Receipt, Pencil } from "lucide-react";
+import { Plus, Trash2, Receipt, Pencil, ExternalLink, ArrowLeftRight } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ export type TravelClaim = {
   status: RequestStatusT;
   total_amount: number;
   attachment_urls: string[];
+  generated_doc_url?: string | null;
   created_at: string;
   items: TravelItem[];
 };
@@ -93,7 +94,7 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export function TravelExpenseClient({ claims }: { claims: TravelClaim[] }) {
+export function TravelExpenseClient({ claims, savedLocations }: { claims: TravelClaim[]; savedLocations: string[] }) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TravelClaim | null>(null);
@@ -214,6 +215,16 @@ export function TravelExpenseClient({ claims }: { claims: TravelClaim[] }) {
               <div className="flex items-center justify-between">
                 <Badge variant={STATUS_VARIANT[detail.status]}>{LEAVE_STATUS_LABELS_TH[detail.status]}</Badge>
                 <div className="flex items-center gap-1">
+                  {detail.generated_doc_url && (
+                    <a
+                      href={detail.generated_doc_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary underline"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" /> เปิดเอกสารที่สร้างไว้
+                    </a>
+                  )}
                   <GenerateDocButton id={detail.id} generate={generateTravelDoc} label="ออกใบรับรองแทนใบเสร็จ" />
                   {(detail.status === "draft" || detail.status === "returned") && (
                     <Button size="sm" variant="outline" onClick={() => openEdit(detail)}>
@@ -263,6 +274,7 @@ export function TravelExpenseClient({ claims }: { claims: TravelClaim[] }) {
       {formOpen && (
         <ClaimForm
           existing={editing}
+          savedLocations={savedLocations}
           onClose={() => setFormOpen(false)}
           onSaved={() => {
             setFormOpen(false);
@@ -276,10 +288,12 @@ export function TravelExpenseClient({ claims }: { claims: TravelClaim[] }) {
 
 function ClaimForm({
   existing,
+  savedLocations,
   onClose,
   onSaved,
 }: {
   existing: TravelClaim | null;
+  savedLocations: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -311,6 +325,15 @@ function ClaimForm({
   }
   function removeRow(i: number) {
     setRows((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
+  // "ไป-กลับ": duplicate this row right after itself with จาก/ถึง swapped, so
+  // the user only fills in the ขาไป leg once instead of retyping ขากลับ.
+  function addReturnLeg(i: number) {
+    setRows((prev) => {
+      const r = prev[i];
+      const returnLeg: Row = { ...r, from_location: r.to_location, to_location: r.from_location };
+      return [...prev.slice(0, i + 1), returnLeg, ...prev.slice(i + 1)];
+    });
   }
 
   function submit(doSubmit: boolean) {
@@ -352,6 +375,11 @@ function ClaimForm({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
+          <datalist id="travel-location-options">
+            {savedLocations.map((loc) => (
+              <option key={loc} value={loc} />
+            ))}
+          </datalist>
           <div className="flex flex-col gap-1.5">
             <Label>ชื่อ/วัตถุประสงค์ (ไม่บังคับ)</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น เดินทางประชุมนอกสถานที่" />
@@ -369,9 +397,28 @@ function ClaimForm({
               </div>
               <Input type="date" value={r.travel_date} onChange={(e) => updateRow(i, { travel_date: e.target.value })} />
               <div className="grid grid-cols-2 gap-2">
-                <Input placeholder="จาก" value={r.from_location} onChange={(e) => updateRow(i, { from_location: e.target.value })} />
-                <Input placeholder="ถึง" value={r.to_location} onChange={(e) => updateRow(i, { to_location: e.target.value })} />
+                <Input
+                  placeholder="จาก"
+                  list="travel-location-options"
+                  value={r.from_location}
+                  onChange={(e) => updateRow(i, { from_location: e.target.value })}
+                />
+                <Input
+                  placeholder="ถึง"
+                  list="travel-location-options"
+                  value={r.to_location}
+                  onChange={(e) => updateRow(i, { to_location: e.target.value })}
+                />
               </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="self-start gap-1 text-xs text-muted-foreground"
+                onClick={() => addReturnLeg(i)}
+              >
+                <ArrowLeftRight className="h-3.5 w-3.5" /> เพิ่มขากลับ (สลับจาก-ถึง)
+              </Button>
               <select
                 value={r.mode}
                 onChange={(e) => updateRow(i, { mode: e.target.value })}
