@@ -83,6 +83,7 @@ export default async function TravelExpensePage({
 
   const { tab } = await searchParams;
   const defaultTab = tab === "approvals" && showApprovals ? "approvals" : "mine";
+  const canManage = ["admin", "hr"].includes(employee.role);
 
   return (
     <div>
@@ -90,10 +91,10 @@ export default async function TravelExpensePage({
       <div className="px-4 md:px-6">
         <RequestTabs
           defaultTab={defaultTab}
-          mine={<TravelExpenseClient claims={ownClaims} savedLocations={savedLocations} />}
+          mine={<TravelExpenseClient claims={ownClaims} savedLocations={savedLocations} canManage={canManage} />}
           approvals={
             showApprovals ? (
-              <TravelApprovalList rows={approvalRows} role={employee.role} />
+              <TravelApprovalList rows={approvalRows} role={employee.role} canManage={canManage} />
             ) : null
           }
         />

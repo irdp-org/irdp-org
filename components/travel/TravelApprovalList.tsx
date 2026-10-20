@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, RotateCcw, Receipt } from "lucide-react";
+import { Check, X, RotateCcw, Receipt, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { MODE_LABELS, formatBaht } from "@/lib/travel";
-import { decideClaim, generateTravelDoc } from "@/app/(app)/travel-expense/actions";
+import { decideClaim, deleteClaim, generateTravelDoc } from "@/app/(app)/travel-expense/actions";
 import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 import type { RequestStatusT } from "@/lib/database.types";
 import type { TravelItem } from "./TravelExpenseClient";
@@ -49,18 +49,36 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export function TravelApprovalList({ rows, role }: { rows: TravelApprovalRow[]; role: string }) {
+export function TravelApprovalList({
+  rows,
+  role,
+  canManage = false,
+}: {
+  rows: TravelApprovalRow[];
+  role: string;
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const [detail, setDetail] = useState<TravelApprovalRow | null>(null);
   const [isPending, startTransition] = useTransition();
   const [statusFilter, setStatusFilter] = useState(ALL_FILTER);
   const [yearFilter, setYearFilter] = useState(ALL_FILTER);
   const [search, setSearch] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const canDecide = ["dept_head", "admin", "exec"].includes(role);
 
   function decide(id: string, decision: "approved" | "rejected" | "returned") {
     startTransition(async () => {
       await decideClaim(id, decision);
+      setDetail(null);
+      router.refresh();
+    });
+  }
+
+  function remove(id: string) {
+    startTransition(async () => {
+      await deleteClaim(id);
+      setConfirmDeleteId(null);
       setDetail(null);
       router.refresh();
     });
@@ -175,7 +193,24 @@ export function TravelApprovalList({ rows, role }: { rows: TravelApprovalRow[]; 
               </DialogHeader>
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">โดย {detail.employee_name}</p>
-                <GenerateDocButton id={detail.id} generate={generateTravelDoc} label="ออกใบรับรองแทนใบเสร็จ" />
+                <div className="flex items-center gap-1">
+                  <GenerateDocButton id={detail.id} generate={generateTravelDoc} label="ออกใบรับรองแทนใบเสร็จ" />
+                  {canManage &&
+                    (confirmDeleteId === detail.id ? (
+                      <>
+                        <Button size="sm" variant="destructive" disabled={isPending} onClick={() => remove(detail.id)}>
+                          ยืนยันลบ
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={isPending} onClick={() => setConfirmDeleteId(null)}>
+                          ยกเลิก
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="ghost" className="text-danger" onClick={() => setConfirmDeleteId(detail.id)}>
+                        <Trash2 className="h-3.5 w-3.5" /> ลบ
+                      </Button>
+                    ))}
+                </div>
               </div>
               <div className="flex flex-col divide-y divide-border">
                 {detail.items.map((it) => (

@@ -134,9 +134,13 @@ export async function saveClaim(formData: FormData) {
   }
 
   let claimId = id;
+  let locationOwnerId = employee.id;
   if (id) {
-    // Preserve existing attachments, append new ones
-    const { data: existing } = await supabase.from("travel_expense_claims").select("attachment_urls").eq("id", id).single();
+    // Preserve existing attachments, append new ones. Also keep the
+    // original owner for "remember location" below — hr/admin editing
+    // someone else's claim shouldn't attribute their จาก/ถึง to the editor.
+    const { data: existing } = await supabase.from("travel_expense_claims").select("attachment_urls, employee_id").eq("id", id).single();
+    locationOwnerId = existing?.employee_id ?? employee.id;
     const merged = [...(existing?.attachment_urls ?? []), ...newUrls];
     const { error } = await supabase
       .from("travel_expense_claims")
@@ -171,7 +175,7 @@ export async function saveClaim(formData: FormData) {
   if (itemsErr) return { error: itemsErr.message };
 
   const locations = [...new Set(items.flatMap((it) => [it.from_location, it.to_location]).filter(Boolean))];
-  await Promise.allSettled(locations.map((loc) => rememberLocation(employee.id, loc)));
+  await Promise.allSettled(locations.map((loc) => rememberLocation(locationOwnerId, loc)));
 
   if (submit) await notifyHead(employee, title ?? "");
 
@@ -284,6 +288,12 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
 
   // Fill the real 3-column item table: one row per travel leg (date / route
   // + mode / amount), duplicating the template's single data row as needed.
+  // travel_date is a plain "YYYY-MM-DD" date column — split it directly
+  // instead of going through Date/timezone conversion.
+  const dShort = (isoDate: string) => {
+    const [y, m, d] = isoDate.split("-");
+    return `${d}/${m}/${Number(y) + 543}`;
+  };
   await fillItemTable(
     docId,
     "{{รายละเอียด}}",
@@ -292,9 +302,9 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
       const mode = MODE_LABELS[it.mode] ?? it.mode;
       const km = it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : "";
       return {
-        date: dLabel(it.travel_date),
+        date: dShort(it.travel_date),
         detail: `${i + 1}. ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}`,
-        amount: `${formatBaht(it.amount)} บาท`,
+        amount: formatBaht(it.amount),
       };
     })
   );

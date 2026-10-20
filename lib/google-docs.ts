@@ -113,6 +113,13 @@ export async function fillItemTable(
 
     const amountStart = cells[2].startIndex! + 1;
     fillReqs.push({ insertText: { location: { index: amountStart }, text: it.amount } });
+    fillReqs.push({
+      updateParagraphStyle: {
+        range: { startIndex: amountStart, endIndex: amountStart + it.amount.length },
+        paragraphStyle: { alignment: "END" },
+        fields: "alignment",
+      },
+    });
 
     const detailStart = cells[1].startIndex! + 1;
     const detailEnd = cells[1].endIndex! - 1;

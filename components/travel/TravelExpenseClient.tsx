@@ -61,6 +61,57 @@ const STATUS_VARIANT: Record<RequestStatusT, "default" | "secondary" | "destruct
   cancelled: "outline",
 };
 
+// Native <input list=datalist> suggestions don't show up on mobile Safari
+// (iOS effectively ignores datalist) — IRDP is 100% mobile usage, so a
+// custom dropdown is needed instead of relying on the browser's datalist.
+function LocationAutocomplete({
+  value,
+  onChange,
+  placeholder,
+  options,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  options: string[];
+}) {
+  const [open, setOpen] = useState(false);
+  const filtered = options.filter((o) => o.toLowerCase().includes(value.trim().toLowerCase())).slice(0, 8);
+
+  return (
+    <div className="relative">
+      <Input
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => {
+          onChange(e.target.value);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-10 mt-1 max-h-40 w-full overflow-y-auto rounded-lg border border-border bg-background shadow-md">
+          {filtered.map((opt) => (
+            <button
+              key={opt}
+              type="button"
+              className="block w-full px-3 py-1.5 text-left text-sm hover:bg-muted"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                onChange(opt);
+                setOpen(false);
+              }}
+            >
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function emptyRow(): Row {
   return {
     travel_date: new Date().toISOString().slice(0, 10),
@@ -94,13 +145,32 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
   );
 }
 
-export function TravelExpenseClient({ claims, savedLocations }: { claims: TravelClaim[]; savedLocations: string[] }) {
+export function TravelExpenseClient({
+  claims,
+  savedLocations,
+  canManage = false,
+}: {
+  claims: TravelClaim[];
+  savedLocations: string[];
+  canManage?: boolean;
+}) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TravelClaim | null>(null);
   const [detail, setDetail] = useState<TravelClaim | null>(null);
   const [statusFilter, setStatusFilter] = useState(ALL_FILTER);
   const [yearFilter, setYearFilter] = useState(ALL_FILTER);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isDeletePending, startDeleteTransition] = useTransition();
+
+  function handleDelete(id: string) {
+    startDeleteTransition(async () => {
+      await deleteClaim(id);
+      setConfirmDeleteId(null);
+      setDetail(null);
+      router.refresh();
+    });
+  }
 
   function openNew() {
     setEditing(null);
@@ -226,11 +296,26 @@ export function TravelExpenseClient({ claims, savedLocations }: { claims: Travel
                     </a>
                   )}
                   <GenerateDocButton id={detail.id} generate={generateTravelDoc} label="ออกใบรับรองแทนใบเสร็จ" />
-                  {(detail.status === "draft" || detail.status === "returned") && (
+                  {(detail.status === "draft" || detail.status === "returned" || canManage) && (
                     <Button size="sm" variant="outline" onClick={() => openEdit(detail)}>
                       <Pencil className="h-3.5 w-3.5" /> แก้ไข
                     </Button>
                   )}
+                  {(canManage || detail.status === "draft") &&
+                    (confirmDeleteId === detail.id ? (
+                      <>
+                        <Button size="sm" variant="destructive" disabled={isDeletePending} onClick={() => handleDelete(detail.id)}>
+                          ยืนยันลบ
+                        </Button>
+                        <Button size="sm" variant="ghost" disabled={isDeletePending} onClick={() => setConfirmDeleteId(null)}>
+                          ยกเลิก
+                        </Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="ghost" className="text-danger" onClick={() => setConfirmDeleteId(detail.id)}>
+                        <Trash2 className="h-3.5 w-3.5" /> ลบ
+                      </Button>
+                    ))}
                 </div>
               </div>
               <div className="flex flex-col divide-y divide-border">
@@ -375,11 +460,6 @@ function ClaimForm({
         </DialogHeader>
 
         <div className="flex flex-col gap-4">
-          <datalist id="travel-location-options">
-            {savedLocations.map((loc) => (
-              <option key={loc} value={loc} />
-            ))}
-          </datalist>
           <div className="flex flex-col gap-1.5">
             <Label>ชื่อ/วัตถุประสงค์ (ไม่บังคับ)</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น เดินทางประชุมนอกสถานที่" />
@@ -397,17 +477,17 @@ function ClaimForm({
               </div>
               <Input type="date" value={r.travel_date} onChange={(e) => updateRow(i, { travel_date: e.target.value })} />
               <div className="grid grid-cols-2 gap-2">
-                <Input
+                <LocationAutocomplete
                   placeholder="จาก"
-                  list="travel-location-options"
                   value={r.from_location}
-                  onChange={(e) => updateRow(i, { from_location: e.target.value })}
+                  onChange={(v) => updateRow(i, { from_location: v })}
+                  options={savedLocations}
                 />
-                <Input
+                <LocationAutocomplete
                   placeholder="ถึง"
-                  list="travel-location-options"
                   value={r.to_location}
-                  onChange={(e) => updateRow(i, { to_location: e.target.value })}
+                  onChange={(v) => updateRow(i, { to_location: v })}
+                  options={savedLocations}
                 />
               </div>
               <Button
