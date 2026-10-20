@@ -128,8 +128,19 @@ export async function fillItemTable(
     }
     fillReqs.push({ insertText: { location: { index: detailStart }, text: it.detail } });
 
-    const dateStart = cells[0].startIndex! + 1;
-    fillReqs.push({ insertText: { location: { index: dateStart }, text: it.date } });
+    // date is left blank by the caller for repeat rows on the same day
+    // (shown once per day) — only insert/center when there's actually text.
+    if (it.date) {
+      const dateStart = cells[0].startIndex! + 1;
+      fillReqs.push({ insertText: { location: { index: dateStart }, text: it.date } });
+      fillReqs.push({
+        updateParagraphStyle: {
+          range: { startIndex: dateStart, endIndex: dateStart + it.date.length },
+          paragraphStyle: { alignment: "CENTER" },
+          fields: "alignment",
+        },
+      });
+    }
   }
   if (fillReqs.length) {
     await docs.documents.batchUpdate({ documentId, requestBody: { requests: fillReqs } });

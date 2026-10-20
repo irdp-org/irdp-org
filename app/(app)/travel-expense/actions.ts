@@ -294,16 +294,23 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
     const [y, m, d] = isoDate.split("-");
     return `${d}/${m}/${Number(y) + 543}`;
   };
+  // Date shows once per calendar day (blank on repeat rows for that day),
+  // and within each day's group the legs alternate ขาไป/ขากลับ instead of a
+  // numbered list — matches how a single day's round trip is normally two
+  // rows (ไป, then กลับ with จาก/ถึง swapped).
+  let indexInDay = 0;
   await fillItemTable(
     docId,
     "{{รายละเอียด}}",
     (items ?? []).map((it, i) => {
-      const route = [it.from_location, it.to_location].filter(Boolean).join(" - ");
+      const sameDayAsPrev = i > 0 && items![i - 1].travel_date === it.travel_date;
+      indexInDay = sameDayAsPrev ? indexInDay + 1 : 0;
+      const legLabel = indexInDay % 2 === 0 ? "ขาไป" : "ขากลับ";
       const mode = MODE_LABELS[it.mode] ?? it.mode;
       const km = it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : "";
       return {
-        date: dShort(it.travel_date),
-        detail: `${i + 1}. ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}`,
+        date: sameDayAsPrev ? "" : dShort(it.travel_date),
+        detail: `${legLabel} จาก ${it.from_location ?? ""} ถึง ${it.to_location ?? ""} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}`,
         amount: formatBaht(it.amount),
       };
     })
