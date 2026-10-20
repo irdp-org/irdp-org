@@ -234,7 +234,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   const templateId = process.env.DOC_TEMPLATE_TRAVEL_CERT;
   if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบรับรองฯ (DOC_TEMPLATE_TRAVEL_CERT)" };
 
-  const { generateDocFromTemplate, appendImagesToDoc } = await import("@/lib/google-docs");
+  const { generateDocFromTemplate, appendImagesToDoc, fillItemTable } = await import("@/lib/google-docs");
   const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const { MODE_LABELS, formatBaht, bahtText } = await import("@/lib/travel");
@@ -265,28 +265,13 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   const head = await deptHeadName(claim.employee_id);
   const dept = await deptNameOf(claim.employee_id);
 
-  // One numbered line per item: date · route+mode · amount, in a
-  // tab-separated "วันที่ \t รายการ \t จำนวนเงิน" layout so it reads as 3
-  // columns — the template's pre-drawn table rows are a single merged
-  // 38-column grid (inspected directly via the Docs API: 23 rows × 38
-  // columns of near-empty merged cells), too fragile to insert/duplicate
-  // real rows into via the API without risking a corrupted document, so the
-  // breakdown still goes into the one {{รายละเอียด}} cell, just laid out with
-  // real tab stops instead of a flowing sentence.
-  const lines = (items ?? []).map((it, i) => {
-    const route = [it.from_location, it.to_location].filter(Boolean).join(" - ");
-    const mode = MODE_LABELS[it.mode] ?? it.mode;
-    const km = it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : "";
-    const desc = `${i + 1}. ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}`;
-    return `${dLabel(it.travel_date)}\t${desc}\t${formatBaht(it.amount)} บาท`;
-  });
-  const detail = lines.join("\n");
-
   // Filenames collide easily (same person, same day, multiple trips) since
   // the name used to be just "ใบรับรองแทนใบเสร็จ-<ชื่อ>" — stamp date+time.
   const stamp = dLabel(new Date().toISOString()).replace(/\s+/g, "") + "-" + new Date().toISOString().slice(11, 16).replace(":", "");
+  // Note: no "รายละเอียด" key here — that placeholder sits inside the item
+  // table's data-row cell and is used as a marker by fillItemTable below to
+  // locate+duplicate that row per item; replaceAllText would wipe it first.
   const { id: docId, url } = await generateDocFromTemplate(templateId, `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}-${stamp}`, {
-    รายละเอียด: detail,
     ได้ปฏิบัติงานเกี่ยวกับ: claim.title ?? "การเดินทางปฏิบัติงาน",
     ชื่อ: emp?.full_name ?? "",
     ตำแหน่ง: emp?.position ?? "",
@@ -296,6 +281,23 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
     รวมเป็นเงิน: formatBaht(claim.total_amount),
     รวมเป็นเงินตัวอักษร: bahtText(claim.total_amount),
   });
+
+  // Fill the real 3-column item table: one row per travel leg (date / route
+  // + mode / amount), duplicating the template's single data row as needed.
+  await fillItemTable(
+    docId,
+    "{{รายละเอียด}}",
+    (items ?? []).map((it, i) => {
+      const route = [it.from_location, it.to_location].filter(Boolean).join(" - ");
+      const mode = MODE_LABELS[it.mode] ?? it.mode;
+      const km = it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : "";
+      return {
+        date: dLabel(it.travel_date),
+        detail: `${i + 1}. ${route} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}`,
+        amount: `${formatBaht(it.amount)} บาท`,
+      };
+    })
+  );
 
   // Attach evidence images at the end of the certificate
   const attachments = (claim.attachment_urls ?? []) as string[];

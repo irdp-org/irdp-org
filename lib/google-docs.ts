@@ -47,6 +47,88 @@ export async function generateDocFromTemplate(
   return { id, url: `https://docs.google.com/document/d/${id}/edit` };
 }
 
+/**
+ * Fill a 3-column item table (วันที่ | รายการ | จำนวนเงิน) that already has
+ * exactly 1 header row, 1 template data row (its middle cell holding the
+ * `{{markerPlaceholder}}` text), and 1 total row directly below it — no
+ * spacer rows in between, which matters: duplicating/filling rows by
+ * rowIndex only stays correct if row positions don't shift from something
+ * else sitting between the data row and the total row.
+ *
+ * For N items: duplicates the data row N-1 more times (clean table, no
+ * merged cells, so Docs copies the row's formatting safely), then fills
+ * every row's 3 cells bottom-to-top / right-to-left so earlier text
+ * insertions never invalidate indices already queued for later requests.
+ */
+export async function fillItemTable(
+  documentId: string,
+  markerPlaceholder: string,
+  items: { date: string; detail: string; amount: string }[]
+): Promise<void> {
+  if (items.length === 0) return;
+  const docs = docsClient();
+
+  let doc = await docs.documents.get({ documentId });
+  const tableEl = doc.data.body?.content?.find(
+    (c) =>
+      c.table &&
+      c.table.tableRows?.some((row) =>
+        row.tableCells?.some((cell) =>
+          (cell.content ?? []).some((p) =>
+            (p.paragraph?.elements ?? []).some((e) => (e.textRun?.content ?? "").includes(markerPlaceholder))
+          )
+        )
+      )
+  );
+  if (!tableEl?.table || tableEl.startIndex == null) return;
+  const tableStart = tableEl.startIndex;
+
+  // Locate the marker row (data row) by scanning for the cell text.
+  const dataRowIdx = tableEl.table.tableRows!.findIndex((row) =>
+    row.tableCells?.some((cell) =>
+      (cell.content ?? []).some((p) => (p.paragraph?.elements ?? []).some((e) => (e.textRun?.content ?? "").includes(markerPlaceholder)))
+    )
+  );
+  if (dataRowIdx < 0) return;
+
+  if (items.length > 1) {
+    const insertReqs = Array.from({ length: items.length - 1 }, (_, i) => ({
+      insertTableRow: {
+        tableCellLocation: { tableStartLocation: { index: tableStart }, rowIndex: dataRowIdx + i, columnIndex: 0 },
+        insertBelow: true,
+      },
+    }));
+    await docs.documents.batchUpdate({ documentId, requestBody: { requests: insertReqs } });
+  }
+
+  doc = await docs.documents.get({ documentId });
+  const refreshedTable = doc.data.body?.content?.find((c) => c.table && c.startIndex === tableStart)?.table;
+  if (!refreshedTable?.tableRows) return;
+
+  const fillReqs: object[] = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const row = dataRowIdx + i;
+    const it = items[i];
+    const cells = refreshedTable.tableRows[row].tableCells!;
+
+    const amountStart = cells[2].startIndex! + 1;
+    fillReqs.push({ insertText: { location: { index: amountStart }, text: it.amount } });
+
+    const detailStart = cells[1].startIndex! + 1;
+    const detailEnd = cells[1].endIndex! - 1;
+    if (detailEnd > detailStart) {
+      fillReqs.push({ deleteContentRange: { range: { startIndex: detailStart, endIndex: detailEnd } } });
+    }
+    fillReqs.push({ insertText: { location: { index: detailStart }, text: it.detail } });
+
+    const dateStart = cells[0].startIndex! + 1;
+    fillReqs.push({ insertText: { location: { index: dateStart }, text: it.date } });
+  }
+  if (fillReqs.length) {
+    await docs.documents.batchUpdate({ documentId, requestBody: { requests: fillReqs } });
+  }
+}
+
 /** Append evidence images to the end of a Google Doc (best-effort — a failed
  * fetch of one image won't abort the rest or the doc). imageUrls must be
  * publicly fetchable image URLs (e.g. Drive thumbnail links). */
