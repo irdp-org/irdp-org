@@ -1,0 +1,19 @@
+name: Offsite/OT checkout reminders
+
+# Same pattern as wfh-reminders.yml — Vercel Hobby only allows daily cron,
+# so this hits the CRON_SECRET-guarded route externally every 15 min. The
+# route itself no-ops before 18:00 Bangkok. Reuses the same repository
+# secrets (CRON_SECRET, APP_URL).
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call checkout-reminders cron route
+        run: |
+          curl -sf -X GET "${{ secrets.APP_URL }}/api/cron/checkout-reminders" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
