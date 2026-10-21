@@ -68,14 +68,14 @@ export default async function WorkLogPage({
         .from("field_requests")
         .select("id, type, work_date, planned_start, planned_end, status, reason, ot_hours")
         .eq("employee_id", viewingId)
-        .eq("status", "approved")
+        .neq("status", "cancelled")
         .gte("work_date", from)
         .lte("work_date", to),
       supabase
         .from("leave_requests")
         .select("id, leave_code, start_at, end_at, hours, status, reason")
         .eq("employee_id", viewingId)
-        .eq("status", "approved")
+        .neq("status", "cancelled")
         .gte("start_at", fromTs)
         .lte("end_at", toTs),
       supabase.from("calendar_events").select("start_at, title").eq("type", "holiday").gte("start_at", fromTs).lte("start_at", toTs),
@@ -146,7 +146,9 @@ export default async function WorkLogPage({
 
   for (const f of fieldRows ?? []) {
     const typeLabel = f.type === "ot" ? "นอกเวลา (OT)" : FIELD_TYPE_LABELS_TH[f.type as "offsite" | "wfh"] ?? f.type;
-    if (f.type === "ot" && f.ot_hours) totalOtHours += f.ot_hours;
+    // Only count hours toward the monthly total once actually approved —
+    // a still-pending/returned/rejected record shouldn't inflate it.
+    if (f.type === "ot" && f.ot_hours && f.status === "approved") totalOtHours += f.ot_hours;
     push(f.work_date, {
       id: f.id,
       kind: "field",
@@ -155,7 +157,7 @@ export default async function WorkLogPage({
       detail: f.reason,
       projectName: null,
       attachmentUrl: null,
-      status: null,
+      status: f.status === "approved" ? null : f.status,
       editable: false,
     });
   }
@@ -170,7 +172,7 @@ export default async function WorkLogPage({
       detail: l.reason,
       projectName: null,
       attachmentUrl: null,
-      status: null,
+      status: l.status === "approved" ? null : l.status,
       editable: false,
     });
   }

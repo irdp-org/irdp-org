@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
@@ -29,6 +29,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { createWorkLog, updateWorkLog, deleteWorkLog, acknowledgeDay } from "@/app/(app)/worklog/actions";
+import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
+import type { RequestStatusT } from "@/lib/database.types";
+
+const PENDING_STATUS_BADGE: Partial<Record<RequestStatusT, string>> = {
+  draft: "bg-muted text-muted-foreground",
+  submitted: "bg-warning/15 text-warning",
+  returned: "bg-danger/10 text-danger",
+  rejected: "bg-danger/10 text-danger",
+};
 
 export type DiaryEntry = {
   id: string;
@@ -67,7 +76,6 @@ function WorkLogForm({
   onDone: () => void;
 }) {
   const router = useRouter();
-  const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -140,11 +148,6 @@ function WorkLogForm({
           placeholder="พิมพ์หรือเลือกโครงการที่เคยบันทึกไว้"
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"
         />
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <label className="text-xs font-medium text-muted-foreground">แนบไฟล์ / รูปภาพ</label>
-        <input ref={fileRef} type="file" name="attachment" accept="image/*,application/pdf" className="text-sm" />
       </div>
 
       {error && <p className="text-xs text-danger">{error}</p>}
@@ -373,7 +376,14 @@ export function WorkDiaryClient({
                     </td>
                   )}
                   <td className="whitespace-nowrap px-3 py-2">
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${KIND_BADGE[e.kind]}`}>{e.typeLabel}</span>
+                    <div className="flex flex-col items-start gap-1">
+                      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${KIND_BADGE[e.kind]}`}>{e.typeLabel}</span>
+                      {e.status && (
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${PENDING_STATUS_BADGE[e.status as RequestStatusT] ?? "bg-muted text-muted-foreground"}`}>
+                          {LEAVE_STATUS_LABELS_TH[e.status as RequestStatusT] ?? e.status}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-foreground">{e.timeLabel ?? "-"}</td>
                   <td className="px-3 py-2">
