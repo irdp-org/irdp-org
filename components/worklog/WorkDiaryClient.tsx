@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { th } from "date-fns/locale";
@@ -76,6 +76,7 @@ function WorkLogForm({
   onDone: () => void;
 }) {
   const router = useRouter();
+  const fileRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -148,6 +149,11 @@ function WorkLogForm({
           placeholder="พิมพ์หรือเลือกโครงการที่เคยบันทึกไว้"
           className="rounded-md border border-input bg-background px-3 py-2 text-sm"
         />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className="text-xs font-medium text-muted-foreground">แนบไฟล์ / รูปภาพ</label>
+        <input ref={fileRef} type="file" name="attachment" accept="image/*,application/pdf" className="text-sm" />
       </div>
 
       {error && <p className="text-xs text-danger">{error}</p>}
