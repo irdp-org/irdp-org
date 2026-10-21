@@ -6,6 +6,7 @@ import { canEdit } from "@/lib/rbac";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { CheckinPageClient } from "@/components/field/CheckinPageClient";
 import { ActivityCheckinList, type UpcomingActivity } from "@/components/field/ActivityCheckinList";
+import { QuickWorkCheckin } from "@/components/field/QuickWorkCheckin";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -135,6 +136,12 @@ export default async function CheckinPage() {
     checkedOutAt: checkinByEventId.get(e.id)?.checked_out_at ?? null,
   }));
 
+  const { count: todayWorkLogCount } = await supabase
+    .from("work_logs")
+    .select("id", { count: "exact", head: true })
+    .eq("employee_id", employee.id)
+    .eq("work_date", today);
+
   const dateDisplay = thaiDateDisplay(today);
   const timeDisplay = nowBangkokTime();
 
@@ -149,6 +156,8 @@ export default async function CheckinPage() {
           <p className="text-4xl font-bold tabular-nums text-primary">{timeDisplay}</p>
           <p className="mt-1 text-sm text-muted-foreground">{dateDisplay}</p>
         </div>
+
+        <QuickWorkCheckin todayEntryCount={todayWorkLogCount ?? 0} />
 
         <ActivityCheckinList activities={upcomingActivities} canViewRoster={canEdit(employee.role)} />
 
