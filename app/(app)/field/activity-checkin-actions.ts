@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { formatInTimeZone } from "date-fns-tz";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
@@ -157,9 +158,13 @@ export async function checkOutActivity(calendarEventId: string) {
     return { error: existing ? "คุณเช็คเอ้าท์ไปแล้ว" : "คุณยังไม่ได้เช็คอินกิจกรรมนี้" };
   }
 
-  const workDate = checkin.checked_in_at.slice(0, 10);
-  const startTime = checkin.checked_in_at.slice(11, 16);
-  const endTime = now.slice(11, 16);
+  // checked_in_at/now are UTC instants — slicing the raw ISO string would
+  // store the UTC wall-clock time (e.g. a 08:50 Bangkok check-in shows up
+  // as 01:50), 7 hours off. Convert to Bangkok local time first.
+  const TZ = "Asia/Bangkok";
+  const workDate = formatInTimeZone(checkin.checked_in_at, TZ, "yyyy-MM-dd");
+  const startTime = formatInTimeZone(checkin.checked_in_at, TZ, "HH:mm");
+  const endTime = formatInTimeZone(now, TZ, "HH:mm");
   await supabase.from("work_logs").insert({
     employee_id: employee.id,
     work_date: workDate,
