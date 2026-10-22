@@ -40,9 +40,20 @@ export default async function FieldPage({
   const { data: myCheckins } = requestIds.length
     ? await supabase
         .from("attendance_checkins")
-        .select("field_request_id, kind, happened_at")
+        .select("field_request_id, kind, happened_at, distance_m, within_radius, selfie_url, photo_url")
         .in("field_request_id", requestIds)
     : { data: [] };
+
+  // Own view gets the same distance/radius + photo detail as the approvals
+  // view — previously only dept_head/hr/admin/exec could see this, so the
+  // employee who actually checked in had no way to verify it themselves.
+  const myCheckinsSigned = await Promise.all(
+    (myCheckins ?? []).map(async (c) => ({
+      ...c,
+      selfie_url: await getSignedCheckinPhotoUrl(c.selfie_url),
+      photo_url: await getSignedCheckinPhotoUrl(c.photo_url),
+    }))
+  );
 
   const today = format(new Date(), "yyyy-MM-dd");
   const ownRequests: OwnFieldRequest[] = (requests ?? []).map((r) => {
@@ -55,9 +66,16 @@ export default async function FieldPage({
       location_radius_m: loc?.radius_m ?? null,
       location_required_photos: loc?.required_photos ?? null,
       is_today: r.work_date === today,
-      checkins: (myCheckins ?? [])
+      checkins: myCheckinsSigned
         .filter((c) => c.field_request_id === r.id)
-        .map((c) => ({ kind: c.kind, happened_at: c.happened_at })),
+        .map((c) => ({
+          kind: c.kind,
+          happened_at: c.happened_at,
+          distance_m: c.distance_m,
+          within_radius: c.within_radius,
+          selfie_url: c.selfie_url,
+          photo_url: c.photo_url,
+        })),
     };
   });
 

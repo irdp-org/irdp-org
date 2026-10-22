@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, X, MapPin, ChevronRight, FileText } from "lucide-react";
+import { Plus, Pencil, X, MapPin, ChevronRight, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +46,14 @@ export type OwnFieldRequest = {
   status: RequestStatusT;
   reason: string | null;
   is_today?: boolean;
-  checkins?: { kind: CheckinKindT; happened_at: string }[];
+  checkins?: {
+    kind: CheckinKindT;
+    happened_at: string;
+    distance_m?: number | null;
+    within_radius?: boolean | null;
+    selfie_url?: string | null;
+    photo_url?: string | null;
+  }[];
 };
 
 const FIELD_TYPE_LABELS_FULL: Record<string, string> = {
@@ -86,6 +93,7 @@ export function FieldRequestsClient({
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<OwnFieldRequest | null>(null);
   const [detailItem, setDetailItem] = useState<OwnFieldRequest | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleCancel(id: string) {
@@ -330,9 +338,45 @@ export function FieldRequestsClient({
                         wfh_evening: "เช็คอินเย็น",
                       };
                       return (
-                        <div key={i} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2 text-xs">
-                          <span className="font-medium text-foreground">{kindLabel[c.kind] ?? c.kind}</span>
-                          <span className="text-muted-foreground">{format(new Date(c.happened_at), "HH:mm น.")}</span>
+                        <div key={i} className="flex flex-col gap-1.5 rounded-lg bg-surface px-3 py-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-foreground">{kindLabel[c.kind] ?? c.kind}</span>
+                            <span className="text-muted-foreground">{format(new Date(c.happened_at), "HH:mm น.")}</span>
+                          </div>
+                          {c.within_radius != null && (
+                            <span
+                              className={`inline-flex w-fit items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                                c.within_radius ? "bg-success/10 text-success" : "bg-danger/10 text-danger"
+                              }`}
+                            >
+                              {c.within_radius ? <CheckCircle2 className="h-3 w-3" /> : <AlertTriangle className="h-3 w-3" />}
+                              <MapPin className="h-3 w-3" />
+                              {c.within_radius ? "อยู่ในรัศมี" : "อยู่นอกรัศมี"}
+                              {c.distance_m != null && ` (ห่าง ${c.distance_m} ม.)`}
+                            </span>
+                          )}
+                          {(c.selfie_url || c.photo_url) && (
+                            <div className="flex gap-2">
+                              {c.selfie_url && (
+                                // eslint-disable-next-line @next/next/no-img-element -- signed URL, short-lived
+                                <img
+                                  src={c.selfie_url}
+                                  alt="เซลฟี่"
+                                  onClick={() => setLightbox(c.selfie_url!)}
+                                  className="h-16 w-16 cursor-pointer rounded-lg object-cover"
+                                />
+                              )}
+                              {c.photo_url && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={c.photo_url}
+                                  alt="รูปหน้างาน"
+                                  onClick={() => setLightbox(c.photo_url!)}
+                                  className="h-16 w-16 cursor-pointer rounded-lg object-cover"
+                                />
+                              )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -340,6 +384,16 @@ export function FieldRequestsClient({
                 )}
               </div>
             </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Photo lightbox */}
+      <Dialog open={!!lightbox} onOpenChange={(open) => !open && setLightbox(null)}>
+        <DialogContent className="max-w-2xl p-2">
+          {lightbox && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={lightbox} alt="รูปขยาย" className="max-h-[80vh] w-full rounded-lg object-contain" />
           )}
         </DialogContent>
       </Dialog>

@@ -14,6 +14,7 @@ import {
   Trash2,
   ClipboardList,
   MapPin,
+  CheckCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -169,7 +170,7 @@ function CancelApprovedDialog({
   );
 }
 
-function CheckinSummary({ checkins }: { checkins: FieldCheckinInfo[] }) {
+function CheckinSummary({ checkins, onEnlarge }: { checkins: FieldCheckinInfo[]; onEnlarge: (url: string) => void }) {
   if (checkins.length === 0) return null;
   return (
     <div className="flex flex-col gap-2 rounded-xl bg-background px-3 py-2">
@@ -178,21 +179,36 @@ function CheckinSummary({ checkins }: { checkins: FieldCheckinInfo[] }) {
           <div className="flex items-center gap-2">
             <span className="font-medium text-foreground">{CHECKIN_KIND_LABELS_TH[c.kind]}</span>
             <span className="text-muted-foreground">{format(new Date(c.happened_at), "d MMM HH:mm")}</span>
-            {c.within_radius === false && (
-              <Badge variant="destructive" className="gap-1">
-                <MapPin className="h-3 w-3" /> นอกรัศมี{c.distance_m != null ? ` (${c.distance_m} ม.)` : ""}
-              </Badge>
-            )}
+            {c.within_radius != null &&
+              (c.within_radius ? (
+                <Badge className="gap-1 bg-success/10 text-success hover:bg-success/10">
+                  <CheckCircle2 className="h-3 w-3" /> ในรัศมี{c.distance_m != null ? ` (${c.distance_m} ม.)` : ""}
+                </Badge>
+              ) : (
+                <Badge variant="destructive" className="gap-1">
+                  <MapPin className="h-3 w-3" /> นอกรัศมี{c.distance_m != null ? ` (${c.distance_m} ม.)` : ""}
+                </Badge>
+              ))}
           </div>
           {(c.selfie_url || c.photo_url) && (
             <div className="flex gap-2">
               {c.selfie_url && (
                 /* eslint-disable-next-line @next/next/no-img-element -- signed URL, short-lived, not worth next/image's static optimization */
-                <img src={c.selfie_url} alt="เซลฟี่" className="h-16 w-16 rounded-lg object-cover" />
+                <img
+                  src={c.selfie_url}
+                  alt="เซลฟี่"
+                  onClick={() => onEnlarge(c.selfie_url!)}
+                  className="h-16 w-16 cursor-pointer rounded-lg object-cover"
+                />
               )}
               {c.photo_url && (
                 /* eslint-disable-next-line @next/next/no-img-element */
-                <img src={c.photo_url} alt="รูปหน้างาน" className="h-16 w-16 rounded-lg object-cover" />
+                <img
+                  src={c.photo_url}
+                  alt="รูปหน้างาน"
+                  onClick={() => onEnlarge(c.photo_url!)}
+                  className="h-16 w-16 cursor-pointer rounded-lg object-cover"
+                />
               )}
             </div>
           )}
@@ -216,6 +232,7 @@ export function FieldApprovalList({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<FieldApprovalQueueRow | null>(null);
+  const [lightbox, setLightbox] = useState<string | null>(null);
 
   function decide(id: string, action: "approve" | "reject" | "return" | "cancel", note?: string) {
     startTransition(async () => {
@@ -277,7 +294,7 @@ export function FieldApprovalList({
               <Badge variant={STATUS_VARIANT[r.status]}>{FIELD_STATUS_LABELS_TH[r.status]}</Badge>
             </div>
 
-            <CheckinSummary checkins={r.checkins} />
+            <CheckinSummary checkins={r.checkins} onEnlarge={setLightbox} />
 
             {r.status === "submitted" && canApprove && (
               <div className="flex flex-wrap gap-2">
@@ -364,6 +381,15 @@ export function FieldApprovalList({
           }}
         />
       )}
+
+      <Dialog open={!!lightbox} onOpenChange={(open) => !open && setLightbox(null)}>
+        <DialogContent className="max-w-2xl p-2">
+          {lightbox && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img src={lightbox} alt="รูปขยาย" className="max-h-[80vh] w-full rounded-lg object-contain" />
+          )}
+        </DialogContent>
+      </Dialog>
     </ul>
   );
 }
