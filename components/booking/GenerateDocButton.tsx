@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { FileText, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -8,16 +9,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 type Result = { ok?: boolean; url?: string; error?: string };
 
 /** Reusable "ออกเอกสาร" trigger: tick ส่งเข้าเมล then generate a Google Doc,
- * showing the link when done. `generate` is a server action. */
+ * showing the link when done. `generate` is a server action.
+ *
+ * `onGenerated` lets the parent update its own already-open detail view
+ * (e.g. the persistent "เปิดเอกสารที่สร้างไว้" link) immediately with the
+ * new URL — without it, that link stays stale until the page is reloaded,
+ * since the parent's data was fetched before this generation happened. */
 export function GenerateDocButton({
   id,
   generate,
   label = "ออกเอกสาร",
+  onGenerated,
 }: {
   id: string;
   generate: (id: string, sendEmail: boolean) => Promise<Result>;
   label?: string;
+  onGenerated?: (url: string) => void;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [sendEmail, setSendEmail] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -30,6 +39,8 @@ export function GenerateDocButton({
       const res = await generate(id, sendEmail);
       if (res.error) { setError(res.error); return; }
       setUrl(res.url ?? null);
+      if (res.url) onGenerated?.(res.url);
+      router.refresh();
     });
   }
 

@@ -49,7 +49,7 @@ export default async function TravelExpensePage({
   if (showApprovals) {
     const { data: queue } = await supabase
       .from("travel_expense_claims")
-      .select("id, employee_id, title, status, total_amount, attachment_urls, created_at")
+      .select("id, employee_id, title, status, total_amount, attachment_urls, generated_doc_url, created_at")
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -76,6 +76,7 @@ export default async function TravelExpensePage({
       total_amount: r.total_amount,
       created_at: r.created_at,
       attachment_urls: r.attachment_urls ?? [],
+      generated_doc_url: r.generated_doc_url,
       employee_name: nameById.get(r.employee_id) ?? "—",
       items: (qItems ?? []).filter((it) => it.claim_id === r.id),
     }));

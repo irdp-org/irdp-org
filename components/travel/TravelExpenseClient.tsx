@@ -295,7 +295,12 @@ export function TravelExpenseClient({
                       <ExternalLink className="h-3.5 w-3.5" /> เปิดเอกสารที่สร้างไว้
                     </a>
                   )}
-                  <GenerateDocButton id={detail.id} generate={generateTravelDoc} label="ออกใบรับรองแทนใบเสร็จ" />
+                  <GenerateDocButton
+                    id={detail.id}
+                    generate={generateTravelDoc}
+                    label="ออกใบรับรองแทนใบเสร็จ"
+                    onGenerated={(url) => setDetail((d) => (d ? { ...d, generated_doc_url: url } : d))}
+                  />
                   {(detail.status === "draft" || detail.status === "returned" || canManage) && (
                     <Button size="sm" variant="outline" onClick={() => openEdit(detail)}>
                       <Pencil className="h-3.5 w-3.5" /> แก้ไข

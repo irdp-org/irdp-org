@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, X, RotateCcw, Receipt, Trash2 } from "lucide-react";
+import { Check, X, RotateCcw, Receipt, Trash2, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ export type TravelApprovalRow = {
   total_amount: number;
   created_at: string;
   attachment_urls: string[];
+  generated_doc_url?: string | null;
   employee_name: string;
   items: TravelItem[];
 };
@@ -194,7 +195,22 @@ export function TravelApprovalList({
               <div className="flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">โดย {detail.employee_name}</p>
                 <div className="flex items-center gap-1">
-                  <GenerateDocButton id={detail.id} generate={generateTravelDoc} label="ออกใบรับรองแทนใบเสร็จ" />
+                  {detail.generated_doc_url && (
+                    <a
+                      href={detail.generated_doc_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-primary underline"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" /> เปิดเอกสารที่สร้างไว้
+                    </a>
+                  )}
+                  <GenerateDocButton
+                    id={detail.id}
+                    generate={generateTravelDoc}
+                    label="ออกใบรับรองแทนใบเสร็จ"
+                    onGenerated={(url) => setDetail((d) => (d ? { ...d, generated_doc_url: url } : d))}
+                  />
                   {canManage &&
                     (confirmDeleteId === detail.id ? (
                       <>
