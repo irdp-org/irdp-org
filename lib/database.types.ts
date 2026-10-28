@@ -65,6 +65,8 @@ export interface Database {
           hire_date: string | null;
           address: string | null;
           avatar_url: string | null;
+          signature_url: string | null;
+          signature_drive_id: string | null;
           status: EmployeeStatusT;
           employee_code: string | null;
           education: EducationEntry[];
@@ -88,6 +90,8 @@ export interface Database {
           hire_date?: string | null;
           address?: string | null;
           avatar_url?: string | null;
+          signature_url?: string | null;
+          signature_drive_id?: string | null;
           status?: EmployeeStatusT;
           employee_code?: string | null;
           education?: EducationEntry[];

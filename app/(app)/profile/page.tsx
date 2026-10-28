@@ -4,6 +4,7 @@ import { getSignedAvatarUrl } from "@/lib/storage";
 import { roleLabelTh } from "@/lib/rbac";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import { SignatureSection } from "@/components/profile/SignatureSection";
 
 export default async function ProfilePage() {
   const employee = await getCurrentEmployee();
@@ -27,6 +28,9 @@ export default async function ProfilePage() {
           departmentName={department?.name ?? "—"}
           roleLabel={roleLabelTh[employee.role]}
         />
+        <div className="mt-4">
+          <SignatureSection signatureUrl={employee.signature_url} />
+        </div>
       </div>
     </div>
   );

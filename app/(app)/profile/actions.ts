@@ -124,3 +124,60 @@ export async function updateProfile(formData: FormData) {
   revalidatePath("/", "layout"); // top bar avatar
   return { ok: true };
 }
+
+const MAX_SIGNATURE_BYTES = 2 * 1024 * 1024; // 2MB — a signature image/drawing is tiny
+
+/**
+ * Save the employee's own e-signature — either an uploaded image file, or a
+ * PNG captured from the on-screen signature pad (sent as a data URL). Saved
+ * to Google Drive (not Supabase Storage) under "ลายเซ็นพนักงาน/<ชื่อ>",
+ * same pattern as every other generated/uploaded document in this app.
+ * Only ever replaces the caller's own signature — no employeeId parameter.
+ */
+export async function updateSignature(formData: FormData) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+
+  const file = formData.get("signatureFile");
+  const dataUrl = String(formData.get("signatureDataUrl") ?? "");
+
+  let buffer: Buffer;
+  let mimeType: string;
+  if (file instanceof File && file.size > 0) {
+    if (file.size > MAX_SIGNATURE_BYTES) return { error: "ไฟล์รูปใหญ่เกินไป (จำกัด 2MB)" };
+    buffer = Buffer.from(await file.arrayBuffer());
+    mimeType = file.type || "image/png";
+  } else if (dataUrl.startsWith("data:image/")) {
+    const match = dataUrl.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+    if (!match) return { error: "รูปลายเซ็นไม่ถูกต้อง" };
+    mimeType = match[1];
+    buffer = Buffer.from(match[2], "base64");
+    if (buffer.length > MAX_SIGNATURE_BYTES) return { error: "รูปลายเซ็นใหญ่เกินไป" };
+  } else {
+    return { error: "กรุณาอัปโหลดรูปหรือเซ็นลายเซ็นก่อนบันทึก" };
+  }
+
+  const { getOrCreatePath, uploadToDrive, driveThumbUrl, deleteFromDrive } = await import("@/lib/google-drive");
+  const folderId = await getOrCreatePath(["ลายเซ็นพนักงาน", employee.full_name]);
+  const ext = mimeType === "image/png" ? "png" : mimeType === "image/jpeg" ? "jpg" : "webp";
+  const up = await uploadToDrive(buffer, `signature-${Date.now()}.${ext}`, mimeType, folderId);
+  // driveThumbUrl (not webContentLink) — same choice as every other
+  // Drive-hosted photo preview in this app (checkin selfies, travel
+  // evidence), since webContentLink can force a download-confirmation
+  // redirect that breaks a plain <img src>.
+  const signatureUrl = driveThumbUrl(up.id, 400);
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("employees")
+    .update({ signature_url: signatureUrl, signature_drive_id: up.id })
+    .eq("id", employee.id);
+  if (error) return { error: error.message };
+
+  // Best-effort cleanup of the previous signature file, if any — avoid
+  // leaving an unbounded trail of old signature images in Drive.
+  if (employee.signature_drive_id) await deleteFromDrive(employee.signature_drive_id);
+
+  revalidatePath("/profile");
+  return { ok: true, url: signatureUrl };
+}
