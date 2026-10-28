@@ -309,23 +309,37 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
     const [y, m, d] = isoDate.split("-");
     return `${d}/${m}/${Number(y) + 543}`;
   };
-  // Date shows once per calendar day (blank on repeat rows for that day),
-  // and within each day's group the legs alternate ขาไป/ขากลับ instead of a
-  // numbered list — matches how a single day's round trip is normally two
-  // rows (ไป, then กลับ with จาก/ถึง swapped).
-  let indexInDay = 0;
+  // Date shows once per calendar day (blank on repeat rows for that day).
+  // ขาไป/ขากลับ is derived from each row's actual จาก/ถึง against the day's
+  // first leg — not "every other row" — since a day commonly has more than
+  // 2 rows (e.g. drive + toll fee for each leg = 4 rows/day), and strict
+  // alternation mislabels anything past row 2.
+  let dayPair: { from: string; to: string } | null = null;
   await fillItemTable(
     docId,
     "{{รายละเอียด}}",
     (items ?? []).map((it, i) => {
       const sameDayAsPrev = i > 0 && items![i - 1].travel_date === it.travel_date;
-      indexInDay = sameDayAsPrev ? indexInDay + 1 : 0;
-      const legLabel = indexInDay % 2 === 0 ? "ขาไป" : "ขากลับ";
+      if (!sameDayAsPrev) dayPair = null;
+
+      let legLabel = "";
+      if (it.from_location && it.to_location) {
+        if (!dayPair) {
+          dayPair = { from: it.from_location, to: it.to_location };
+          legLabel = "ขาไป";
+        } else if (it.from_location === dayPair.from && it.to_location === dayPair.to) {
+          legLabel = "ขาไป";
+        } else if (it.from_location === dayPair.to && it.to_location === dayPair.from) {
+          legLabel = "ขากลับ";
+        }
+      }
+
       const mode = MODE_LABELS[it.mode] ?? it.mode;
       const km = it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : "";
+      const route = it.from_location || it.to_location ? `จาก ${it.from_location ?? ""} ถึง ${it.to_location ?? ""} ` : "";
       return {
         date: sameDayAsPrev ? "" : dShort(it.travel_date),
-        detail: `${legLabel} จาก ${it.from_location ?? ""} ถึง ${it.to_location ?? ""} โดย${mode}${km}${it.note ? ` (${it.note})` : ""}`,
+        detail: `${legLabel ? legLabel + " " : ""}${route}โดย${mode}${km}${it.note ? ` (${it.note})` : ""}`.trim(),
         amount: formatBaht(it.amount),
       };
     })
