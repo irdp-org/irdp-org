@@ -325,6 +325,34 @@ export interface Database {
         { id: string; employee_id: string; label: string; created_at: string },
         { id?: string; employee_id: string; label: string }
       >;
+      travel_trip_templates: TableShape<
+        { id: string; employee_id: string; label: string; created_at: string },
+        { id?: string; employee_id: string; label: string }
+      >;
+      travel_trip_template_items: TableShape<
+        {
+          id: string;
+          template_id: string;
+          from_location: string | null;
+          to_location: string | null;
+          mode: string;
+          km: number | null;
+          amount: number;
+          note: string | null;
+          sort_order: number;
+        },
+        {
+          id?: string;
+          template_id: string;
+          from_location?: string | null;
+          to_location?: string | null;
+          mode: string;
+          km?: number | null;
+          amount?: number;
+          note?: string | null;
+          sort_order?: number;
+        }
+      >;
       work_locations: TableShape<{
         id: string;
         name: string;

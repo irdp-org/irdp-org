@@ -76,6 +76,102 @@ export async function getTravelLocations(): Promise<string[]> {
   return (data ?? []).map((r) => r.label);
 }
 
+// ── เส้นทางที่ใช้บ่อย (saved trip templates) ───────────────────────────────────
+// A bundle of item rows (e.g. ขาไป + ค่าทางด่วนขาไป + ขากลับ + ค่าทางด่วนขากลับ)
+// saved together so the same round trip can be re-added to a new claim in one
+// click instead of retyping every leg + toll fee again.
+
+export type TripTemplate = {
+  id: string;
+  label: string;
+  items: {
+    from_location: string | null;
+    to_location: string | null;
+    mode: string;
+    km: number | null;
+    amount: number;
+    note: string | null;
+  }[];
+};
+
+export async function getTripTemplates(): Promise<TripTemplate[]> {
+  const employee = await getCurrentEmployee();
+  if (!employee) return [];
+  const supabase = await createClient();
+
+  const { data: templates } = await supabase
+    .from("travel_trip_templates")
+    .select("id, label")
+    .eq("employee_id", employee.id)
+    .order("created_at", { ascending: false });
+  if (!templates?.length) return [];
+
+  const { data: items } = await supabase
+    .from("travel_trip_template_items")
+    .select("template_id, from_location, to_location, mode, km, amount, note, sort_order")
+    .in(
+      "template_id",
+      templates.map((t) => t.id)
+    )
+    .order("sort_order");
+
+  return templates.map((t) => ({
+    id: t.id,
+    label: t.label,
+    items: (items ?? [])
+      .filter((i) => i.template_id === t.id)
+      .map((i) => ({
+        from_location: i.from_location,
+        to_location: i.to_location,
+        mode: i.mode,
+        km: i.km,
+        amount: i.amount,
+        note: i.note,
+      })),
+  }));
+}
+
+export async function saveTripTemplate(label: string, items: TripTemplate["items"]) {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "unauthorized" };
+  const trimmed = label.trim();
+  if (!trimmed) return { error: "กรุณาตั้งชื่อเส้นทาง" };
+  if (items.length === 0) return { error: "ไม่มีรายการให้บันทึก" };
+
+  const supabase = await createClient();
+  const { data: tpl, error } = await supabase
+    .from("travel_trip_templates")
+    .insert({ employee_id: employee.id, label: trimmed })
+    .select("id")
+    .single();
+  if (error || !tpl) return { error: error?.message ?? "บันทึกไม่สำเร็จ" };
+
+  const { error: itemsErr } = await supabase.from("travel_trip_template_items").insert(
+    items.map((it, idx) => ({
+      template_id: tpl.id,
+      from_location: it.from_location || null,
+      to_location: it.to_location || null,
+      mode: it.mode,
+      km: it.km,
+      amount: it.amount,
+      note: it.note || null,
+      sort_order: idx,
+    }))
+  );
+  if (itemsErr) return { error: itemsErr.message };
+
+  revalidatePath("/travel-expense");
+  return { ok: true, id: tpl.id };
+}
+
+export async function deleteTripTemplate(id: string) {
+  const supabase = await createClient();
+  const { error } = await supabase.from("travel_trip_templates").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath("/travel-expense");
+  return { ok: true };
+}
+
 async function notifyHead(submitter: Employee, claimTitle: string) {
   const supabase = await createClient();
   if (!submitter.department_id) return;

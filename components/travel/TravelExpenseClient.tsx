@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Receipt, Pencil, ExternalLink, ArrowLeftRight } from "lucide-react";
+import { Plus, Trash2, Receipt, Pencil, ExternalLink, ArrowLeftRight, Route, Save } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,14 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { TRAVEL_MODES, MODE_LABELS, KM_RATE, formatBaht } from "@/lib/travel";
-import { saveClaim, deleteClaim, generateTravelDoc } from "@/app/(app)/travel-expense/actions";
+import {
+  saveClaim,
+  deleteClaim,
+  generateTravelDoc,
+  saveTripTemplate,
+  deleteTripTemplate,
+  type TripTemplate,
+} from "@/app/(app)/travel-expense/actions";
 import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 import { compressImage } from "@/lib/image-compress";
 import type { RequestStatusT } from "@/lib/database.types";
@@ -148,10 +155,12 @@ function StatCard({ label, value, sub }: { label: string; value: string; sub?: s
 export function TravelExpenseClient({
   claims,
   savedLocations,
+  tripTemplates,
   canManage = false,
 }: {
   claims: TravelClaim[];
   savedLocations: string[];
+  tripTemplates: TripTemplate[];
   canManage?: boolean;
 }) {
   const router = useRouter();
@@ -365,6 +374,7 @@ export function TravelExpenseClient({
         <ClaimForm
           existing={editing}
           savedLocations={savedLocations}
+          tripTemplates={tripTemplates}
           onClose={() => setFormOpen(false)}
           onSaved={() => {
             setFormOpen(false);
@@ -379,11 +389,13 @@ export function TravelExpenseClient({
 function ClaimForm({
   existing,
   savedLocations,
+  tripTemplates,
   onClose,
   onSaved,
 }: {
   existing: TravelClaim | null;
   savedLocations: string[];
+  tripTemplates: TripTemplate[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -404,8 +416,64 @@ function ClaimForm({
   const [error, setError] = useState<string | null>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [templates, setTemplates] = useState(tripTemplates);
+  const [savingTemplateName, setSavingTemplateName] = useState<string | null>(null);
+  const [templatePending, startTemplateTransition] = useTransition();
 
   const total = rows.reduce((s, r) => s + rowAmount(r), 0);
+
+  // Apply a saved "เส้นทางที่ใช้บ่อย": append its whole bundle (e.g.
+  // ขาไป + ค่าทางด่วนขาไป + ขากลับ + ค่าทางด่วนขากลับ) as new rows dated
+  // today — เพิ่มรายการ / เพิ่มขากลับ still works the same for everything else.
+  function applyTemplate(id: string) {
+    const tpl = templates.find((t) => t.id === id);
+    if (!tpl) return;
+    const today = new Date().toISOString().slice(0, 10);
+    setRows((prev) => {
+      const fresh = tpl.items.map((it) => ({
+        travel_date: today,
+        from_location: it.from_location ?? "",
+        to_location: it.to_location ?? "",
+        mode: it.mode,
+        km: it.km != null ? String(it.km) : "",
+        amount: it.mode === "private_car" ? "" : String(it.amount),
+        note: it.note ?? "",
+      }));
+      // Replace the form's single still-blank starter row instead of leaving
+      // an empty row dangling above the template's rows.
+      const base = prev.length === 1 && !prev[0].from_location && !prev[0].to_location ? [] : prev;
+      return [...base, ...fresh];
+    });
+  }
+
+  function saveAsTemplate() {
+    if (!savingTemplateName?.trim()) return;
+    const items = rows.map((r) => ({
+      from_location: r.from_location || null,
+      to_location: r.to_location || null,
+      mode: r.mode,
+      km: r.mode === "private_car" && r.km ? Number(r.km) : null,
+      amount: rowAmount(r),
+      note: r.note || null,
+    }));
+    const label = savingTemplateName;
+    startTemplateTransition(async () => {
+      const res = await saveTripTemplate(label, items);
+      if ("error" in res && res.error) {
+        setError(res.error);
+        return;
+      }
+      setTemplates((prev) => [{ id: res.id!, label, items }, ...prev]);
+      setSavingTemplateName(null);
+    });
+  }
+
+  function removeTemplate(id: string) {
+    startTemplateTransition(async () => {
+      await deleteTripTemplate(id);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+    });
+  }
 
   function updateRow(i: number, patch: Partial<Row>) {
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -469,6 +537,26 @@ function ClaimForm({
             <Label>ชื่อ/วัตถุประสงค์ (ไม่บังคับ)</Label>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="เช่น เดินทางประชุมนอกสถานที่" />
           </div>
+
+          {templates.length > 0 && (
+            <div className="flex flex-col gap-1.5 rounded-xl border border-border bg-surface p-3">
+              <Label className="flex items-center gap-1.5">
+                <Route className="h-3.5 w-3.5" /> เส้นทางที่บันทึกไว้
+              </Label>
+              <div className="flex flex-wrap gap-1.5">
+                {templates.map((t) => (
+                  <div key={t.id} className="flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-xs">
+                    <button type="button" onClick={() => applyTemplate(t.id)} className="font-medium text-foreground">
+                      {t.label} ({t.items.length} รายการ)
+                    </button>
+                    <button type="button" onClick={() => removeTemplate(t.id)} disabled={templatePending} className="text-muted-foreground hover:text-danger">
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {rows.map((r, i) => (
             <div key={i} className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-3">
@@ -537,9 +625,37 @@ function ClaimForm({
             </div>
           ))}
 
-          <Button type="button" variant="outline" onClick={addRow} className="self-start">
-            <Plus className="h-4 w-4" /> เพิ่มรายการ
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={addRow} className="self-start">
+              <Plus className="h-4 w-4" /> เพิ่มรายการ
+            </Button>
+            {savingTemplateName == null ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="self-start gap-1.5"
+                onClick={() => setSavingTemplateName("")}
+                disabled={rows.every((r) => !r.from_location && !r.to_location)}
+              >
+                <Save className="h-4 w-4" /> บันทึกเป็นเส้นทางที่ใช้บ่อย
+              </Button>
+            ) : (
+              <div className="flex w-full items-center gap-2">
+                <Input
+                  autoFocus
+                  placeholder="ตั้งชื่อเส้นทาง เช่น บ้าน-โรงแรมแลนด์มาร์ค ไป-กลับ"
+                  value={savingTemplateName}
+                  onChange={(e) => setSavingTemplateName(e.target.value)}
+                />
+                <Button type="button" size="sm" disabled={templatePending || !savingTemplateName.trim()} onClick={saveAsTemplate}>
+                  บันทึก
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setSavingTemplateName(null)}>
+                  ยกเลิก
+                </Button>
+              </div>
+            )}
+          </div>
 
           <div className="flex justify-between border-t border-border pt-2 text-sm font-semibold">
             <span>รวมทั้งสิ้น</span>
