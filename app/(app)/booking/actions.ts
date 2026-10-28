@@ -679,7 +679,12 @@ export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
   const requesterName = nameById.get(b.requester_id) ?? "";
   const others = [b.has_tollway ? "ค่าทางด่วน" : "", b.has_fuel ? "ค่าน้ำมัน" : "", b.other_expense || ""].filter(Boolean).join(", ");
 
-  const { url } = await generateDocFromTemplate(templateId, `ใบจองรถ-${dLabel(b.start_at)}-${requesterName}`, {
+  const { getOrCreateDatedFolder } = await import("@/lib/google-drive");
+  const folderId = await getOrCreateDatedFolder("จองรถ", b.start_at.slice(0, 10), requesterName || "ไม่ระบุชื่อ");
+  const { url } = await generateDocFromTemplate(
+    templateId,
+    `ใบจองรถ-${dLabel(b.start_at)}-${requesterName}`,
+    {
     เมื่อวันที่: dLabel(new Date().toISOString()),
     ชื่อผู้จอง: requesterName,
     ตำแหน่ง: byId.get(b.requester_id)?.position ?? "",
@@ -694,7 +699,9 @@ export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
     รายจ่ายเพิ่มเติม: others || "ไม่มี",
     ค่าผ่านทาง1c: "",
     หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
-  });
+    },
+    folderId
+  );
 
   await admin.from("van_bookings").update({ generated_doc_url: url }).eq("id", bookingId);
   await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองรถ ${dLabel(b.start_at)}`, url);
@@ -720,7 +727,12 @@ export async function generateRoomDoc(bookingId: string, sendEmail: boolean) {
   const { data: room } = await admin.from("rooms").select("name").eq("id", b.room_id).single();
 
   const requesterName = reqEmp?.full_name ?? "";
-  const { url } = await generateDocFromTemplate(templateId, `ใบจองห้อง-${dLabel(b.start_at)}-${requesterName}`, {
+  const { getOrCreateDatedFolder } = await import("@/lib/google-drive");
+  const folderId = await getOrCreateDatedFolder("จองห้องประชุม", b.start_at.slice(0, 10), requesterName || "ไม่ระบุชื่อ");
+  const { url } = await generateDocFromTemplate(
+    templateId,
+    `ใบจองห้อง-${dLabel(b.start_at)}-${requesterName}`,
+    {
     เมื่อวันที่: dLabel(new Date().toISOString()),
     ชื่อผู้จอง: requesterName,
     ตำแหน่ง: reqEmp?.position ?? "",
@@ -731,7 +743,9 @@ export async function generateRoomDoc(bookingId: string, sendEmail: boolean) {
     ตั้งแต่: `${dLabel(b.start_at)} ${tLabel(b.start_at)}`,
     ถึง: `${dLabel(b.end_at)} ${tLabel(b.end_at)}`,
     หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
-  });
+    },
+    folderId
+  );
 
   await admin.from("room_bookings").update({ generated_doc_url: url }).eq("id", bookingId);
   await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองห้องประชุม ${dLabel(b.start_at)}`, url);

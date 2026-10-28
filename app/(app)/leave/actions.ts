@@ -242,7 +242,12 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
   const { data: emp } = await admin.from("employees").select("full_name, position").eq("id", r.employee_id).single();
 
   const days = (r.hours / 7.5).toFixed(1).replace(/\.0$/, "");
-  const { url } = await generateDocFromTemplate(templateId, `ใบลา-${dLabel(r.start_at)}-${emp?.full_name ?? ""}`, {
+  const { getOrCreateDatedFolder } = await import("@/lib/google-drive");
+  const folderId = await getOrCreateDatedFolder("ใบลา", r.start_at.slice(0, 10), emp?.full_name ?? "ไม่ระบุชื่อ");
+  const { url } = await generateDocFromTemplate(
+    templateId,
+    `ใบลา-${dLabel(r.start_at)}-${emp?.full_name ?? ""}`,
+    {
     ผู้ลา: emp?.full_name ?? "",
     ตำแหน่ง: emp?.position ?? "",
     ฝ่าย: await deptNameOf(r.employee_id),
@@ -253,7 +258,9 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
     เหตุผล: r.reason ?? "",
     วันที่ยื่น: dLabel(r.created_at),
     หัวหน้าฝ่าย: await deptHeadName(r.employee_id),
-  });
+    },
+    folderId
+  );
 
   await emailDocIfRequested(sendEmail, r.employee_id, `ใบลา ${dLabel(r.start_at)}`, url);
   return { ok: true, url };

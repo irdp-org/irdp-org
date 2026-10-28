@@ -356,7 +356,12 @@ export async function generateAssetDoc(assignmentId: string, sendEmail: boolean)
     admin.from("employees").select("full_name").eq("id", a.employee_id).single(),
   ]);
 
-  const { url } = await generateDocFromTemplate(templateId, `ใบรับคืนอุปกรณ์-${asset?.name ?? ""}-${emp?.full_name ?? ""}`, {
+  const { getOrCreateDatedFolder } = await import("@/lib/google-drive");
+  const folderId = await getOrCreateDatedFolder("รับ-คืนอุปกรณ์", a.assigned_at.slice(0, 10), emp?.full_name ?? "ไม่ระบุชื่อ");
+  const { url } = await generateDocFromTemplate(
+    templateId,
+    `ใบรับคืนอุปกรณ์-${asset?.name ?? ""}-${emp?.full_name ?? ""}`,
+    {
     ผู้รับผิดชอบ: emp?.full_name ?? "",
     ฝ่าย: await deptNameOf(a.employee_id),
     ชื่ออุปกรณ์: asset?.name ?? "",
@@ -367,7 +372,9 @@ export async function generateAssetDoc(assignmentId: string, sendEmail: boolean)
     วันที่คืน: a.returned_at ? dLabel(a.returned_at) : "-",
     วันที่: dLabel(new Date().toISOString()),
     หัวหน้าฝ่าย: await deptHeadName(a.employee_id),
-  });
+    },
+    folderId
+  );
 
   await emailDocIfRequested(sendEmail, a.employee_id, `ใบรับ-คืนอุปกรณ์ ${asset?.name ?? ""}`, url);
   return { ok: true, url };

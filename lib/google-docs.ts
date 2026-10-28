@@ -4,23 +4,29 @@ import { DRIVE_FOLDER_ID } from "./google-drive";
 
 /**
  * Generate a document from a Google Docs template:
- *   1. copy the template into the shared Drive folder
+ *   1. copy the template into the shared Drive folder (or `folderId`, if given)
  *   2. replace every {{placeholder}} with the provided value
  *   3. make it link-viewable and return the edit URL
  *
  * The template file must be shared with the service account (Editor).
  * Placeholders in the template use double braces, e.g. {{ผู้จอง}}.
+ *
+ * `folderId` defaults to the flat shared root — pass one from
+ * getOrCreatePath/getOrCreateDatedFolder (lib/google-drive.ts) to keep
+ * generated docs organized by module/date/person instead of all landing in
+ * one undifferentiated folder.
  */
 export async function generateDocFromTemplate(
   templateId: string,
   name: string,
-  replacements: Record<string, string | null | undefined>
+  replacements: Record<string, string | null | undefined>,
+  folderId: string = DRIVE_FOLDER_ID
 ): Promise<{ id: string; url: string }> {
   const drive = driveClient();
 
   const copy = await drive.files.copy({
     fileId: templateId,
-    requestBody: { name, parents: [DRIVE_FOLDER_ID] },
+    requestBody: { name, parents: [folderId] },
     supportsAllDrives: true,
     fields: "id",
   });

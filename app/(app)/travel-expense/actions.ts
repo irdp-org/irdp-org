@@ -272,19 +272,34 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   // Filenames collide easily (same person, same day, multiple trips) since
   // the name used to be just "ใบรับรองแทนใบเสร็จ-<ชื่อ>" — stamp date+time.
   const stamp = dLabel(new Date().toISOString()).replace(/\s+/g, "") + "-" + new Date().toISOString().slice(11, 16).replace(":", "");
+
+  // Same "เบิกค่าเดินทาง/<year>/<month>/<name>" folder the evidence photos
+  // already go into (see saveClaim above) — keeps the certificate next to
+  // its own claim's receipts instead of in the flat shared root.
+  const earliestDate =
+    (items ?? []).reduce((min, i) => (i.travel_date && (!min || i.travel_date < min) ? i.travel_date : min), "" as string) ||
+    new Date().toISOString().slice(0, 10);
+  const { getOrCreateDatedFolder } = await import("@/lib/google-drive");
+  const folderId = await getOrCreateDatedFolder("เบิกค่าเดินทาง", earliestDate, emp?.full_name ?? "ไม่ระบุชื่อ");
+
   // Note: no "รายละเอียด" key here — that placeholder sits inside the item
   // table's data-row cell and is used as a marker by fillItemTable below to
   // locate+duplicate that row per item; replaceAllText would wipe it first.
-  const { id: docId, url } = await generateDocFromTemplate(templateId, `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}-${stamp}`, {
-    ได้ปฏิบัติงานเกี่ยวกับ: claim.title ?? "การเดินทางปฏิบัติงาน",
-    ชื่อ: emp?.full_name ?? "",
-    ตำแหน่ง: emp?.position ?? "",
-    ฝ่าย: dept,
-    ผู้อนุมัติ: head,
-    วันที่: dLabel(new Date().toISOString()),
-    รวมเป็นเงิน: formatBaht(claim.total_amount),
-    รวมเป็นเงินตัวอักษร: bahtText(claim.total_amount),
-  });
+  const { id: docId, url } = await generateDocFromTemplate(
+    templateId,
+    `ใบรับรองแทนใบเสร็จ-${emp?.full_name ?? ""}-${stamp}`,
+    {
+      ได้ปฏิบัติงานเกี่ยวกับ: claim.title ?? "การเดินทางปฏิบัติงาน",
+      ชื่อ: emp?.full_name ?? "",
+      ตำแหน่ง: emp?.position ?? "",
+      ฝ่าย: dept,
+      ผู้อนุมัติ: head,
+      วันที่: dLabel(new Date().toISOString()),
+      รวมเป็นเงิน: formatBaht(claim.total_amount),
+      รวมเป็นเงินตัวอักษร: bahtText(claim.total_amount),
+    },
+    folderId
+  );
 
   // Fill the real 3-column item table: one row per travel leg (date / route
   // + mode / amount), duplicating the template's single data row as needed.
