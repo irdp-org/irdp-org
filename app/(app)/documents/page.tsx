@@ -62,14 +62,21 @@ async function loadCameraTab(supabase: Awaited<ReturnType<typeof createClient>>)
   return { rows, employeeOptions, senders };
 }
 
-async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient>>, categoryLabel: string) {
+const EARLIEST_YEAR_BE = 2560; // bounds the year picker; no query needed to build it
+
+async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient>>, categoryLabel: string, yearBe: number) {
   const { data: category } = await supabase.from("document_categories").select("id").eq("label", categoryLabel).maybeSingle();
   if (!category) return [] as IntakeLogRow[];
 
+  // Scoping to one year (ดร.เสรี alone has 1,100+ rows across all years) is
+  // what actually fixes the slow load — same fix as /document-numbers.
+  const yearGreg = yearBe - 543;
   const { data: rows } = await supabase
     .from("document_numbers")
     .select("id, seq, doc_no, ref_no, issued_date, from_name, recipient, title, issued_by, attachment_url")
     .eq("category_id", category.id)
+    .gte("issued_date", `${yearGreg}-01-01`)
+    .lte("issued_date", `${yearGreg}-12-31`)
     .order("issued_date", { ascending: false });
 
   const issuerIds = [...new Set((rows ?? []).map((r) => r.issued_by))];
@@ -96,19 +103,22 @@ async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient
 export default async function DocumentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; year?: string }>;
 }) {
   const employee = await getCurrentEmployee();
   if (!employee) redirect("/");
   if (!(await canReceive(employee.department_id, employee.role))) redirect("/");
 
-  const { tab: tabParam } = await searchParams;
+  const { tab: tabParam, year: yearParam } = await searchParams;
   const activeTab = INTAKE_TABS.find((t) => t.key === tabParam) ?? INTAKE_TABS.find((t) => t.key === "warapat")!;
+  const currentYearBe = new Date().getFullYear() + 543;
+  const yearBe = Number(yearParam) || currentYearBe;
+  const years = Array.from({ length: currentYearBe - EARLIEST_YEAR_BE + 1 }, (_, i) => String(currentYearBe - i));
 
   const supabase = await createClient();
 
   const camera = activeTab.key === "camera" ? await loadCameraTab(supabase) : null;
-  const logRows = activeTab.categoryLabel ? await loadIntakeLogTab(supabase, activeTab.categoryLabel) : null;
+  const logRows = activeTab.categoryLabel ? await loadIntakeLogTab(supabase, activeTab.categoryLabel, yearBe) : null;
   const { data: allEmployees } = logRows
     ? await supabase.from("employee_directory").select("id, full_name").eq("status", "active").order("full_name")
     : { data: null };
@@ -121,7 +131,7 @@ export default async function DocumentsPage({
           {INTAKE_TABS.map((t) => (
             <Link
               key={t.key}
-              href={t.key === "camera" ? "/documents" : `/documents?tab=${t.key}`}
+              href={t.key === "camera" ? "/documents" : `/documents?tab=${t.key}&year=${yearBe}`}
               className={cn(
                 "px-3 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors",
                 activeTab.key === t.key
@@ -141,6 +151,9 @@ export default async function DocumentsPage({
             rows={logRows}
             employeeOptions={allEmployees ?? []}
             canDelete={isAdmin(employee.role)}
+            years={years}
+            activeYear={String(yearBe)}
+            tabKey={activeTab.key}
           />
         )}
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -26,18 +26,23 @@ export type IntakeLogRow = {
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
-const ALL_TAB = "ทุกปี";
 
 export function IntakeLogClient({
   categoryLabel,
   rows,
   employeeOptions,
   canDelete,
+  years,
+  activeYear,
+  tabKey,
 }: {
   categoryLabel: string;
   rows: IntakeLogRow[];
   employeeOptions: { id: string; full_name: string }[];
   canDelete: boolean;
+  years: string[];
+  activeYear: string;
+  tabKey: string;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -45,18 +50,21 @@ export function IntakeLogClient({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
 
-  const years = useMemo(
-    () => [...new Set(rows.map((r) => String(new Date(r.issued_date).getFullYear() + 543)))].sort((a, b) => Number(b) - Number(a)),
-    [rows]
-  );
-  // Default to the latest year with data (or this year if there's none yet)
-  // instead of showing "ทุกปี" — a 1,000+ row register is unusable to scroll
-  // through unfiltered every time the page opens.
-  const [yearFilter, setYearFilter] = useState(() => years[0] ?? String(new Date().getFullYear() + 543));
-
+  // Year is a real server-side filter now (?year=) instead of client state —
+  // the page only ever fetches one year's rows, which is what actually fixes
+  // the slow load (1,100+ rows for some registers across all years at once).
+  const searchLower = search.trim().toLowerCase();
   const visibleRows = rows.filter(
-    (r) => yearFilter === ALL_TAB || String(new Date(r.issued_date).getFullYear() + 543) === yearFilter
+    (r) =>
+      !searchLower ||
+      r.title.toLowerCase().includes(searchLower) ||
+      (r.from_name ?? "").toLowerCase().includes(searchLower) ||
+      (r.recipient ?? "").toLowerCase().includes(searchLower) ||
+      r.doc_no.toLowerCase().includes(searchLower) ||
+      (r.ref_no ?? "").toLowerCase().includes(searchLower) ||
+      r.handler_name.toLowerCase().includes(searchLower)
   );
 
   function handleCreate(formData: FormData) {
@@ -147,22 +155,29 @@ export function IntakeLogClient({
         <Button type="button" onClick={() => setCreateOpen(true)}>
           <Plus className="h-4 w-4" /> เพิ่มรายการ
         </Button>
-        <select
-          value={yearFilter}
-          onChange={(e) => setYearFilter(e.target.value)}
-          className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
-        >
-          <option value={ALL_TAB}>ทุกปี</option>
-          {years.map((y) => (
-            <option key={y} value={y}>
-              ปี {y}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={activeYear}
+            onChange={(e) => router.push(`/documents?tab=${tabKey}&year=${e.target.value}`)}
+            className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+          >
+            {years.map((y) => (
+              <option key={y} value={y}>
+                ปี {y}
+              </option>
+            ))}
+          </select>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="ค้นหาชื่อเรื่อง, ถึง, จาก, เลขที่..."
+            className="sm:max-w-xs"
+          />
+        </div>
       </div>
 
       {visibleRows.length === 0 ? (
-        <EmptyState icon={FileText} title="ไม่พบรายการ" description="กดปุ่ม 'เพิ่มรายการ' เพื่อเริ่มลงรายการแรก" />
+        <EmptyState icon={FileText} title="ไม่พบรายการ" description={rows.length === 0 ? "กดปุ่ม 'เพิ่มรายการ' เพื่อเริ่มลงรายการแรก" : "ลองเปลี่ยนตัวกรองหรือคำค้นหา"} />
       ) : (
         <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} defaultSort={{ key: "seq", dir: "desc" }} />
       )}

@@ -6,44 +6,33 @@ import { DocumentNumbersClient, type DocNumberRow } from "@/components/document-
 
 export const dynamic = "force-dynamic";
 
-export default async function DocumentNumbersPage() {
+const EARLIEST_YEAR_BE = 2560; // bounds the year picker; no query needed to build it
+
+export default async function DocumentNumbersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ year?: string }>;
+}) {
   const employee = await getCurrentEmployee();
   if (!employee) return null;
 
   const supabase = await createClient();
 
-  // RLS already scopes rows to the caller's department (or all, for oversight roles).
-  // PostgREST caps any single request at 1000 rows by default — well past
-  // that now (2,800+ rows after the secretary/HR imports), so a plain
-  // select silently dropped entire "books" worth of older rows past the
-  // cap instead of erroring. Page through with .range() to get everything.
-  async function fetchAllDocumentNumbers() {
-    const pageSize = 1000;
-    let from = 0;
-    const all: NonNullable<Awaited<ReturnType<typeof fetchPage>>["data"]> = [];
-    async function fetchPage(rangeFrom: number) {
-      return supabase
-        .from("document_numbers")
-        .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at")
-        // doc_no is text and its format changed over time (old rows: "year/code/seq",
-        // current generator: "code/year/seq") — sorting by it lexicographically pushes
-        // newly-issued numbers below legacy rows. created_at sorts correctly
-        // regardless of doc_no format.
-        .order("created_at", { ascending: false })
-        .range(rangeFrom, rangeFrom + pageSize - 1);
-    }
-    while (true) {
-      const { data } = await fetchPage(from);
-      if (!data || data.length === 0) break;
-      all.push(...data);
-      if (data.length < pageSize) break;
-      from += pageSize;
-    }
-    return all;
-  }
+  const currentYearBe = new Date().getFullYear() + 543;
+  const { year: yearParam } = await searchParams;
+  const yearBe = Number(yearParam) || currentYearBe;
+  const years = Array.from({ length: currentYearBe - EARLIEST_YEAR_BE + 1 }, (_, i) => String(currentYearBe - i));
 
-  const [rows, { data: categories }, { data: recipients }] = await Promise.all([
-    fetchAllDocumentNumbers(),
+  // Scoping to one year at a time (instead of fetching the full 2,800+ row
+  // table on every load) is what actually fixes the slow load — a given
+  // year's rows comfortably fit under PostgREST's 1000-row cap, so no
+  // pagination loop is needed here any more.
+  const [{ data: rows }, { data: categories }, { data: recipients }] = await Promise.all([
+    supabase
+      .from("document_numbers")
+      .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at")
+      .eq("year_be", yearBe)
+      .order("created_at", { ascending: false }),
     supabase.from("document_categories").select("id, department_id, label").order("sort_order"),
     supabase.from("document_recipients").select("name").order("name"),
   ]);
@@ -52,7 +41,7 @@ export default async function DocumentNumbersPage() {
   // "จาก"), not outgoing-issued numbers, and don't belong in this book list.
   const MOVED_TO_INTAKE = new Set(["ส่วนรับเลขา ดร.วรภัทร", "ส่วนรับเลขา ดร.เสรี", "รับเข้า ธุรการ"]);
   const movedCategoryIds = new Set((categories ?? []).filter((c) => MOVED_TO_INTAKE.has(c.label)).map((c) => c.id));
-  const rowsForThisPage = rows.filter((r) => !r.category_id || !movedCategoryIds.has(r.category_id));
+  const rowsForThisPage = (rows ?? []).filter((r) => !r.category_id || !movedCategoryIds.has(r.category_id));
 
   const deptIds = [...new Set(rowsForThisPage.map((r) => r.department_id))];
   const issuerIdsForPage = [...new Set(rowsForThisPage.map((r) => r.issued_by))];
@@ -105,6 +94,8 @@ export default async function DocumentNumbersPage() {
           categoryLabels={categoryLabels}
           recipientNames={recipientNames}
           canDelete={isAdmin(employee.role)}
+          years={years}
+          activeYear={String(yearBe)}
         />
       </div>
     </div>

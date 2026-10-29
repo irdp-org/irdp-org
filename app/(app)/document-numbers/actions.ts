@@ -100,9 +100,11 @@ export async function createDocumentNumber(formData: FormData) {
   const categoryId = categoryInput ? await getOrCreateCategoryId(categoryInput, employee.department_id, employee.id) : null;
   const recipient = recipientInput ? await getOrCreateRecipient(recipientInput, employee.id) : null;
   let categoryCode: string | null = null;
+  let isExternalBook = false;
   if (categoryId) {
     const { data: cat } = await admin.from("document_categories").select("code, label").eq("id", categoryId).single();
     categoryCode = cat?.code ?? cat?.label ?? null;
+    isExternalBook = !!cat?.label?.startsWith("ภายนอก");
   }
 
   const { data: seq, error: seqErr } = await supabase.rpc("fn_next_docnum_seq", {
@@ -111,8 +113,12 @@ export async function createDocumentNumber(formData: FormData) {
     p_category_id: categoryId,
   });
   if (seqErr || seq == null) return { error: seqErr?.message ?? "ออกเลขไม่สำเร็จ" };
+  // เล่มภายนอก uses "IRDP{year}/{code}/{seq}" (matches the imported rows
+  // already in that book) — every other register keeps "{year}/{code}/{seq}".
   const docNo = categoryCode
-    ? `${yearBe}/${categoryCode}/${String(seq).padStart(4, "0")}`
+    ? isExternalBook
+      ? `IRDP${yearBe}/${categoryCode}/${String(seq).padStart(4, "0")}`
+      : `${yearBe}/${categoryCode}/${String(seq).padStart(4, "0")}`
     : `${yearBe}/${deptName}/${String(seq).padStart(3, "0")}`;
 
   let attachmentDriveId: string | null = null;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, FileText, Hash, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,12 +59,16 @@ export function DocumentNumbersClient({
   categoryLabels,
   recipientNames,
   canDelete,
+  years,
+  activeYear,
 }: {
   rows: DocNumberRow[];
   showDeptColumn: boolean;
   categoryLabels: string[];
   recipientNames: string[];
   canDelete: boolean;
+  years: string[];
+  activeYear: string;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -74,13 +78,9 @@ export function DocumentNumbersClient({
   const [activeBook, setActiveBook] = useState<Book>(BOOK_INTERNAL);
   const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const years = useMemo(
-    () => [...new Set(rows.map((r) => String(new Date(r.issued_date).getFullYear() + 543)))].sort((a, b) => Number(b) - Number(a)),
-    [rows]
-  );
-  // Default to the latest year with data instead of "ทุกปี" — with 2,800+
-  // rows across years, an unfiltered table is unusable to open by default.
-  const [yearFilter, setYearFilter] = useState(() => years[0] ?? String(new Date().getFullYear() + 543));
+  // Year is a real server-side filter now (?year=) instead of client state —
+  // the page only ever fetches one year's rows, which is what actually fixes
+  // the slow load (2,800+ rows across all years at once, before).
   const [search, setSearch] = useState("");
 
   function rowBook(r: DocNumberRow) {
@@ -109,7 +109,6 @@ export function DocumentNumbersClient({
   const visibleRows = rows
     .filter((r) => rowBook(r) === activeBook)
     .filter((r) => activeTab === ALL_TAB || r.category_label === activeTab)
-    .filter((r) => yearFilter === ALL_TAB || String(new Date(r.issued_date).getFullYear() + 543) === yearFilter)
     .filter(
       (r) =>
         !searchLower ||
@@ -273,11 +272,10 @@ export function DocumentNumbersClient({
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
-          value={yearFilter}
-          onChange={(e) => setYearFilter(e.target.value)}
+          value={activeYear}
+          onChange={(e) => router.push(`/document-numbers?year=${e.target.value}`)}
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
         >
-          <option value={ALL_TAB}>ทุกปี</option>
           {years.map((y) => (
             <option key={y} value={y}>
               ปี {y}
