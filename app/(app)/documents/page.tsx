@@ -1,23 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { DocumentIntakeClient, type ReceivedDoc } from "@/components/documents/DocumentIntakeClient";
 import { IntakeLogClient, type IntakeLogRow } from "@/components/documents/IntakeLogClient";
 import { isAdmin } from "@/lib/rbac";
+import { canReceiveDocuments } from "@/lib/intake-permissions";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-async function canReceive(deptId: string | null, role: string): Promise<boolean> {
-  if (["admin", "hr"].includes(role)) return true;
-  if (!deptId) return false;
-  const admin = createAdminClient();
-  const { data } = await admin.from("departments").select("name").eq("id", deptId).single();
-  return ["ธุรการ", "บุคคล", "ฝ่ายบุคคล"].includes(data?.name ?? "");
-}
 
 // Historical paper registers, moved here from "ออกเลขเอกสาร" — they're
 // incoming logs (มี "จาก"), not outgoing-issued numbers. Each is its own
@@ -107,7 +99,7 @@ export default async function DocumentsPage({
 }) {
   const employee = await getCurrentEmployee();
   if (!employee) redirect("/");
-  if (!(await canReceive(employee.department_id, employee.role))) redirect("/");
+  if (!(await canReceiveDocuments(employee.department_id, employee.role))) redirect("/");
 
   const { tab: tabParam, year: yearParam } = await searchParams;
   const activeTab = INTAKE_TABS.find((t) => t.key === tabParam) ?? INTAKE_TABS.find((t) => t.key === "warapat")!;

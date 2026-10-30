@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
-import { canEdit, isAdmin } from "@/lib/rbac";
+import { isAdmin } from "@/lib/rbac";
+import { canReceiveDocuments } from "@/lib/intake-permissions";
 
 const DEPT_THURAKARN = "ec228265-ee39-4b31-98f5-364dc03d1297";
 
@@ -19,7 +20,7 @@ const DOC_NO_TEMPLATE: Record<string, (yearGreg: number, seq: number) => string>
 
 async function assertEditor() {
   const employee = await getCurrentEmployee();
-  if (!employee || !canEdit(employee.role)) throw new Error("ไม่มีสิทธิ์");
+  if (!employee || !(await canReceiveDocuments(employee.department_id, employee.role))) throw new Error("ไม่มีสิทธิ์");
   return employee;
 }
 
