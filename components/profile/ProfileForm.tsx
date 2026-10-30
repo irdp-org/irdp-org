@@ -10,9 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { updateProfile } from "@/app/(app)/profile/actions";
+import { compressImage } from "@/lib/image-compress";
 import type { Employee } from "@/lib/auth";
 import type { EducationEntry, WorkHistoryEntry, TrainingHistoryEntry } from "@/lib/database.types";
 
+// Matches the avatars bucket's file_size_limit (0002_storage.sql) — enforced
+// after compression below, not on the raw picked file, since a modern phone
+// camera photo routinely starts well above this before resizing.
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 function initialsOf(fullName: string) {
@@ -50,11 +54,10 @@ export function ProfileForm({
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > MAX_AVATAR_BYTES) {
-      setError("ไฟล์รูปใหญ่เกินไป (จำกัด 5MB)");
-      e.target.value = "";
-      return;
-    }
+    // No raw-size gate here any more — a camera photo straight off a phone
+    // is routinely several MB before resizing, and was silently blocking
+    // uploads at the old 5MB check. Compressed before actually submitting
+    // (see handleSubmit), which brings it well under the bucket's limit.
     setError(null);
     setAvatarPreview(URL.createObjectURL(file));
   }
@@ -99,10 +102,18 @@ export function ProfileForm({
     formData.set("education", JSON.stringify(education));
     formData.set("workHistory", JSON.stringify(workHistory));
     formData.set("trainingHistory", JSON.stringify(trainingHistory));
-    const file = fileInputRef.current?.files?.[0];
-    if (file) formData.set("avatarFile", file);
+    const rawFile = fileInputRef.current?.files?.[0];
 
     startTransition(async () => {
+      if (rawFile) {
+        const compressed = await compressImage(rawFile);
+        if (compressed.size > MAX_AVATAR_BYTES) {
+          setError("ไฟล์รูปใหญ่เกินไปแม้บีบอัดแล้ว ลองใช้รูปอื่น");
+          return;
+        }
+        formData.set("avatarFile", compressed);
+      }
+
       const res = await updateProfile(formData);
       if (res && "error" in res && res.error) {
         setError(res.error);
