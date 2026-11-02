@@ -34,6 +34,27 @@ export type StockTxKindT = "purchase" | "deduct" | "return" | "adjust";
 export type QmsDocTypeT = "manual" | "procedure" | "work_instruction" | "form";
 export type QmsDocStatusT = "active" | "superseded" | "obsolete";
 
+// DAR workflow (0053_qms_dar_workflow.sql) — the ISO doc-code letters
+// (QM/PM/WI/FM/SD), kept separate from QmsDocTypeT above since that enum
+// predates "SD" and altering it isn't worth the migration risk.
+export type QmsDocTypeCodeT = "QM" | "PM" | "WI" | "FM" | "SD";
+export type QmsConfidentialityT = "public" | "internal" | "confidential";
+export type QmsDarActionT = "create" | "revise" | "cancel";
+export type QmsDarStatusT = "pending" | "approved" | "returned" | "cancelled";
+export type QmsQmrDecisionT = "approve" | "meeting" | "other";
+export type QmsStepRoleT = "author" | "reviewer" | "approver" | "dcc" | "qmr";
+export type QmsStepStatusT = "waiting" | "current" | "approved" | "rejected";
+export type QmsDarStep = {
+  roles: QmsStepRoleT[]; // usually one role; collapsed to several when the same person holds consecutive steps
+  employee_id: string;
+  full_name_snapshot: string;
+  position_snapshot: string;
+  status: QmsStepStatusT;
+  acted_at: string | null;
+  note: string | null;
+  signature_url_snapshot: string | null;
+};
+
 type TableShape<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -245,6 +266,10 @@ export interface Database {
           doc_code: string;
           title: string;
           doc_type: QmsDocTypeT;
+          doc_type_code: QmsDocTypeCodeT | null;
+          process_code: string | null;
+          confidentiality: QmsConfidentialityT | null;
+          dar_id: string | null;
           department_id: string;
           version: string;
           status: QmsDocStatusT;
@@ -261,6 +286,10 @@ export interface Database {
           doc_code: string;
           title: string;
           doc_type: QmsDocTypeT;
+          doc_type_code?: QmsDocTypeCodeT | null;
+          process_code?: string | null;
+          confidentiality?: QmsConfidentialityT | null;
+          dar_id?: string | null;
           department_id: string;
           version: string;
           status?: QmsDocStatusT;
@@ -274,11 +303,118 @@ export interface Database {
         {
           status?: QmsDocStatusT;
           superseded_by?: string | null;
+          dar_id?: string | null;
         }
       >;
       qms_document_controllers: TableShape<
         { employee_id: string; added_at: string },
         { employee_id: string }
+      >;
+      qms_qmr: TableShape<
+        { employee_id: string; added_at: string },
+        { employee_id: string }
+      >;
+      qms_authority_matrix: TableShape<
+        {
+          id: string;
+          process_code: string;
+          process_label: string;
+          doc_type_code: QmsDocTypeCodeT;
+          author_position: string;
+          reviewer_position: string;
+          approver_position: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          process_code: string;
+          process_label: string;
+          doc_type_code: QmsDocTypeCodeT;
+          author_position: string;
+          reviewer_position: string;
+          approver_position: string;
+        },
+        {
+          author_position?: string;
+          reviewer_position?: string;
+          approver_position?: string;
+        }
+      >;
+      qms_dar: TableShape<
+        {
+          id: string;
+          dar_no: string | null;
+          action_type: QmsDarActionT;
+          doc_code: string;
+          title: string;
+          doc_type_code: QmsDocTypeCodeT;
+          process_code: string;
+          department_id: string | null;
+          reason: string | null;
+          change_summary: string | null;
+          confidentiality: QmsConfidentialityT;
+          qmr_waived: boolean;
+          qmr_waived_by: string | null;
+          qmr_waived_at: string | null;
+          source_google_file_id: string | null;
+          source_google_view_url: string | null;
+          source_file_size: number | null;
+          effective_date: string | null;
+          target_document_id: string | null;
+          resulting_document_id: string | null;
+          status: QmsDarStatusT;
+          current_step: number;
+          steps: QmsDarStep[];
+          dcc_check_note: string | null;
+          qmr_decision: QmsQmrDecisionT | null;
+          qmr_note: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          id?: string;
+          dar_no?: string | null;
+          action_type: QmsDarActionT;
+          doc_code: string;
+          title: string;
+          doc_type_code: QmsDocTypeCodeT;
+          process_code: string;
+          department_id?: string | null;
+          reason?: string | null;
+          change_summary?: string | null;
+          confidentiality?: QmsConfidentialityT;
+          qmr_waived?: boolean;
+          qmr_waived_by?: string | null;
+          qmr_waived_at?: string | null;
+          source_google_file_id?: string | null;
+          source_google_view_url?: string | null;
+          source_file_size?: number | null;
+          effective_date?: string | null;
+          target_document_id?: string | null;
+          resulting_document_id?: string | null;
+          status?: QmsDarStatusT;
+          current_step?: number;
+          steps?: QmsDarStep[];
+          dcc_check_note?: string | null;
+          qmr_decision?: QmsQmrDecisionT | null;
+          qmr_note?: string | null;
+          created_by: string;
+        },
+        {
+          dar_no?: string | null;
+          resulting_document_id?: string | null;
+          status?: QmsDarStatusT;
+          current_step?: number;
+          steps?: QmsDarStep[];
+          dcc_check_note?: string | null;
+          qmr_decision?: QmsQmrDecisionT | null;
+          qmr_note?: string | null;
+          qmr_waived?: boolean;
+          qmr_waived_by?: string | null;
+          qmr_waived_at?: string | null;
+          updated_at?: string;
+        }
       >;
       document_numbers: TableShape<{
         id: string;

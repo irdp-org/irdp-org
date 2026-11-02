@@ -1,0 +1,373 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { getCurrentEmployee, type Employee } from "@/lib/auth";
+import { isAdmin } from "@/lib/rbac";
+import { notify } from "@/lib/notify";
+import { getOrCreatePath, uploadToDrive } from "@/lib/google-drive";
+import { buildDarSteps, resetDarSteps, stepRoleLabels } from "@/lib/qms-dar";
+import type { QmsDarStep, QmsDocTypeCodeT, QmsDocTypeT } from "@/lib/database.types";
+
+const ROOT_FOLDER = "IRDP_QMS_เอกสารเผยแพร่";
+
+// qms_documents.doc_type (0045) predates the QM/PM/WI/FM/SD codes used
+// everywhere else in the DCC paperwork — SD has no matching legacy value,
+// so it falls back to "form" there (doc_type_code on the row still says SD).
+const LEGACY_DOC_TYPE: Record<QmsDocTypeCodeT, QmsDocTypeT> = {
+  QM: "manual",
+  PM: "procedure",
+  WI: "work_instruction",
+  FM: "form",
+  SD: "form",
+};
+
+async function assertDcc(): Promise<Employee> {
+  const employee = await getCurrentEmployee();
+  if (!employee) throw new Error("unauthorized");
+  if (isAdmin(employee.role)) return employee;
+  const admin = createAdminClient();
+  const { data } = await admin.from("qms_document_controllers").select("employee_id").eq("employee_id", employee.id).maybeSingle();
+  if (!data) throw new Error("ไม่มีสิทธิ์ (ต้องเป็น DCC)");
+  return employee;
+}
+
+async function isQmr(employeeId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: emp } = await admin.from("employees").select("role").eq("id", employeeId).single();
+  if (emp?.role === "admin") return true;
+  const { data } = await admin.from("qms_qmr").select("employee_id").eq("employee_id", employeeId).maybeSingle();
+  return !!data;
+}
+
+export async function createDar(formData: FormData) {
+  try {
+    const dcc = await assertDcc();
+    const admin = createAdminClient();
+
+    const actionType = String(formData.get("actionType") ?? "create") as "create" | "revise" | "cancel";
+    const docCode = String(formData.get("docCode") ?? "").trim();
+    const title = String(formData.get("title") ?? "").trim();
+    const docTypeCode = String(formData.get("docTypeCode") ?? "") as QmsDocTypeCodeT;
+    const processCode = String(formData.get("processCode") ?? "").trim();
+    const departmentId = String(formData.get("departmentId") ?? "") || null;
+    const reason = String(formData.get("reason") ?? "").trim() || null;
+    const changeSummary = String(formData.get("changeSummary") ?? "").trim() || null;
+    const confidentiality = (String(formData.get("confidentiality") ?? "internal") || "internal") as "public" | "internal" | "confidential";
+    const effectiveDate = String(formData.get("effectiveDate") ?? "") || null;
+    const authorId = String(formData.get("authorId") ?? "");
+    const reviewerId = String(formData.get("reviewerId") ?? "");
+    const approverId = String(formData.get("approverId") ?? "");
+    const dccCheckerId = String(formData.get("dccCheckerId") ?? "") || dcc.id;
+    const qmrWaived = formData.get("qmrWaived") === "on";
+    const qmrId = String(formData.get("qmrId") ?? "");
+    const targetDocumentId = String(formData.get("targetDocumentId") ?? "") || null;
+
+    if (!docCode) return { error: "กรุณากรอกรหัสเอกสาร" };
+    if (!title) return { error: "กรุณากรอกชื่อเอกสาร" };
+    if (actionType !== "create" && !targetDocumentId) return { error: "กรุณาเลือกเอกสารที่จะแก้ไข/ยกเลิก" };
+    if (!docTypeCode) return { error: "กรุณาเลือกประเภทเอกสาร" };
+    if (!processCode) return { error: "กรุณาเลือกกระบวนการ" };
+    if (!authorId || !reviewerId || !approverId) return { error: "กรุณาเลือกผู้จัดทำ ผู้ทบทวน และผู้อนุมัติให้ครบ" };
+    if (!qmrWaived && !qmrId) return { error: "กรุณาเลือก QMR หรือระบุว่าได้รับการยกเว้น" };
+
+    const file = formData.get("file") as File | null;
+    let sourceGoogleFileId: string | null = null;
+    let sourceGoogleViewUrl: string | null = null;
+    let sourceFileSize: number | null = null;
+    if (file && file.size > 0) {
+      const folderId = await getOrCreatePath([ROOT_FOLDER, "DAR ระหว่างอนุมัติ", docCode]);
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const uploaded = await uploadToDrive(buffer, file.name, file.type || "application/octet-stream", folderId);
+      sourceGoogleFileId = uploaded.id;
+      sourceGoogleViewUrl = uploaded.webViewLink;
+      sourceFileSize = file.size;
+    } else if (actionType !== "cancel") {
+      return { error: "กรุณาแนบไฟล์เอกสาร" };
+    }
+
+    const empIds = [authorId, reviewerId, approverId, dccCheckerId, ...(qmrWaived ? [] : [qmrId])];
+    const { data: emps } = await admin.from("employees").select("id, full_name, position").in("id", empIds);
+    const empById = new Map((emps ?? []).map((e) => [e.id, e]));
+    for (const id of empIds) {
+      if (!empById.get(id)) return { error: "ไม่พบพนักงานที่เลือก" };
+    }
+
+    const stepInputs = [
+      { role: "author" as const, employeeId: authorId },
+      { role: "reviewer" as const, employeeId: reviewerId },
+      { role: "approver" as const, employeeId: approverId },
+      { role: "dcc" as const, employeeId: dccCheckerId },
+      ...(qmrWaived ? [] : [{ role: "qmr" as const, employeeId: qmrId }]),
+    ].map((s) => {
+      const e = empById.get(s.employeeId)!;
+      return { role: s.role, employeeId: s.employeeId, fullName: e.full_name, position: e.position ?? "" };
+    });
+
+    const steps = buildDarSteps(stepInputs);
+
+    const { data: inserted, error } = await admin
+      .from("qms_dar")
+      .insert({
+        action_type: actionType,
+        doc_code: docCode,
+        title,
+        doc_type_code: docTypeCode,
+        process_code: processCode,
+        department_id: departmentId,
+        reason,
+        change_summary: changeSummary,
+        confidentiality,
+        qmr_waived: qmrWaived,
+        qmr_waived_by: qmrWaived ? dcc.id : null,
+        qmr_waived_at: qmrWaived ? new Date().toISOString() : null,
+        source_google_file_id: sourceGoogleFileId,
+        source_google_view_url: sourceGoogleViewUrl,
+        source_file_size: sourceFileSize,
+        effective_date: effectiveDate,
+        target_document_id: targetDocumentId,
+        status: "pending",
+        current_step: 0,
+        steps,
+        created_by: dcc.id,
+      })
+      .select("id")
+      .single();
+    if (error || !inserted) return { error: error?.message ?? "บันทึกไม่สำเร็จ" };
+
+    await notifyCurrentStep(inserted.id, steps, docCode, title);
+
+    revalidatePath("/qms/dar");
+    return { ok: true, id: inserted.id };
+  } catch (err) {
+    console.error("[qms-dar] create failed", err);
+    return { error: err instanceof Error && err.message === "ไม่มีสิทธิ์ (ต้องเป็น DCC)" ? err.message : "สร้างคำขอไม่สำเร็จ" };
+  }
+}
+
+async function notifyCurrentStep(darId: string, steps: QmsDarStep[], docCode: string, title: string) {
+  const current = steps.find((s) => s.status === "current");
+  if (!current) return;
+  await notify({
+    userId: current.employee_id,
+    type: "qms_dar_pending",
+    title: `รอ${stepRoleLabels(current)}: ${docCode}`,
+    body: title,
+    link: `/qms/dar/${darId}`,
+  });
+}
+
+export async function actOnDarStep(darId: string, action: "approve" | "reject", note: string) {
+  try {
+    const employee = await getCurrentEmployee();
+    if (!employee) return { error: "unauthorized" };
+
+    const supabase = await createClient();
+    const { data: dar } = await supabase.from("qms_dar").select("*").eq("id", darId).single();
+    if (!dar) return { error: "ไม่พบคำขอ" };
+    if (dar.status !== "pending") return { error: "คำขอนี้ไม่ได้อยู่ระหว่างรออนุมัติแล้ว" };
+
+    const steps = dar.steps as QmsDarStep[];
+    const step = steps[dar.current_step];
+    if (!step || step.employee_id !== employee.id) return { error: "ยังไม่ถึงคิวของคุณ" };
+    if (step.status !== "current") return { error: "ขั้นนี้ไม่ได้อยู่ระหว่างรออนุมัติ" };
+
+    const admin = createAdminClient();
+
+    if (action === "reject") {
+      if (!note.trim()) return { error: "กรุณาระบุเหตุผลที่ตีกลับ" };
+      const resetSteps = resetDarSteps(steps);
+      resetSteps[dar.current_step] = { ...resetSteps[dar.current_step], status: "rejected", acted_at: new Date().toISOString(), note };
+      const { error } = await admin
+        .from("qms_dar")
+        .update({ status: "returned", current_step: 0, steps: resetSteps, updated_at: new Date().toISOString() })
+        .eq("id", darId);
+      if (error) return { error: error.message };
+      await notify({
+        userId: dar.created_by,
+        type: "qms_dar_returned",
+        title: `ถูกตีกลับ: ${dar.doc_code}`,
+        body: note,
+        link: `/qms/dar/${darId}`,
+      });
+      revalidatePath("/qms/dar");
+      revalidatePath(`/qms/dar/${darId}`);
+      return { ok: true };
+    }
+
+    if (!employee.signature_url) return { error: "กรุณาตั้งลายเซ็นในโปรไฟล์ของคุณก่อนอนุมัติ" };
+
+    const nextSteps = [...steps];
+    nextSteps[dar.current_step] = {
+      ...step,
+      status: "approved",
+      acted_at: new Date().toISOString(),
+      note: note || null,
+      signature_url_snapshot: employee.signature_url,
+    };
+
+    const nextIndex = dar.current_step + 1;
+    const isLast = nextIndex >= nextSteps.length;
+    if (!isLast) nextSteps[nextIndex] = { ...nextSteps[nextIndex], status: "current" };
+
+    let darNo: string | null = null;
+    if (isLast) {
+      const year = new Date().getFullYear() + 543;
+      const { count } = await admin
+        .from("qms_dar")
+        .select("id", { count: "exact", head: true })
+        .not("dar_no", "is", null)
+        .like("dar_no", `DAR-${year}-%`);
+      darNo = `DAR-${year}-${String((count ?? 0) + 1).padStart(4, "0")}`;
+    }
+
+    const { error } = await admin
+      .from("qms_dar")
+      .update({
+        steps: nextSteps,
+        current_step: nextIndex,
+        status: isLast ? "approved" : "pending",
+        dar_no: darNo,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", darId);
+    if (error) return { error: error.message };
+
+    if (isLast) {
+      await notify({
+        userId: dar.created_by,
+        type: "qms_dar_approved",
+        title: `อนุมัติครบแล้ว พร้อมประกาศใช้: ${dar.doc_code}`,
+        body: title_or_empty(dar.title),
+        link: `/qms/dar/${darId}`,
+      });
+    } else {
+      await notifyCurrentStep(darId, nextSteps, dar.doc_code, dar.title);
+    }
+
+    revalidatePath("/qms/dar");
+    revalidatePath(`/qms/dar/${darId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("[qms-dar] act failed", err);
+    return { error: "ดำเนินการไม่สำเร็จ" };
+  }
+}
+
+function title_or_empty(t: string | null) {
+  return t ?? "";
+}
+
+/**
+ * DCC publishes a fully-approved DAR: supersedes the previous active
+ * qms_documents row (if any) and creates the new one. The published file is
+ * the same PDF DCC uploaded when creating the DAR — Phase 1 does not yet
+ * stamp a signature page onto it (see docs/qms-document-system.md §4,
+ * Method A); the per-step approval record in qms_dar.steps (who, when,
+ * which signature) is the evidence trail until that's added.
+ */
+export async function publishDar(darId: string) {
+  try {
+    const dcc = await assertDcc();
+    const admin = createAdminClient();
+
+    const { data: dar } = await admin.from("qms_dar").select("*").eq("id", darId).single();
+    if (!dar) return { error: "ไม่พบคำขอ" };
+    if (dar.status !== "approved") return { error: "คำขอนี้ยังไม่ได้รับการอนุมัติครบ" };
+    if (dar.resulting_document_id) return { error: "ประกาศใช้ไปแล้ว" };
+
+    if (dar.action_type === "cancel") {
+      if (!dar.target_document_id) return { error: "ไม่พบเอกสารที่จะยกเลิก" };
+      const { error } = await admin.from("qms_documents").update({ status: "obsolete" }).eq("id", dar.target_document_id);
+      if (error) return { error: error.message };
+      await admin.from("qms_dar").update({ resulting_document_id: dar.target_document_id }).eq("id", darId);
+      revalidatePath("/qms");
+      revalidatePath(`/qms/dar/${darId}`);
+      return { ok: true };
+    }
+
+    if (!dar.source_google_file_id || !dar.source_google_view_url || !dar.department_id || !dar.effective_date) {
+      return { error: "ข้อมูลเอกสารไม่ครบ (ไฟล์/ฝ่าย/วันที่มีผล)" };
+    }
+
+    const { count: priorRevisions } = await admin
+      .from("qms_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("doc_code", dar.doc_code);
+    const version = String(priorRevisions ?? 0).padStart(2, "0");
+
+    const { data: existingActive } = await admin
+      .from("qms_documents")
+      .select("id")
+      .eq("doc_code", dar.doc_code)
+      .eq("status", "active")
+      .maybeSingle();
+
+    const { data: inserted, error } = await admin
+      .from("qms_documents")
+      .insert({
+        doc_code: dar.doc_code,
+        title: dar.title,
+        doc_type: LEGACY_DOC_TYPE[dar.doc_type_code],
+        doc_type_code: dar.doc_type_code,
+        process_code: dar.process_code,
+        confidentiality: dar.confidentiality,
+        dar_id: darId,
+        department_id: dar.department_id,
+        version,
+        status: "active",
+        effective_date: dar.effective_date,
+        google_file_id: dar.source_google_file_id,
+        google_view_url: dar.source_google_view_url,
+        file_size_bytes: dar.source_file_size,
+        uploaded_by: dcc.id,
+      })
+      .select("id")
+      .single();
+    if (error || !inserted) return { error: error?.message ?? "ประกาศใช้ไม่สำเร็จ" };
+
+    if (existingActive) {
+      await admin.from("qms_documents").update({ status: "superseded", superseded_by: inserted.id }).eq("id", existingActive.id);
+    }
+    await admin.from("qms_dar").update({ resulting_document_id: inserted.id }).eq("id", darId);
+
+    revalidatePath("/qms");
+    revalidatePath("/qms/dar");
+    revalidatePath(`/qms/dar/${darId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("[qms-dar] publish failed", err);
+    return { error: "ประกาศใช้ไม่สำเร็จ" };
+  }
+}
+
+export async function addQmr(employeeId: string) {
+  try {
+    const employee = await getCurrentEmployee();
+    if (!employee || !isAdmin(employee.role)) return { error: "ไม่มีสิทธิ์" };
+    const admin = createAdminClient();
+    const { error } = await admin.from("qms_qmr").insert({ employee_id: employeeId });
+    if (error) return { error: error.message };
+    revalidatePath("/qms/dar");
+    return {};
+  } catch {
+    return { error: "ไม่มีสิทธิ์" };
+  }
+}
+
+export async function removeQmr(employeeId: string) {
+  try {
+    const employee = await getCurrentEmployee();
+    if (!employee || !isAdmin(employee.role)) return { error: "ไม่มีสิทธิ์" };
+    const admin = createAdminClient();
+    const { error } = await admin.from("qms_qmr").delete().eq("employee_id", employeeId);
+    if (error) return { error: error.message };
+    revalidatePath("/qms/dar");
+    return {};
+  } catch {
+    return { error: "ไม่มีสิทธิ์" };
+  }
+}
+
+export { isQmr };
