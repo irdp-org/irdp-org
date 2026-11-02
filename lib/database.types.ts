@@ -292,6 +292,7 @@ export interface Database {
         from_name: string | null;
         ref_no: string | null;
         issued_date: string;
+        source_date: string | null;
         issued_by: string;
         attachment_drive_id: string | null;
         attachment_url: string | null;

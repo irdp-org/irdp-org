@@ -10,6 +10,17 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { createIntakeLogEntry, updateIntakeLogEntry, deleteIntakeLogEntry } from "@/app/(app)/documents/intake-log-actions";
+import { compressImage } from "@/lib/image-compress";
+
+/** Server actions on this platform reject request bodies over a few MB — a raw
+ * phone photo attachment can blow past that and the failure surfaces as a full
+ * page reload instead of an in-app error, so compress before submitting. */
+async function compressAttachment(formData: FormData) {
+  const file = formData.get("attachment");
+  if (file instanceof File && file.size > 0) {
+    formData.set("attachment", await compressImage(file));
+  }
+}
 
 export type IntakeLogRow = {
   id: string;
@@ -17,6 +28,7 @@ export type IntakeLogRow = {
   doc_no: string;
   ref_no: string | null;
   issued_date: string;
+  source_date: string | null;
   from_name: string | null;
   recipient: string | null;
   title: string;
@@ -70,6 +82,7 @@ export function IntakeLogClient({
   function handleCreate(formData: FormData) {
     setError(null);
     startTransition(async () => {
+      await compressAttachment(formData);
       const res = await createIntakeLogEntry(categoryLabel, formData);
       if ("error" in res && res.error) {
         setError(res.error);
@@ -84,6 +97,7 @@ export function IntakeLogClient({
     if (!editing) return;
     setError(null);
     startTransition(async () => {
+      await compressAttachment(formData);
       const res = await updateIntakeLogEntry(editing.id, formData);
       if ("error" in res && res.error) {
         setError(res.error);
@@ -119,6 +133,16 @@ export function IntakeLogClient({
       render: (r) => (
         <span className="whitespace-nowrap text-foreground">
           {new Date(r.issued_date).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" })}
+        </span>
+      ),
+    },
+    {
+      key: "source_date",
+      label: "วันที่ในเอกสาร",
+      sortValue: (r) => r.source_date ?? "",
+      render: (r) => (
+        <span className="whitespace-nowrap text-foreground">
+          {r.source_date ? new Date(r.source_date).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" }) : "-"}
         </span>
       ),
     },
@@ -200,6 +224,10 @@ export function IntakeLogClient({
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
+              <Label>วันที่ในเอกสาร (วันที่ออกเอกสารตามที่ระบุมา)</Label>
+              <Input type="date" name="sourceDate" />
+            </div>
+            <div className="flex flex-col gap-1.5">
               <Label>จาก</Label>
               <Input name="fromName" placeholder="หน่วยงาน/บุคคลที่ส่งมา" />
             </div>
@@ -219,6 +247,10 @@ export function IntakeLogClient({
                   <option key={e.id} value={e.id}>{e.full_name}</option>
                 ))}
               </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>แนบไฟล์ (ถ้ามี)</Label>
+              <Input type="file" name="attachment" />
             </div>
             {error && <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
             <DialogFooter>
@@ -249,6 +281,10 @@ export function IntakeLogClient({
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
+                <Label>วันที่ในเอกสาร (วันที่ออกเอกสารตามที่ระบุมา)</Label>
+                <Input type="date" name="sourceDate" defaultValue={editing.source_date ?? ""} />
+              </div>
+              <div className="flex flex-col gap-1.5">
                 <Label>จาก</Label>
                 <Input name="fromName" defaultValue={editing.from_name ?? ""} />
               </div>
@@ -267,6 +303,15 @@ export function IntakeLogClient({
                     <option key={e.id} value={e.id}>{e.full_name}</option>
                   ))}
                 </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>{editing.attachment_url ? "แทนที่ไฟล์แนบ" : "แนบไฟล์"}</Label>
+                <Input type="file" name="attachment" />
+                {editing.attachment_url && (
+                  <a href={editing.attachment_url} target="_blank" rel="noreferrer" className="text-xs text-primary hover:underline">
+                    ไฟล์ปัจจุบัน — เปิดดู
+                  </a>
+                )}
               </div>
               {error && <p className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">{error}</p>}
               <DialogFooter className="flex-row items-center justify-between sm:justify-between">

@@ -65,7 +65,7 @@ async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient
   const yearGreg = yearBe - 543;
   const { data: rows } = await supabase
     .from("document_numbers")
-    .select("id, seq, doc_no, ref_no, issued_date, from_name, recipient, title, issued_by, attachment_url")
+    .select("id, seq, doc_no, ref_no, issued_date, source_date, from_name, recipient, title, issued_by, attachment_url")
     .eq("category_id", category.id)
     .gte("issued_date", `${yearGreg}-01-01`)
     .lte("issued_date", `${yearGreg}-12-31`)
@@ -83,6 +83,7 @@ async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient
     doc_no: r.doc_no,
     ref_no: r.ref_no,
     issued_date: r.issued_date,
+    source_date: r.source_date,
     from_name: r.from_name,
     recipient: r.recipient,
     title: r.title,
