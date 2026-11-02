@@ -28,9 +28,13 @@ export default async function QmsDarDetailPage({ params }: { params: Promise<{ i
   const { data: creator } = await admin.from("employees").select("full_name").eq("id", dar.created_by).single();
 
   const steps = dar.steps as QmsDarStep[];
-  const myStep = steps.find((s) => s.employee_id === employee.id);
-  const myStepIndex = steps.findIndex((s) => s.employee_id === employee.id);
-  const canAct = dar.status === "pending" && myStep?.status === "current" && myStepIndex === dar.current_step;
+  // Match by *position* (current_step), not by searching for this employee's
+  // id anywhere in the chain — the same person can appear at more than one
+  // step (e.g. ผู้อนุมัติ at step 3 and QMR at step 5), and matching by id
+  // alone always finds their *first* appearance, which is wrong once that
+  // first step is already approved and it's actually their later turn.
+  const currentStep = steps[dar.current_step];
+  const canAct = dar.status === "pending" && currentStep?.status === "current" && currentStep?.employee_id === employee.id;
 
   return (
     <div>
