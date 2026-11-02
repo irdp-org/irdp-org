@@ -100,7 +100,18 @@ export async function updateProfile(formData: FormData) {
       contentType: file.type || guessContentType(ext),
       upsert: true,
     });
-    if (uploadError) return { error: uploadError.message };
+    if (uploadError) {
+      // Temporary verbose diagnostics for an in-progress RLS investigation
+      // (storage.objects policy checks out fine when impersonated directly
+      // in SQL, so something about this specific request isn't carrying the
+      // expected session through to the upload call) — remove once resolved.
+      console.error("[updateProfile] avatar upload failed", {
+        employeeId: employee.id,
+        path,
+        error: uploadError,
+      });
+      return { error: `${uploadError.message} (employeeId=${employee.id}, path=${path})` };
+    }
     avatarUrl = path;
   }
 
