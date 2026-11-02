@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 
 const EXT_TO_MIME: Record<string, string> = {
@@ -96,31 +97,21 @@ export async function updateProfile(formData: FormData) {
     if (file.size > MAX_AVATAR_BYTES) return { error: "ไฟล์รูปใหญ่เกินไป (จำกัด 5MB)" };
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${employee.id}/avatar.${ext}`;
-    // Diagnostic: confirm what auth.uid() the Postgres layer will actually
-    // see for THIS client instance's token (getUser() does a real
-    // server-side verification round-trip, unlike getClaims() used by
-    // getCurrentEmployee() above, which only decodes locally) — a mismatch
-    // or failure here would explain the employee resolving fine while the
-    // storage RLS check still fails. Remove once the RLS issue is resolved.
-    const { data: authProbe, error: authProbeError } = await supabase.auth.getUser();
-
-    const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
+    // service_role, not the user-session client — storage.objects' own RLS
+    // (which correctly scopes this to the caller's own folder) was never
+    // the problem; storage.buckets has RLS enabled with zero policies
+    // (external misconfiguration, not something this app's migrations ever
+    // touched, and not fixable via the SQL editor or dashboard — both
+    // refuse to alter that system table), which blocks the Storage API's
+    // own internal bucket-metadata read for ANY non-service-role request
+    // regardless of the objects policy. employee identity is already
+    // verified above (getCurrentEmployee), so this is still self-scoped.
+    const admin = createAdminClient();
+    const { error: uploadError } = await admin.storage.from("avatars").upload(path, file, {
       contentType: file.type || guessContentType(ext),
       upsert: true,
     });
-    if (uploadError) {
-      console.error("[updateProfile] avatar upload failed", {
-        employeeId: employee.id,
-        employeeUserId: employee.user_id,
-        path,
-        authProbeUserId: authProbe?.user?.id,
-        authProbeError,
-        error: uploadError,
-      });
-      return {
-        error: `${uploadError.message} (employeeId=${employee.id}, expectedUserId=${employee.user_id}, authUserId=${authProbe?.user?.id ?? "null"}, authError=${authProbeError?.message ?? "none"})`,
-      };
-    }
+    if (uploadError) return { error: uploadError.message };
     avatarUrl = path;
   }
 

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee, type Employee } from "@/lib/auth";
 import { notify } from "@/lib/notify";
 import {
@@ -125,7 +126,13 @@ export async function createLeaveRequest(formData: FormData) {
   if (file instanceof File && file.size > 0) {
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${employee.id}/${row.id}.${ext}`;
-    const { error: uploadError } = await supabase.storage.from("leave-certs").upload(path, file, {
+    // service_role — storage.buckets has RLS enabled with zero policies
+    // (external misconfiguration, not fixable via SQL editor/dashboard),
+    // which blocks the Storage API's own internal bucket-metadata read for
+    // any non-service-role request regardless of the objects policy. Same
+    // fix as profile avatar uploads and admin/employees/actions.ts.
+    const admin = createAdminClient();
+    const { error: uploadError } = await admin.storage.from("leave-certs").upload(path, file, {
       // iOS Safari can report an empty/unreliable file.type for some photo
       // picker selections — fall back to extension-based guessing so the
       // upload doesn't get rejected by the bucket's allowed_mime_types.
