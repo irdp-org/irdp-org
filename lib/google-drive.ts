@@ -106,6 +106,16 @@ export async function uploadToDrive(
   };
 }
 
+/** Download a Drive file's raw bytes (e.g. to merge/transform before re-upload). */
+export async function downloadFromDrive(fileId: string): Promise<Buffer> {
+  const drive = driveClient();
+  const res = await drive.files.get(
+    { fileId, alt: "media", supportsAllDrives: true },
+    { responseType: "arraybuffer" }
+  );
+  return Buffer.from(res.data as ArrayBuffer);
+}
+
 export async function deleteFromDrive(fileId: string): Promise<void> {
   try {
     await driveClient().files.delete({ fileId, supportsAllDrives: true });

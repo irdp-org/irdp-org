@@ -359,6 +359,7 @@ export interface Database {
           source_google_file_id: string | null;
           source_google_view_url: string | null;
           source_file_size: number | null;
+          source_mime_type: string | null;
           effective_date: string | null;
           target_document_id: string | null;
           resulting_document_id: string | null;
@@ -390,6 +391,7 @@ export interface Database {
           source_google_file_id?: string | null;
           source_google_view_url?: string | null;
           source_file_size?: number | null;
+          source_mime_type?: string | null;
           effective_date?: string | null;
           target_document_id?: string | null;
           resulting_document_id?: string | null;

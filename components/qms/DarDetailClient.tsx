@@ -175,8 +175,8 @@ export function DarDetailClient({
         <div className="rounded-2xl border border-success/30 bg-success/5 p-4">
           <h3 className="mb-2 text-sm font-semibold text-foreground">อนุมัติครบทุกขั้นแล้ว</h3>
           <p className="mb-2 text-xs text-muted-foreground">
-            กดเพื่อนำเอกสารขึ้นระบบกลาง (ไฟล์ที่อัปโหลดตอนสร้าง DAR — ยังไม่มีการประทับลายเซ็นลงในตัวไฟล์ในเวอร์ชันนี้
-            ประวัติการลงนามครบทุกขั้นถูกบันทึกไว้ด้านบนแล้ว)
+            กดเพื่อนำเอกสารขึ้นระบบกลาง — ถ้าไฟล์ที่อัปโหลดตอนสร้าง DAR เป็น PDF ระบบจะสร้างหน้ารับรองการอนุมัติ
+            (รายชื่อ/ตำแหน่ง/ลายเซ็น/เวลาที่ลงนามของทุกขั้น) แล้วรวมไว้หน้าแรกของไฟล์ให้อัตโนมัติ
           </p>
           {error && <p className="mb-2 text-sm text-danger">{error}</p>}
           <Button type="button" disabled={isPending} onClick={handlePublish}>

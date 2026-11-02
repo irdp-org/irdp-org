@@ -1,0 +1,8 @@
+Noto Sans Thai (variable, default instance), from the google/fonts repository
+(ofl/notosansthai), licensed under the SIL Open Font License 1.1.
+
+Full license: https://openfontlicense.org/open-font-license-official-text/
+Source: https://github.com/google/fonts/tree/main/ofl/notosansthai
+
+Used by lib/qms/signed-cover.ts to render the QMS DAR certification cover
+page (Thai + Latin + digits + punctuation in one font).

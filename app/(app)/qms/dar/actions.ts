@@ -6,8 +6,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee, type Employee } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { notify } from "@/lib/notify";
-import { getOrCreatePath, uploadToDrive } from "@/lib/google-drive";
+import { getOrCreatePath, uploadToDrive, downloadFromDrive } from "@/lib/google-drive";
 import { buildDarSteps, resetDarSteps, stepRoleLabels } from "@/lib/qms-dar";
+import { buildSignedCoverAndMerge } from "@/lib/qms/signed-cover";
 import type { QmsDarStep, QmsDocTypeCodeT, QmsDocTypeT } from "@/lib/database.types";
 
 const ROOT_FOLDER = "IRDP_QMS_เอกสารเผยแพร่";
@@ -76,13 +77,16 @@ export async function createDar(formData: FormData) {
     let sourceGoogleFileId: string | null = null;
     let sourceGoogleViewUrl: string | null = null;
     let sourceFileSize: number | null = null;
+    let sourceMimeType: string | null = null;
     if (file && file.size > 0) {
       const folderId = await getOrCreatePath([ROOT_FOLDER, "DAR ระหว่างอนุมัติ", docCode]);
       const buffer = Buffer.from(await file.arrayBuffer());
-      const uploaded = await uploadToDrive(buffer, file.name, file.type || "application/octet-stream", folderId);
+      const mimeType = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream");
+      const uploaded = await uploadToDrive(buffer, file.name, mimeType, folderId);
       sourceGoogleFileId = uploaded.id;
       sourceGoogleViewUrl = uploaded.webViewLink;
       sourceFileSize = file.size;
+      sourceMimeType = mimeType;
     } else if (actionType !== "cancel") {
       return { error: "กรุณาแนบไฟล์เอกสาร" };
     }
@@ -125,6 +129,7 @@ export async function createDar(formData: FormData) {
         source_google_file_id: sourceGoogleFileId,
         source_google_view_url: sourceGoogleViewUrl,
         source_file_size: sourceFileSize,
+        source_mime_type: sourceMimeType,
         effective_date: effectiveDate,
         target_document_id: targetDocumentId,
         status: "pending",
@@ -261,11 +266,14 @@ function title_or_empty(t: string | null) {
 
 /**
  * DCC publishes a fully-approved DAR: supersedes the previous active
- * qms_documents row (if any) and creates the new one. The published file is
- * the same PDF DCC uploaded when creating the DAR — Phase 1 does not yet
- * stamp a signature page onto it (see docs/qms-document-system.md §4,
- * Method A); the per-step approval record in qms_dar.steps (who, when,
- * which signature) is the evidence trail until that's added.
+ * qms_documents row (if any) and creates the new one. When the uploaded
+ * source file is a PDF, a certification cover page listing every sign-off
+ * (name, position snapshot, timestamp, signature image) is generated and
+ * prepended, and that merged file — not the raw upload — becomes the
+ * published document (design doc §4, Method A). Non-PDF uploads (e.g. a
+ * .docx DCC didn't get around to converting) fall back to publishing the
+ * raw file as-is; the approval trail in qms_dar.steps is still the
+ * authoritative record either way.
  */
 export async function publishDar(darId: string) {
   try {
@@ -291,11 +299,39 @@ export async function publishDar(darId: string) {
       return { error: "ข้อมูลเอกสารไม่ครบ (ไฟล์/ฝ่าย/วันที่มีผล)" };
     }
 
-    const { count: priorRevisions } = await admin
+    const { count: priorRevisionsForVersion } = await admin
       .from("qms_documents")
       .select("id", { count: "exact", head: true })
       .eq("doc_code", dar.doc_code);
-    const version = String(priorRevisions ?? 0).padStart(2, "0");
+    const version = String(priorRevisionsForVersion ?? 0).padStart(2, "0");
+
+    let publishedGoogleFileId = dar.source_google_file_id;
+    let publishedGoogleViewUrl = dar.source_google_view_url;
+    let publishedFileSize = dar.source_file_size;
+    if (dar.source_mime_type === "application/pdf") {
+      try {
+        const sourceBytes = await downloadFromDrive(dar.source_google_file_id);
+        const { mergedPdfBytes } = await buildSignedCoverAndMerge({
+          sourcePdfBytes: sourceBytes,
+          darNo: dar.dar_no,
+          docCode: dar.doc_code,
+          title: dar.title,
+          version,
+          effectiveDate: dar.effective_date,
+          steps: dar.steps as QmsDarStep[],
+        });
+        const folderId = await getOrCreatePath([ROOT_FOLDER, "เอกสารเผยแพร่", dar.doc_code]);
+        const uploaded = await uploadToDrive(mergedPdfBytes, `${dar.doc_code}_rev${version}_signed.pdf`, "application/pdf", folderId);
+        publishedGoogleFileId = uploaded.id;
+        publishedGoogleViewUrl = uploaded.webViewLink;
+        publishedFileSize = mergedPdfBytes.length;
+      } catch (err) {
+        // Falls back to publishing the unsigned source — the sign-off trail
+        // in qms_dar.steps is unaffected, so this degrades gracefully rather
+        // than blocking the whole publish on a PDF-merge bug.
+        console.error("[qms-dar] signed-cover merge failed, publishing source as-is", err);
+      }
+    }
 
     const { data: existingActive } = await admin
       .from("qms_documents")
@@ -318,9 +354,9 @@ export async function publishDar(darId: string) {
         version,
         status: "active",
         effective_date: dar.effective_date,
-        google_file_id: dar.source_google_file_id,
-        google_view_url: dar.source_google_view_url,
-        file_size_bytes: dar.source_file_size,
+        google_file_id: publishedGoogleFileId,
+        google_view_url: publishedGoogleViewUrl,
+        file_size_bytes: publishedFileSize,
         uploaded_by: dcc.id,
       })
       .select("id")
