@@ -9,10 +9,16 @@ export const dynamic = "force-dynamic";
 const EARLIEST_YEAR_BE = 2560; // bounds the year picker; no query needed to build it
 const PAGE_SIZE = 50; // some years have 1,000+ rows in one book — page it instead of loading them all
 
+function escapeIlike(s: string) {
+  // Escape PostgREST's pattern-matching special chars so a literal search
+  // term can't be misread as a wildcard or break the filter syntax.
+  return s.replace(/[%,()]/g, "\\$&");
+}
+
 export default async function DocumentNumbersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; page?: string }>;
+  searchParams: Promise<{ year?: string; page?: string; q?: string }>;
 }) {
   const employee = await getCurrentEmployee();
   if (!employee) return null;
@@ -20,9 +26,10 @@ export default async function DocumentNumbersPage({
   const supabase = await createClient();
 
   const currentYearBe = new Date().getFullYear() + 543;
-  const { year: yearParam, page: pageParam } = await searchParams;
+  const { year: yearParam, page: pageParam, q: qParam } = await searchParams;
   const yearBe = Number(yearParam) || currentYearBe;
   const page = Math.max(1, Number(pageParam) || 1);
+  const search = qParam ?? "";
   const years = Array.from({ length: currentYearBe - EARLIEST_YEAR_BE + 1 }, (_, i) => String(currentYearBe - i));
 
   // These 3 categories moved to "ลงรับเอกสาร" — they're incoming logs (มี
@@ -48,6 +55,21 @@ export default async function DocumentNumbersPage({
   if (movedCategoryIds.length) {
     query = query.or(`category_id.is.null,category_id.not.in.(${movedCategoryIds.join(",")})`);
   }
+
+  let issuerIdsMatchingSearch: string[] = [];
+  if (search.trim()) {
+    const term = escapeIlike(search.trim());
+    // issuer_name isn't a column on this table — resolve matching employees
+    // first so their ids can be folded into the same OR filter below (search
+    // has to run server-side, inside the same query, to reach rows outside
+    // the current page).
+    const { data: matchingIssuers } = await supabase.from("employee_directory").select("id").ilike("full_name", `%${term}%`);
+    issuerIdsMatchingSearch = (matchingIssuers ?? []).map((i) => i.id);
+    const orParts = [`title.ilike.%${term}%`, `recipient.ilike.%${term}%`, `doc_no.ilike.%${term}%`];
+    if (issuerIdsMatchingSearch.length) orParts.push(`issued_by.in.(${issuerIdsMatchingSearch.join(",")})`);
+    query = query.or(orParts.join(","));
+  }
+
   const [{ data: rows, count: totalCount }, { data: recipients }] = await Promise.all([
     query.order("created_at", { ascending: false }).range(from, to),
     supabase.from("document_recipients").select("name").order("name"),
@@ -111,6 +133,7 @@ export default async function DocumentNumbersPage({
           page={page}
           totalCount={totalCount ?? 0}
           pageSize={PAGE_SIZE}
+          search={search}
         />
       </div>
     </div>

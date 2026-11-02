@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, FileText, Hash, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -64,6 +64,7 @@ export function DocumentNumbersClient({
   page,
   totalCount,
   pageSize,
+  search: searchFromUrl,
 }: {
   rows: DocNumberRow[];
   showDeptColumn: boolean;
@@ -75,6 +76,7 @@ export function DocumentNumbersClient({
   page: number;
   totalCount: number;
   pageSize: number;
+  search: string;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -84,16 +86,27 @@ export function DocumentNumbersClient({
   const [activeBook, setActiveBook] = useState<Book>(BOOK_INTERNAL);
   const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  // Year is a real server-side filter now (?year=) instead of client state —
-  // the page only ever fetches one year's rows, which is what actually fixes
-  // the slow load (2,800+ rows across all years at once, before).
-  const [search, setSearch] = useState("");
+  // Year and search are real server-side filters now (?year=, ?q=) instead
+  // of client state — the page only fetches one year/page of rows at a
+  // time, so search has to run on the server to reach rows outside the
+  // current page too.
+  const [search, setSearch] = useState(searchFromUrl);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   function goToPage(p: number) {
-    router.push(`/document-numbers?year=${activeYear}&page=${p}`);
+    router.push(`/document-numbers?year=${activeYear}&page=${p}&q=${encodeURIComponent(search)}`);
   }
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      router.push(`/document-numbers?year=${activeYear}&page=1&q=${encodeURIComponent(value)}`);
+    }, 400);
+  }
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   function rowBook(r: DocNumberRow) {
     return r.category_label ? bookOf(r.category_label) : BOOK_INTERNAL;
@@ -117,18 +130,11 @@ export function DocumentNumbersClient({
   const tabs = [ALL_TAB, ...allLabels.filter((l) => bookOf(l) === activeBook)];
   const booksPresent = new Set(rows.map(rowBook));
 
-  const searchLower = search.trim().toLowerCase();
+  // Book/tab filters still apply only within the current page — switching
+  // book doesn't re-fetch — but search itself now runs server-side above.
   const visibleRows = rows
     .filter((r) => rowBook(r) === activeBook)
-    .filter((r) => activeTab === ALL_TAB || r.category_label === activeTab)
-    .filter(
-      (r) =>
-        !searchLower ||
-        r.title.toLowerCase().includes(searchLower) ||
-        (r.recipient ?? "").toLowerCase().includes(searchLower) ||
-        r.doc_no.toLowerCase().includes(searchLower) ||
-        r.issuer_name.toLowerCase().includes(searchLower)
-    );
+    .filter((r) => activeTab === ALL_TAB || r.category_label === activeTab);
 
   function handleCreate(formData: FormData) {
     setError(null);
@@ -174,7 +180,7 @@ export function DocumentNumbersClient({
       label: "ชื่อเรื่อง",
       sortValue: (r) => r.title,
       render: (r) => <span className="text-foreground">{r.title}</span>,
-      className: "max-w-[280px]",
+      className: "w-full min-w-[260px]",
     },
     {
       key: "recipient",
@@ -285,7 +291,7 @@ export function DocumentNumbersClient({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
           value={activeYear}
-          onChange={(e) => router.push(`/document-numbers?year=${e.target.value}&page=1`)}
+          onChange={(e) => router.push(`/document-numbers?year=${e.target.value}&page=1&q=${encodeURIComponent(search)}`)}
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
         >
           {years.map((y) => (
@@ -296,8 +302,8 @@ export function DocumentNumbersClient({
         </select>
         <Input
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="ค้นหาชื่อเรื่อง, ถึง, เลขที่, ผู้ออกเลข..."
+          onChange={(e) => handleSearchChange(e.target.value)}
+          placeholder="ค้นหาชื่อเรื่อง, ถึง, เลขที่, ผู้ออกเลข... (ค้นทุกหน้า)"
           className="sm:max-w-xs"
         />
       </div>

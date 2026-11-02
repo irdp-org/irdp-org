@@ -57,28 +57,56 @@ async function loadCameraTab(supabase: Awaited<ReturnType<typeof createClient>>)
 const EARLIEST_YEAR_BE = 2560; // bounds the year picker; no query needed to build it
 const PAGE_SIZE = 50; // ดร.เสรี alone has 1,100+ rows in a single year — page it instead of loading them all
 
+function escapeIlike(s: string) {
+  // Escape PostgREST's pattern-matching special chars so a literal search
+  // term can't be misread as a wildcard or break the filter syntax.
+  return s.replace(/[%,()]/g, "\\$&");
+}
+
 async function loadIntakeLogTab(
   supabase: Awaited<ReturnType<typeof createClient>>,
   categoryLabel: string,
   yearBe: number,
-  page: number
+  page: number,
+  search: string
 ) {
   const { data: category } = await supabase.from("document_categories").select("id").eq("label", categoryLabel).maybeSingle();
   if (!category) return { rows: [] as IntakeLogRow[], totalCount: 0 };
 
   // Scoping to one year AND one page is what actually fixes the slow load —
-  // some registers still have 1,000+ rows within a single year.
+  // some registers still have 1,000+ rows within a single year. Search must
+  // run as part of this same query (not after) so it can reach rows outside
+  // the current page too.
   const yearGreg = yearBe - 543;
   const from = (page - 1) * PAGE_SIZE;
   const to = from + PAGE_SIZE - 1;
-  const { data: rows, count } = await supabase
+
+  let query = supabase
     .from("document_numbers")
     .select("id, seq, doc_no, ref_no, issued_date, source_date, from_name, recipient, title, issued_by, attachment_url", { count: "exact" })
     .eq("category_id", category.id)
     .gte("issued_date", `${yearGreg}-01-01`)
-    .lte("issued_date", `${yearGreg}-12-31`)
-    .order("issued_date", { ascending: false })
-    .range(from, to);
+    .lte("issued_date", `${yearGreg}-12-31`);
+
+  if (search.trim()) {
+    const term = escapeIlike(search.trim());
+    const orParts = [
+      `title.ilike.%${term}%`,
+      `from_name.ilike.%${term}%`,
+      `recipient.ilike.%${term}%`,
+      `doc_no.ilike.%${term}%`,
+      `ref_no.ilike.%${term}%`,
+    ];
+    // Handler name isn't a column on this table — resolve matching employees
+    // first so their ids can be folded into the same OR filter.
+    const { data: matchingHandlers } = await supabase.from("employee_directory").select("id").ilike("full_name", `%${term}%`);
+    if (matchingHandlers?.length) {
+      orParts.push(`issued_by.in.(${matchingHandlers.map((h) => h.id).join(",")})`);
+    }
+    query = query.or(orParts.join(","));
+  }
+
+  const { data: rows, count } = await query.order("issued_date", { ascending: false }).range(from, to);
 
   const issuerIds = [...new Set((rows ?? []).map((r) => r.issued_by))];
   const { data: issuers } = issuerIds.length
@@ -107,23 +135,24 @@ async function loadIntakeLogTab(
 export default async function DocumentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; year?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string; year?: string; page?: string; q?: string }>;
 }) {
   const employee = await getCurrentEmployee();
   if (!employee) redirect("/");
   if (!(await canReceiveDocuments(employee.department_id, employee.role))) redirect("/");
 
-  const { tab: tabParam, year: yearParam, page: pageParam } = await searchParams;
+  const { tab: tabParam, year: yearParam, page: pageParam, q: qParam } = await searchParams;
   const activeTab = INTAKE_TABS.find((t) => t.key === tabParam) ?? INTAKE_TABS.find((t) => t.key === "warapat")!;
   const currentYearBe = new Date().getFullYear() + 543;
   const yearBe = Number(yearParam) || currentYearBe;
   const page = Math.max(1, Number(pageParam) || 1);
+  const search = qParam ?? "";
   const years = Array.from({ length: currentYearBe - EARLIEST_YEAR_BE + 1 }, (_, i) => String(currentYearBe - i));
 
   const supabase = await createClient();
 
   const camera = activeTab.key === "camera" ? await loadCameraTab(supabase) : null;
-  const log = activeTab.categoryLabel ? await loadIntakeLogTab(supabase, activeTab.categoryLabel, yearBe, page) : null;
+  const log = activeTab.categoryLabel ? await loadIntakeLogTab(supabase, activeTab.categoryLabel, yearBe, page, search) : null;
   const logRows = log?.rows ?? null;
   const { data: allEmployees } = logRows
     ? await supabase.from("employee_directory").select("id, full_name").eq("status", "active").order("full_name")
@@ -163,6 +192,7 @@ export default async function DocumentsPage({
             page={page}
             totalCount={log?.totalCount ?? 0}
             pageSize={PAGE_SIZE}
+            search={search}
           />
         )}
       </div>

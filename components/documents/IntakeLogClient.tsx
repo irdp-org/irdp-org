@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, ExternalLink, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,7 @@ export function IntakeLogClient({
   page,
   totalCount,
   pageSize,
+  search: searchFromUrl,
 }: {
   categoryLabel: string;
   rows: IntakeLogRow[];
@@ -61,6 +62,7 @@ export function IntakeLogClient({
   page: number;
   totalCount: number;
   pageSize: number;
+  search: string;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -68,28 +70,31 @@ export function IntakeLogClient({
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchFromUrl);
 
-  // Year is a real server-side filter now (?year=) instead of client state —
-  // the page only ever fetches one year's rows, which is what actually fixes
-  // the slow load (1,100+ rows for some registers across all years at once).
+  // Year and search are real server-side filters now (?year=, ?q=) instead
+  // of client state — the page only fetches one year/page of rows at a
+  // time, so search has to run on the server to reach rows outside the
+  // current page too.
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
   function goToPage(p: number) {
-    router.push(`/documents?tab=${tabKey}&year=${activeYear}&page=${p}`);
+    router.push(`/documents?tab=${tabKey}&year=${activeYear}&page=${p}&q=${encodeURIComponent(search)}`);
   }
 
-  const searchLower = search.trim().toLowerCase();
-  const visibleRows = rows.filter(
-    (r) =>
-      !searchLower ||
-      r.title.toLowerCase().includes(searchLower) ||
-      (r.from_name ?? "").toLowerCase().includes(searchLower) ||
-      (r.recipient ?? "").toLowerCase().includes(searchLower) ||
-      r.doc_no.toLowerCase().includes(searchLower) ||
-      (r.ref_no ?? "").toLowerCase().includes(searchLower) ||
-      r.handler_name.toLowerCase().includes(searchLower)
-  );
+  // Debounce so every keystroke doesn't trigger a server round-trip; reset
+  // to page 1 since the result set for a new search term starts over.
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleSearchChange(value: string) {
+    setSearch(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      router.push(`/documents?tab=${tabKey}&year=${activeYear}&page=1&q=${encodeURIComponent(value)}`);
+    }, 400);
+  }
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+  const visibleRows = rows;
 
   function handleCreate(formData: FormData) {
     setError(null);
@@ -160,7 +165,7 @@ export function IntakeLogClient({
     },
     { key: "from_name", label: "จาก", sortValue: (r) => r.from_name ?? "", render: (r) => <span className="text-foreground">{r.from_name ?? "-"}</span> },
     { key: "recipient", label: "ถึง", sortValue: (r) => r.recipient ?? "", render: (r) => <span className="text-foreground">{r.recipient ?? "-"}</span> },
-    { key: "title", label: "เรื่อง", sortValue: (r) => r.title, render: (r) => <span className="text-foreground">{r.title}</span>, className: "max-w-[320px]" },
+    { key: "title", label: "เรื่อง", sortValue: (r) => r.title, render: (r) => <span className="text-foreground">{r.title}</span>, className: "w-full min-w-[260px]" },
     { key: "handler_name", label: "การปฏิบัติ", sortValue: (r) => r.handler_name, render: (r) => <span className="text-foreground">{r.handler_name}</span> },
     {
       key: "attachment",
@@ -194,7 +199,7 @@ export function IntakeLogClient({
         <div className="flex flex-wrap gap-2">
           <select
             value={activeYear}
-            onChange={(e) => router.push(`/documents?tab=${tabKey}&year=${e.target.value}&page=1`)}
+            onChange={(e) => router.push(`/documents?tab=${tabKey}&year=${e.target.value}&page=1&q=${encodeURIComponent(search)}`)}
             className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
           >
             {years.map((y) => (
@@ -205,8 +210,8 @@ export function IntakeLogClient({
           </select>
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="ค้นหาชื่อเรื่อง, ถึง, จาก, เลขที่..."
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="ค้นหาชื่อเรื่อง, ถึง, จาก, เลขที่... (ค้นทุกหน้า)"
             className="sm:max-w-xs"
           />
         </div>
