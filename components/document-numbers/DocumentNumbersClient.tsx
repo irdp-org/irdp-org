@@ -61,6 +61,9 @@ export function DocumentNumbersClient({
   canDelete,
   years,
   activeYear,
+  page,
+  totalCount,
+  pageSize,
 }: {
   rows: DocNumberRow[];
   showDeptColumn: boolean;
@@ -69,6 +72,9 @@ export function DocumentNumbersClient({
   canDelete: boolean;
   years: string[];
   activeYear: string;
+  page: number;
+  totalCount: number;
+  pageSize: number;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -82,6 +88,12 @@ export function DocumentNumbersClient({
   // the page only ever fetches one year's rows, which is what actually fixes
   // the slow load (2,800+ rows across all years at once, before).
   const [search, setSearch] = useState("");
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  function goToPage(p: number) {
+    router.push(`/document-numbers?year=${activeYear}&page=${p}`);
+  }
 
   function rowBook(r: DocNumberRow) {
     return r.category_label ? bookOf(r.category_label) : BOOK_INTERNAL;
@@ -273,7 +285,7 @@ export function DocumentNumbersClient({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
           value={activeYear}
-          onChange={(e) => router.push(`/document-numbers?year=${e.target.value}`)}
+          onChange={(e) => router.push(`/document-numbers?year=${e.target.value}&page=1`)}
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
         >
           {years.map((y) => (
@@ -298,6 +310,22 @@ export function DocumentNumbersClient({
         )
       ) : (
         <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} defaultSort={{ key: "doc_no", dir: "desc" }} />
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">
+            หน้า {page} / {totalPages} (ทั้งหมด {totalCount} รายการ)
+          </span>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
+              ก่อนหน้า
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+              ถัดไป
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Create */}

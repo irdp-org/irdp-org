@@ -47,6 +47,9 @@ export function IntakeLogClient({
   years,
   activeYear,
   tabKey,
+  page,
+  totalCount,
+  pageSize,
 }: {
   categoryLabel: string;
   rows: IntakeLogRow[];
@@ -55,6 +58,9 @@ export function IntakeLogClient({
   years: string[];
   activeYear: string;
   tabKey: string;
+  page: number;
+  totalCount: number;
+  pageSize: number;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -67,6 +73,12 @@ export function IntakeLogClient({
   // Year is a real server-side filter now (?year=) instead of client state —
   // the page only ever fetches one year's rows, which is what actually fixes
   // the slow load (1,100+ rows for some registers across all years at once).
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+
+  function goToPage(p: number) {
+    router.push(`/documents?tab=${tabKey}&year=${activeYear}&page=${p}`);
+  }
+
   const searchLower = search.trim().toLowerCase();
   const visibleRows = rows.filter(
     (r) =>
@@ -182,7 +194,7 @@ export function IntakeLogClient({
         <div className="flex flex-wrap gap-2">
           <select
             value={activeYear}
-            onChange={(e) => router.push(`/documents?tab=${tabKey}&year=${e.target.value}`)}
+            onChange={(e) => router.push(`/documents?tab=${tabKey}&year=${e.target.value}&page=1`)}
             className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
           >
             {years.map((y) => (
@@ -204,6 +216,22 @@ export function IntakeLogClient({
         <EmptyState icon={FileText} title="ไม่พบรายการ" description={rows.length === 0 ? "กดปุ่ม 'เพิ่มรายการ' เพื่อเริ่มลงรายการแรก" : "ลองเปลี่ยนตัวกรองหรือคำค้นหา"} />
       ) : (
         <SortableTable columns={columns} rows={visibleRows} rowKey={(r) => r.id} defaultSort={{ key: "seq", dir: "desc" }} />
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="text-muted-foreground">
+            หน้า {page} / {totalPages} (ทั้งหมด {totalCount} รายการ)
+          </span>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" size="sm" disabled={page <= 1} onClick={() => goToPage(page - 1)}>
+              ก่อนหน้า
+            </Button>
+            <Button type="button" variant="outline" size="sm" disabled={page >= totalPages} onClick={() => goToPage(page + 1)}>
+              ถัดไป
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Create */}

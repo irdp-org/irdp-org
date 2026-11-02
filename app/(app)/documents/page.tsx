@@ -55,21 +55,30 @@ async function loadCameraTab(supabase: Awaited<ReturnType<typeof createClient>>)
 }
 
 const EARLIEST_YEAR_BE = 2560; // bounds the year picker; no query needed to build it
+const PAGE_SIZE = 50; // ดร.เสรี alone has 1,100+ rows in a single year — page it instead of loading them all
 
-async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient>>, categoryLabel: string, yearBe: number) {
+async function loadIntakeLogTab(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  categoryLabel: string,
+  yearBe: number,
+  page: number
+) {
   const { data: category } = await supabase.from("document_categories").select("id").eq("label", categoryLabel).maybeSingle();
-  if (!category) return [] as IntakeLogRow[];
+  if (!category) return { rows: [] as IntakeLogRow[], totalCount: 0 };
 
-  // Scoping to one year (ดร.เสรี alone has 1,100+ rows across all years) is
-  // what actually fixes the slow load — same fix as /document-numbers.
+  // Scoping to one year AND one page is what actually fixes the slow load —
+  // some registers still have 1,000+ rows within a single year.
   const yearGreg = yearBe - 543;
-  const { data: rows } = await supabase
+  const from = (page - 1) * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+  const { data: rows, count } = await supabase
     .from("document_numbers")
-    .select("id, seq, doc_no, ref_no, issued_date, source_date, from_name, recipient, title, issued_by, attachment_url")
+    .select("id, seq, doc_no, ref_no, issued_date, source_date, from_name, recipient, title, issued_by, attachment_url", { count: "exact" })
     .eq("category_id", category.id)
     .gte("issued_date", `${yearGreg}-01-01`)
     .lte("issued_date", `${yearGreg}-12-31`)
-    .order("issued_date", { ascending: false });
+    .order("issued_date", { ascending: false })
+    .range(from, to);
 
   const issuerIds = [...new Set((rows ?? []).map((r) => r.issued_by))];
   const { data: issuers } = issuerIds.length
@@ -77,7 +86,7 @@ async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient
     : { data: [] };
   const nameById = new Map((issuers ?? []).map((p) => [p.id, p.full_name]));
 
-  return (rows ?? []).map((r) => ({
+  const mapped = (rows ?? []).map((r) => ({
     id: r.id,
     seq: r.seq,
     doc_no: r.doc_no,
@@ -91,27 +100,31 @@ async function loadIntakeLogTab(supabase: Awaited<ReturnType<typeof createClient
     handler_name: nameById.get(r.issued_by) ?? "—",
     attachment_url: r.attachment_url,
   })) as IntakeLogRow[];
+
+  return { rows: mapped, totalCount: count ?? mapped.length };
 }
 
 export default async function DocumentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; year?: string }>;
+  searchParams: Promise<{ tab?: string; year?: string; page?: string }>;
 }) {
   const employee = await getCurrentEmployee();
   if (!employee) redirect("/");
   if (!(await canReceiveDocuments(employee.department_id, employee.role))) redirect("/");
 
-  const { tab: tabParam, year: yearParam } = await searchParams;
+  const { tab: tabParam, year: yearParam, page: pageParam } = await searchParams;
   const activeTab = INTAKE_TABS.find((t) => t.key === tabParam) ?? INTAKE_TABS.find((t) => t.key === "warapat")!;
   const currentYearBe = new Date().getFullYear() + 543;
   const yearBe = Number(yearParam) || currentYearBe;
+  const page = Math.max(1, Number(pageParam) || 1);
   const years = Array.from({ length: currentYearBe - EARLIEST_YEAR_BE + 1 }, (_, i) => String(currentYearBe - i));
 
   const supabase = await createClient();
 
   const camera = activeTab.key === "camera" ? await loadCameraTab(supabase) : null;
-  const logRows = activeTab.categoryLabel ? await loadIntakeLogTab(supabase, activeTab.categoryLabel, yearBe) : null;
+  const log = activeTab.categoryLabel ? await loadIntakeLogTab(supabase, activeTab.categoryLabel, yearBe, page) : null;
+  const logRows = log?.rows ?? null;
   const { data: allEmployees } = logRows
     ? await supabase.from("employee_directory").select("id, full_name").eq("status", "active").order("full_name")
     : { data: null };
@@ -147,6 +160,9 @@ export default async function DocumentsPage({
             years={years}
             activeYear={String(yearBe)}
             tabKey={activeTab.key}
+            page={page}
+            totalCount={log?.totalCount ?? 0}
+            pageSize={PAGE_SIZE}
           />
         )}
       </div>
