@@ -60,7 +60,12 @@ function SelectTrigger({
 function SelectContent({
   className,
   children,
-  position = "item-aligned",
+  // "item-aligned" (the Radix default) computes its own scroll position
+  // against the viewport and fights the page/dialog's own scroll — that's
+  // what made scrolling a long option list inside a dialog expand the
+  // dropdown instead of scrolling it. "popper" anchors to the trigger like
+  // a normal dropdown and scrolls independently.
+  position = "popper",
   align = "center",
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {

@@ -3,14 +3,14 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { FileText, Plus } from "lucide-react";
+import { FileText, Plus, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { createDar } from "@/app/(app)/qms/dar/actions";
+import { createDar, addQmr, removeQmr } from "@/app/(app)/qms/dar/actions";
 import { DOC_TYPE_CODE_LABEL, DAR_STATUS_LABEL, stepRoleLabels } from "@/lib/qms-dar";
 import type { QmsDarStep, QmsDocTypeCodeT } from "@/lib/database.types";
 import { cn } from "@/lib/utils";
@@ -50,6 +50,7 @@ export function DarListClient({
   rows,
   currentEmployeeId,
   isDcc,
+  isAdmin,
   matrix,
   departments,
   employeeOptions,
@@ -67,6 +68,7 @@ export function DarListClient({
   activeDocuments: { id: string; doc_code: string; title: string }[];
 }) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [qmrOpen, setQmrOpen] = useState(false);
   const [onlyMine, setOnlyMine] = useState(true);
 
   const visibleRows = useMemo(() => {
@@ -88,11 +90,18 @@ export function DarListClient({
             ทั้งหมด
           </Button>
         </div>
-        {isDcc && (
-          <Button type="button" size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" /> สร้างใบ DAR
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {isDcc && (
+            <Button type="button" size="sm" className="gap-1.5" onClick={() => setCreateOpen(true)}>
+              <Plus className="h-4 w-4" /> สร้างใบ DAR
+            </Button>
+          )}
+          {isAdmin && (
+            <Button type="button" size="sm" variant="ghost" className="gap-1.5" onClick={() => setQmrOpen(true)}>
+              <Users className="h-4 w-4" /> จัดการ QMR
+            </Button>
+          )}
+        </div>
       </div>
 
       {visibleRows.length === 0 ? (
@@ -146,7 +155,84 @@ export function DarListClient({
           activeDocuments={activeDocuments}
         />
       )}
+      {isAdmin && (
+        <QmrManageDialog open={qmrOpen} onOpenChange={setQmrOpen} qmrMembers={qmrMembers} employeeOptions={employeeOptions} />
+      )}
     </div>
+  );
+}
+
+function QmrManageDialog({
+  open,
+  onOpenChange,
+  qmrMembers,
+  employeeOptions,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  qmrMembers: { employee_id: string; full_name: string }[];
+  employeeOptions: { id: string; full_name: string; position: string | null }[];
+}) {
+  const router = useRouter();
+  const [pickId, setPickId] = useState("");
+  const [isPending, startTransition] = useTransition();
+
+  function handleAdd() {
+    if (!pickId) return;
+    startTransition(async () => {
+      await addQmr(pickId);
+      setPickId("");
+      router.refresh();
+    });
+  }
+
+  function handleRemove(employeeId: string) {
+    startTransition(async () => {
+      await removeQmr(employeeId);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>จัดการสิทธิ์ QMR</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            ใบ DAR ทุกใบต้องเลือก QMR อย่างน้อย 1 คน (เว้นแต่ติ๊กยกเว้น) — ต้องเพิ่มรายชื่อ QMR ที่นี่ก่อน DCC จึงจะเลือกได้ตอนสร้างใบ DAR
+          </p>
+          {qmrMembers.length === 0 ? (
+            <p className="text-sm text-muted-foreground">ยังไม่มีใครถูกตั้งเป็น QMR</p>
+          ) : (
+            <ul className="flex flex-col gap-1">
+              {qmrMembers.map((m) => (
+                <li key={m.employee_id} className="flex items-center justify-between rounded-lg bg-surface px-3 py-1.5 text-sm">
+                  {m.full_name}
+                  <button type="button" onClick={() => handleRemove(m.employee_id)} disabled={isPending} className="text-muted-foreground/60 hover:text-danger">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex gap-2">
+            <Select value={pickId} onValueChange={setPickId}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="เลือกพนักงาน" /></SelectTrigger>
+              <SelectContent>
+                {employeeOptions
+                  .filter((e) => !qmrMembers.some((m) => m.employee_id === e.id))
+                  .map((e) => (
+                    <SelectItem key={e.id} value={e.id}>{e.full_name}</SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <Button type="button" disabled={!pickId || isPending} onClick={handleAdd}>เพิ่ม</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -185,11 +271,6 @@ function CreateDarDialog({
   const processOptions = useMemo(() => [...new Map(matrix.map((m) => [m.process_code, m.process_label])).entries()], [matrix]);
   const selectedMatrix = matrix.find((m) => m.process_code === processCode && m.doc_type_code === docTypeCode);
 
-  function suggestedFor(positionNeeded: string) {
-    const lower = positionNeeded.toLowerCase();
-    return employeeOptions.filter((e) => e.position && lower.includes(e.position.toLowerCase().slice(0, 6)));
-  }
-
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -223,7 +304,13 @@ function CreateDarDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogContent
+        className="max-h-[90vh] overflow-y-auto sm:max-w-lg"
+        // This is a long form — closing it on a stray outside click (e.g.
+        // a mis-tap while reaching for a dropdown) would silently discard
+        // everything typed so far. Only the X button or Escape close it.
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>สร้างใบคำขอดำเนินการเอกสาร (DAR)</DialogTitle>
         </DialogHeader>
@@ -312,26 +399,31 @@ function CreateDarDialog({
           {selectedMatrix && (
             <div className="rounded-xl bg-surface px-3 py-2 text-xs text-muted-foreground">
               ตามตารางสิทธิ์: ผู้จัดทำ = {selectedMatrix.author_position} · ผู้ทบทวน = {selectedMatrix.reviewer_position} · ผู้อนุมัติ = {selectedMatrix.approver_position}
-              <br />เลือกตัวบุคคลด้านล่าง (ระบบช่วยกรองตามตำแหน่ง แต่เลือกคนอื่นได้ถ้าจำเป็น)
             </div>
           )}
 
-          <EmployeePicker label="ผู้จัดทำ *" value={authorId} onChange={setAuthorId} options={employeeOptions} suggested={selectedMatrix ? suggestedFor(selectedMatrix.author_position) : []} />
-          <EmployeePicker label="ผู้ทบทวน *" value={reviewerId} onChange={setReviewerId} options={employeeOptions} suggested={selectedMatrix ? suggestedFor(selectedMatrix.reviewer_position) : []} />
-          <EmployeePicker label="ผู้อนุมัติ *" value={approverId} onChange={setApproverId} options={employeeOptions} suggested={selectedMatrix ? suggestedFor(selectedMatrix.approver_position) : []} />
+          <EmployeePicker label="ผู้จัดทำ *" value={authorId} onChange={setAuthorId} options={employeeOptions} />
+          <EmployeePicker label="ผู้ทบทวน *" value={reviewerId} onChange={setReviewerId} options={employeeOptions} />
+          <EmployeePicker label="ผู้อนุมัติ *" value={approverId} onChange={setApproverId} options={employeeOptions} />
 
           <div className="flex items-center gap-2">
             <input id="qmrWaived" type="checkbox" checked={qmrWaived} onChange={(e) => setQmrWaived(e.target.checked)} className="h-4 w-4 rounded border-input" />
             <Label htmlFor="qmrWaived" className="cursor-pointer">ได้รับการยกเว้นจาก QMR ไม่ต้องผ่านขั้น QMR</Label>
           </div>
           {!qmrWaived && (
-            <EmployeePicker
-              label="QMR *"
-              value={qmrId}
-              onChange={setQmrId}
-              options={qmrMembers.map((q) => ({ id: q.employee_id, full_name: q.full_name, position: null }))}
-              suggested={[]}
-            />
+            <>
+              <EmployeePicker
+                label="QMR *"
+                value={qmrId}
+                onChange={setQmrId}
+                options={qmrMembers.map((q) => ({ id: q.employee_id, full_name: q.full_name, position: null }))}
+              />
+              {qmrMembers.length === 0 && (
+                <p className="text-xs text-danger">
+                  ยังไม่มีใครถูกตั้งเป็น QMR ในระบบ — ให้ผู้ดูแลระบบไปที่ปุ่ม &ldquo;จัดการ QMR&rdquo; เพื่อเพิ่มก่อน หรือติ๊กยกเว้นด้านบน
+                </p>
+              )}
+            </>
           )}
 
           <div className="flex flex-col gap-1.5">
@@ -385,29 +477,23 @@ function EmployeePicker({
   value,
   onChange,
   options,
-  suggested,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { id: string; full_name: string; position: string | null }[];
-  suggested: { id: string; full_name: string; position: string | null }[];
 }) {
-  const suggestedIds = new Set(suggested.map((s) => s.id));
   return (
     <div className="flex flex-col gap-1.5">
       <Label>{label}</Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className="w-full"><SelectValue placeholder="เลือกพนักงาน" /></SelectTrigger>
         <SelectContent>
-          {options
-            .slice()
-            .sort((a, b) => Number(suggestedIds.has(b.id)) - Number(suggestedIds.has(a.id)))
-            .map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.full_name}{suggestedIds.has(o.id) ? " ⭐" : ""}{o.position ? ` — ${o.position}` : ""}
-              </SelectItem>
-            ))}
+          {options.map((o) => (
+            <SelectItem key={o.id} value={o.id}>
+              {o.full_name}{o.position ? ` — ${o.position}` : ""}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
     </div>
