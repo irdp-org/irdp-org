@@ -290,6 +290,19 @@ function CreateDarDialog({
       setError("กรุณาเลือกเอกสารที่จะแก้ไข/ยกเลิก");
       return;
     }
+    // Vercel's serverless functions cap a request body at ~4.5MB regardless
+    // of Next's own server-actions bodySizeLimit setting — a scanned
+    // multi-page PDF routinely blows past that, and the failure shows up as
+    // a blank "This page couldn't load" instead of a readable error since
+    // the platform rejects the connection before our code ever runs. Catch
+    // it client-side with an actionable message instead.
+    const attachedFile = formData.get("file");
+    if (attachedFile instanceof File && attachedFile.size > 4 * 1024 * 1024) {
+      setError(
+        `ไฟล์ใหญ่เกินไป (${(attachedFile.size / 1024 / 1024).toFixed(1)}MB) ระบบรองรับไม่เกิน 4MB — ลองสแกนที่ความละเอียดต่ำลง หรือบีบอัดไฟล์ PDF ก่อนแนบ`
+      );
+      return;
+    }
     startTransition(async () => {
       const res = await createDar(formData);
       if (res?.error) {
