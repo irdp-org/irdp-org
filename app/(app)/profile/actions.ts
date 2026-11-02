@@ -96,21 +96,30 @@ export async function updateProfile(formData: FormData) {
     if (file.size > MAX_AVATAR_BYTES) return { error: "ไฟล์รูปใหญ่เกินไป (จำกัด 5MB)" };
     const ext = file.name.split(".").pop() || "jpg";
     const path = `${employee.id}/avatar.${ext}`;
+    // Diagnostic: confirm what auth.uid() the Postgres layer will actually
+    // see for THIS client instance's token (getUser() does a real
+    // server-side verification round-trip, unlike getClaims() used by
+    // getCurrentEmployee() above, which only decodes locally) — a mismatch
+    // or failure here would explain the employee resolving fine while the
+    // storage RLS check still fails. Remove once the RLS issue is resolved.
+    const { data: authProbe, error: authProbeError } = await supabase.auth.getUser();
+
     const { error: uploadError } = await supabase.storage.from("avatars").upload(path, file, {
       contentType: file.type || guessContentType(ext),
       upsert: true,
     });
     if (uploadError) {
-      // Temporary verbose diagnostics for an in-progress RLS investigation
-      // (storage.objects policy checks out fine when impersonated directly
-      // in SQL, so something about this specific request isn't carrying the
-      // expected session through to the upload call) — remove once resolved.
       console.error("[updateProfile] avatar upload failed", {
         employeeId: employee.id,
+        employeeUserId: employee.user_id,
         path,
+        authProbeUserId: authProbe?.user?.id,
+        authProbeError,
         error: uploadError,
       });
-      return { error: `${uploadError.message} (employeeId=${employee.id}, path=${path})` };
+      return {
+        error: `${uploadError.message} (employeeId=${employee.id}, expectedUserId=${employee.user_id}, authUserId=${authProbe?.user?.id ?? "null"}, authError=${authProbeError?.message ?? "none"})`,
+      };
     }
     avatarUrl = path;
   }
