@@ -106,7 +106,16 @@ async function loadIntakeLogTab(
     query = query.or(orParts.join(","));
   }
 
-  const { data: rows, count } = await query.order("issued_date", { ascending: false }).range(from, to);
+  // issued_date alone isn't a stable sort key — many entries logged in the
+  // same batch share the same date, and Postgres doesn't guarantee any
+  // particular order among ties. Without a tiebreaker a newly-added row with
+  // today's (or any already-used) date could land anywhere among same-date
+  // rows, including off the first page — seq (assigned in creation order)
+  // breaks the tie so the newest entry is always first among its date.
+  const { data: rows, count } = await query
+    .order("issued_date", { ascending: false })
+    .order("seq", { ascending: false })
+    .range(from, to);
 
   const issuerIds = [...new Set((rows ?? []).map((r) => r.issued_by))];
   const { data: issuers } = issuerIds.length
