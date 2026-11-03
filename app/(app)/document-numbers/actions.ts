@@ -81,6 +81,7 @@ export async function createDocumentNumber(formData: FormData) {
   const yearBe = new Date(issuedDate).getFullYear() + 543;
   const recipientInput = String(formData.get("recipient") ?? "").trim();
   const categoryInput = String(formData.get("category") ?? "").trim();
+  const remark = String(formData.get("remark") ?? "").trim() || null;
 
   // These registers moved to "ลงรับเอกสาร" (they're incoming logs with their
   // own doc_no format per register) — block re-creating them here so a typed
@@ -149,6 +150,7 @@ export async function createDocumentNumber(formData: FormData) {
       issued_by: employee.id,
       attachment_drive_id: attachmentDriveId,
       attachment_url: attachmentUrl,
+      remark,
     })
     .select("id")
     .single();
@@ -170,14 +172,18 @@ export async function updateDocumentNumber(id: string, formData: FormData) {
 
   const supabase = await createClient();
 
+  const remark = formData.has("remark") ? String(formData.get("remark") ?? "").trim() || null : undefined;
+
   const update: {
     title: string;
     recipient?: string | null;
     issued_date?: string;
     attachment_drive_id?: string;
     attachment_url?: string;
+    remark?: string | null;
   } = { title, recipient: recipientInput ? await getOrCreateRecipient(recipientInput, employee.id) : null };
   if (issuedDate) update.issued_date = issuedDate;
+  if (remark !== undefined) update.remark = remark;
 
   const file = formData.get("attachment");
   if (file instanceof File && file.size > 0) {

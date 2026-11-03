@@ -434,6 +434,7 @@ export interface Database {
         issued_by: string;
         attachment_drive_id: string | null;
         attachment_url: string | null;
+        remark: string | null;
         created_at: string;
         updated_at: string;
       }>;

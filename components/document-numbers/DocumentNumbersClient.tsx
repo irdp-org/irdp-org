@@ -34,6 +34,7 @@ export type DocNumberRow = {
   department_name: string;
   issuer_name: string;
   attachment_url: string | null;
+  remark: string | null;
 };
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -52,6 +53,7 @@ export function DocumentNumbersClient({
   totalCount,
   pageSize,
   search: searchFromUrl,
+  showRemark,
 }: {
   rows: DocNumberRow[];
   showDeptColumn: boolean;
@@ -65,6 +67,7 @@ export function DocumentNumbersClient({
   totalCount: number;
   pageSize: number;
   search: string;
+  showRemark: boolean;
 }) {
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
@@ -209,6 +212,16 @@ export function DocumentNumbersClient({
       sortValue: (r) => r.issuer_name,
       render: (r) => <span className="text-foreground">{r.issuer_name}</span>,
     },
+    ...(showRemark
+      ? ([
+          {
+            key: "remark",
+            label: "หมายเหตุ",
+            sortValue: (r: DocNumberRow) => r.remark ?? "",
+            render: (r: DocNumberRow) => <span className="text-foreground">{r.remark ?? "-"}</span>,
+          },
+        ] as Column<DocNumberRow>[])
+      : []),
     {
       key: "attachment",
       label: "ไฟล์แนบ",
@@ -368,6 +381,12 @@ export function DocumentNumbersClient({
               <Label>วันที่ออกเลข</Label>
               <Input type="date" name="issuedDate" defaultValue={todayStr()} required />
             </div>
+            {showRemark && (
+              <div className="flex flex-col gap-1.5">
+                <Label>หมายเหตุ</Label>
+                <Input name="remark" placeholder="เช่น ส่งตามสัญญา 1 เล่ม" />
+              </div>
+            )}
             <div className="flex flex-col gap-1.5">
               <Label>แนบไฟล์ (ถ้ามี)</Label>
               <Input type="file" name="attachment" />
@@ -402,6 +421,12 @@ export function DocumentNumbersClient({
                 <Label>วันที่ออกเลข</Label>
                 <Input type="date" name="issuedDate" defaultValue={editing.issued_date} required />
               </div>
+              {showRemark && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>หมายเหตุ</Label>
+                  <Input name="remark" defaultValue={editing.remark ?? ""} placeholder="เช่น ส่งตามสัญญา 1 เล่ม" />
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label>{editing.attachment_url ? "แทนที่ไฟล์แนบ" : "แนบไฟล์"}</Label>
                 <Input type="file" name="attachment" />

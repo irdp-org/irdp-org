@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 
 const EARLIEST_YEAR_BE = 2560; // bounds the year picker; no query needed to build it
 const PAGE_SIZE = 50; // some years have 1,000+ rows in one book — page it instead of loading them all
+const DEPT_PA = "0a6d5693-1e48-4d25-adee-4c720519fa28"; // ฝ่ายประเมินผล — only dept whose register uses หมายเหตุ
 
 function escapeIlike(s: string) {
   // Escape PostgREST's pattern-matching special chars so a literal search
@@ -59,7 +60,7 @@ export default async function DocumentNumbersPage({
   const to = from + PAGE_SIZE - 1;
   let query = supabase
     .from("document_numbers")
-    .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at", { count: "exact" })
+    .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, remark, created_at", { count: "exact" })
     .eq("year_be", yearBe);
   // category_id is nullable and uncategorized rows default to "เล่มภายใน"
   // (see bookOf) — .or() is needed so they still show up under that book.
@@ -112,6 +113,7 @@ export default async function DocumentNumbersPage({
     department_name: deptNameById.get(r.department_id) ?? "—",
     issuer_name: issuerNameById.get(r.issued_by) ?? "—",
     attachment_url: r.attachment_url,
+    remark: r.remark,
   }));
 
   const categoryLabels = [
@@ -147,6 +149,7 @@ export default async function DocumentNumbersPage({
           totalCount={totalCount ?? 0}
           pageSize={PAGE_SIZE}
           search={search}
+          showRemark={isOversight(employee.role) || employee.department_id === DEPT_PA}
         />
       </div>
     </div>
