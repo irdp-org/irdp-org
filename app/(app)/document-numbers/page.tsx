@@ -3,6 +3,7 @@ import { getCurrentEmployee } from "@/lib/auth";
 import { isOversight, isAdmin } from "@/lib/rbac";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { DocumentNumbersClient, type DocNumberRow } from "@/components/document-numbers/DocumentNumbersClient";
+import { ALL_BOOKS, BOOK_INTERNAL, bookOf } from "@/lib/document-number-books";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,7 @@ function escapeIlike(s: string) {
 export default async function DocumentNumbersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; page?: string; q?: string }>;
+  searchParams: Promise<{ year?: string; page?: string; q?: string; book?: string }>;
 }) {
   const employee = await getCurrentEmployee();
   if (!employee) return null;
@@ -26,20 +27,30 @@ export default async function DocumentNumbersPage({
   const supabase = await createClient();
 
   const currentYearBe = new Date().getFullYear() + 543;
-  const { year: yearParam, page: pageParam, q: qParam } = await searchParams;
+  const { year: yearParam, page: pageParam, q: qParam, book: bookParam } = await searchParams;
   const yearBe = Number(yearParam) || currentYearBe;
   const page = Math.max(1, Number(pageParam) || 1);
   const search = qParam ?? "";
+  const activeBook = (ALL_BOOKS as readonly string[]).includes(bookParam ?? "") ? bookParam! : BOOK_INTERNAL;
   const years = Array.from({ length: currentYearBe - EARLIEST_YEAR_BE + 1 }, (_, i) => String(currentYearBe - i));
 
   // These 3 categories moved to "ลงรับเอกสาร" — they're incoming logs (มี
   // "จาก"), not outgoing-issued numbers, and don't belong in this book list.
-  // Categories need to load first so they can be excluded in the SQL query
-  // itself (not filtered out afterwards) — otherwise the per-page slice and
-  // the total count would both be wrong once pagination is in play.
+  // Categories need to load first so both the moved-category exclusion AND
+  // the book filter (below) can happen in the SQL query itself — filtering
+  // client-side after pagination was the actual bug here: a page of 50 rows
+  // sorted by created_at could easily contain almost none of the selected
+  // book's rows, since switching books never re-fetched, just re-filtered
+  // whatever 50 rows happened to already be on screen.
   const { data: categories } = await supabase.from("document_categories").select("id, department_id, label").order("sort_order");
   const MOVED_TO_INTAKE = new Set(["ส่วนรับเลขา ดร.วรภัทร", "ส่วนรับเลขา ดร.เสรี", "รับเข้า ธุรการ"]);
-  const movedCategoryIds = [...new Set((categories ?? []).filter((c) => MOVED_TO_INTAKE.has(c.label)).map((c) => c.id))];
+  const bookCategoryIds = [
+    ...new Set(
+      (categories ?? [])
+        .filter((c) => !MOVED_TO_INTAKE.has(c.label) && bookOf(c.label) === activeBook)
+        .map((c) => c.id)
+    ),
+  ];
 
   // Scoping to one year AND one page at a time (instead of fetching the full
   // 2,800+ row table, or even a whole year, on every load) is what actually
@@ -50,11 +61,12 @@ export default async function DocumentNumbersPage({
     .from("document_numbers")
     .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, created_at", { count: "exact" })
     .eq("year_be", yearBe);
-  // category_id is nullable, and Postgres's NOT IN excludes NULLs rather
-  // than keeping them — .or() is needed so uncategorized rows still show.
-  if (movedCategoryIds.length) {
-    query = query.or(`category_id.is.null,category_id.not.in.(${movedCategoryIds.join(",")})`);
-  }
+  // category_id is nullable and uncategorized rows default to "เล่มภายใน"
+  // (see bookOf) — .or() is needed so they still show up under that book.
+  query =
+    activeBook === BOOK_INTERNAL
+      ? query.or(`category_id.is.null,category_id.in.(${bookCategoryIds.join(",") || "00000000-0000-0000-0000-000000000000"})`)
+      : query.in("category_id", bookCategoryIds.length ? bookCategoryIds : ["00000000-0000-0000-0000-000000000000"]);
 
   let issuerIdsMatchingSearch: string[] = [];
   if (search.trim()) {
@@ -130,6 +142,7 @@ export default async function DocumentNumbersPage({
           canDelete={isAdmin(employee.role)}
           years={years}
           activeYear={String(yearBe)}
+          activeBook={activeBook}
           page={page}
           totalCount={totalCount ?? 0}
           pageSize={PAGE_SIZE}

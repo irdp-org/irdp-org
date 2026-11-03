@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { createDocumentNumber, updateDocumentNumber, deleteDocumentNumber } from "@/app/(app)/document-numbers/actions";
 import { compressImage } from "@/lib/image-compress";
+import { ALL_BOOKS, bookOf, type Book } from "@/lib/document-number-books";
 
 /** Server actions on this platform reject request bodies over a few MB — a raw
  * phone photo attachment can blow past that and the failure surfaces as a full
@@ -38,21 +39,6 @@ export type DocNumberRow = {
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const ALL_TAB = "ทั้งหมด";
 
-// Each physical register ("เล่ม") is identified by a label prefix set when
-// its categories were imported (see the migration import scripts) — not a
-// new DB column, since it's the same distinction the source spreadsheets
-// already encoded in their own tab names.
-const BOOK_INTERNAL = "เล่มภายใน";
-const BOOK_EXTERNAL = "เล่มภายนอก";
-const BOOK_HR = "เล่มงานบุคคล";
-const ALL_BOOKS = [BOOK_INTERNAL, BOOK_EXTERNAL, BOOK_HR] as const;
-type Book = (typeof ALL_BOOKS)[number];
-function bookOf(label: string): Book {
-  if (label.startsWith("ภายนอก")) return BOOK_EXTERNAL;
-  if (label.startsWith("งานบุคคล")) return BOOK_HR;
-  return BOOK_INTERNAL;
-}
-
 export function DocumentNumbersClient({
   rows,
   showDeptColumn,
@@ -61,6 +47,7 @@ export function DocumentNumbersClient({
   canDelete,
   years,
   activeYear,
+  activeBook,
   page,
   totalCount,
   pageSize,
@@ -73,6 +60,7 @@ export function DocumentNumbersClient({
   canDelete: boolean;
   years: string[];
   activeYear: string;
+  activeBook: string;
   page: number;
   totalCount: number;
   pageSize: number;
@@ -83,19 +71,30 @@ export function DocumentNumbersClient({
   const [editing, setEditing] = useState<DocNumberRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [activeBook, setActiveBook] = useState<Book>(BOOK_INTERNAL);
   const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  // Year and search are real server-side filters now (?year=, ?q=) instead
-  // of client state — the page only fetches one year/page of rows at a
-  // time, so search has to run on the server to reach rows outside the
-  // current page too.
+  // Year, book, and search are all real server-side filters now (?year=,
+  // ?book=, ?q=) instead of client state — the page only fetches one
+  // year/book/page of rows at a time. Switching book used to just re-filter
+  // whatever 50 rows were already on screen, which meant a book that wasn't
+  // well-represented on the current page looked almost empty even though it
+  // had plenty of rows elsewhere — book now has to be a real refetch too.
   const [search, setSearch] = useState(searchFromUrl);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
+  function buildUrl(overrides: { page?: number; book?: string; q?: string }) {
+    const params = new URLSearchParams({
+      year: activeYear,
+      book: overrides.book ?? activeBook,
+      page: String(overrides.page ?? page),
+      q: overrides.q ?? search,
+    });
+    return `/document-numbers?${params.toString()}`;
+  }
+
   function goToPage(p: number) {
-    router.push(`/document-numbers?year=${activeYear}&page=${p}&q=${encodeURIComponent(search)}`);
+    router.push(buildUrl({ page: p }));
   }
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -103,18 +102,14 @@ export function DocumentNumbersClient({
     setSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      router.push(`/document-numbers?year=${activeYear}&page=1&q=${encodeURIComponent(value)}`);
+      router.push(buildUrl({ page: 1, q: value }));
     }, 400);
   }
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
-  function rowBook(r: DocNumberRow) {
-    return r.category_label ? bookOf(r.category_label) : BOOK_INTERNAL;
-  }
-
   function selectBook(book: Book) {
-    setActiveBook(book);
     setActiveTab(ALL_TAB);
+    router.push(buildUrl({ book, page: 1 }));
   }
 
   function handleDelete(id: string) {
@@ -128,13 +123,12 @@ export function DocumentNumbersClient({
 
   const allLabels = [...categoryLabels, ...([...new Set(rows.map((r) => r.category_label).filter(Boolean))] as string[]).filter((l) => !categoryLabels.includes(l))];
   const tabs = [ALL_TAB, ...allLabels.filter((l) => bookOf(l) === activeBook)];
-  const booksPresent = new Set(rows.map(rowBook));
 
-  // Book/tab filters still apply only within the current page — switching
-  // book doesn't re-fetch — but search itself now runs server-side above.
-  const visibleRows = rows
-    .filter((r) => rowBook(r) === activeBook)
-    .filter((r) => activeTab === ALL_TAB || r.category_label === activeTab);
+  // Tab filtering still only applies within the current (already
+  // book-and-year-scoped) page — a book with many distinct categories could
+  // in principle split unevenly across pages the same way books used to,
+  // but that's a narrower, pre-existing tradeoff, not what was reported.
+  const visibleRows = rows.filter((r) => activeTab === ALL_TAB || r.category_label === activeTab);
 
   function handleCreate(formData: FormData) {
     setError(null);
@@ -166,6 +160,7 @@ export function DocumentNumbersClient({
   }
 
   const columns: Column<DocNumberRow>[] = [
+    { key: "seq", label: "ลำดับที่", sortValue: (r) => r.seq, render: (r) => <span className="text-muted-foreground">{r.seq}</span> },
     {
       key: "doc_no",
       label: "เลขที่เอกสาร",
@@ -257,8 +252,7 @@ export function DocumentNumbersClient({
             key={book}
             type="button"
             onClick={() => selectBook(book)}
-            disabled={!booksPresent.has(book)}
-            className={`flex-1 min-w-[45%] rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`flex-1 min-w-[45%] rounded-xl border px-4 py-2.5 text-sm font-semibold transition-colors ${
               activeBook === book
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-border bg-background text-muted-foreground hover:bg-surface"
@@ -291,7 +285,7 @@ export function DocumentNumbersClient({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
           value={activeYear}
-          onChange={(e) => router.push(`/document-numbers?year=${e.target.value}&page=1&q=${encodeURIComponent(search)}`)}
+          onChange={(e) => router.push(`/document-numbers?year=${e.target.value}&book=${encodeURIComponent(activeBook)}&page=1&q=${encodeURIComponent(search)}`)}
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
         >
           {years.map((y) => (
