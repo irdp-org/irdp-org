@@ -20,7 +20,7 @@ function escapeIlike(s: string) {
 export default async function DocumentNumbersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; page?: string; q?: string; book?: string }>;
+  searchParams: Promise<{ year?: string; page?: string; q?: string; book?: string; tab?: string }>;
 }) {
   const employee = await getCurrentEmployee();
   if (!employee) return null;
@@ -28,11 +28,12 @@ export default async function DocumentNumbersPage({
   const supabase = await createClient();
 
   const currentYearBe = new Date().getFullYear() + 543;
-  const { year: yearParam, page: pageParam, q: qParam, book: bookParam } = await searchParams;
+  const { year: yearParam, page: pageParam, q: qParam, book: bookParam, tab: tabParam } = await searchParams;
   const yearBe = Number(yearParam) || currentYearBe;
   const page = Math.max(1, Number(pageParam) || 1);
   const search = qParam ?? "";
   const activeBook = (ALL_BOOKS as readonly string[]).includes(bookParam ?? "") ? bookParam! : BOOK_INTERNAL;
+  const activeTab = tabParam ?? "";
   const years = Array.from({ length: currentYearBe - EARLIEST_YEAR_BE + 1 }, (_, i) => String(currentYearBe - i));
 
   // These 3 categories moved to "ลงรับเอกสาร" — they're incoming logs (มี
@@ -53,6 +54,16 @@ export default async function DocumentNumbersPage({
     ),
   ];
 
+  // Same reasoning extends to the sub-category tabs within a book (e.g.
+  // ฝ่ายประเมินผล's own "ภายใน" tab among ธุรการ's "บัญชี"/"บุคคล"/... tabs
+  // that share the same book) — a specific tab's rows are just as likely to
+  // be thin on any one page's 50-row slice, going by created_at across every
+  // category in the book. Scope to the exact category ids when a tab (not
+  // "ทั้งหมด") is selected, same as the book filter above.
+  const tabCategoryIds = activeTab
+    ? [...new Set((categories ?? []).filter((c) => bookCategoryIds.includes(c.id) && c.label === activeTab).map((c) => c.id))]
+    : null;
+
   // Scoping to one year AND one page at a time (instead of fetching the full
   // 2,800+ row table, or even a whole year, on every load) is what actually
   // fixes the slow load.
@@ -62,12 +73,18 @@ export default async function DocumentNumbersPage({
     .from("document_numbers")
     .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, remark, created_at", { count: "exact" })
     .eq("year_be", yearBe);
-  // category_id is nullable and uncategorized rows default to "เล่มภายใน"
-  // (see bookOf) — .or() is needed so they still show up under that book.
-  query =
-    activeBook === BOOK_INTERNAL
-      ? query.or(`category_id.is.null,category_id.in.(${bookCategoryIds.join(",") || "00000000-0000-0000-0000-000000000000"})`)
-      : query.in("category_id", bookCategoryIds.length ? bookCategoryIds : ["00000000-0000-0000-0000-000000000000"]);
+  if (tabCategoryIds) {
+    // A specific tab is always a real category — never the "uncategorized"
+    // bucket — so no null-row branch is needed here.
+    query = query.in("category_id", tabCategoryIds.length ? tabCategoryIds : ["00000000-0000-0000-0000-000000000000"]);
+  } else {
+    // category_id is nullable and uncategorized rows default to "เล่มภายใน"
+    // (see bookOf) — .or() is needed so they still show up under that book.
+    query =
+      activeBook === BOOK_INTERNAL
+        ? query.or(`category_id.is.null,category_id.in.(${bookCategoryIds.join(",") || "00000000-0000-0000-0000-000000000000"})`)
+        : query.in("category_id", bookCategoryIds.length ? bookCategoryIds : ["00000000-0000-0000-0000-000000000000"]);
+  }
 
   let issuerIdsMatchingSearch: string[] = [];
   if (search.trim()) {
@@ -145,6 +162,7 @@ export default async function DocumentNumbersPage({
           years={years}
           activeYear={String(yearBe)}
           activeBook={activeBook}
+          activeTab={activeTab}
           page={page}
           totalCount={totalCount ?? 0}
           pageSize={PAGE_SIZE}

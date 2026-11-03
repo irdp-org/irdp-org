@@ -49,6 +49,7 @@ export function DocumentNumbersClient({
   years,
   activeYear,
   activeBook,
+  activeTab: activeTabFromUrl,
   page,
   totalCount,
   pageSize,
@@ -63,6 +64,7 @@ export function DocumentNumbersClient({
   years: string[];
   activeYear: string;
   activeBook: string;
+  activeTab: string;
   page: number;
   totalCount: number;
   pageSize: number;
@@ -74,22 +76,25 @@ export function DocumentNumbersClient({
   const [editing, setEditing] = useState<DocNumberRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [activeTab, setActiveTab] = useState(ALL_TAB);
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  // Year, book, and search are all real server-side filters now (?year=,
-  // ?book=, ?q=) instead of client state — the page only fetches one
-  // year/book/page of rows at a time. Switching book used to just re-filter
-  // whatever 50 rows were already on screen, which meant a book that wasn't
-  // well-represented on the current page looked almost empty even though it
-  // had plenty of rows elsewhere — book now has to be a real refetch too.
+  // Year, book, tab, and search are all real server-side filters now
+  // (?year=, ?book=, ?tab=, ?q=) instead of client state — the page only
+  // fetches one year/book/tab/page of rows at a time. Switching book or tab
+  // used to just re-filter whatever 50 rows were already on screen, which
+  // meant a book or tab that wasn't well-represented on the current page
+  // looked almost or entirely empty even though it had plenty of rows
+  // elsewhere — both now have to be a real refetch instead.
+  const activeTab = activeTabFromUrl || ALL_TAB;
   const [search, setSearch] = useState(searchFromUrl);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
 
-  function buildUrl(overrides: { page?: number; book?: string; q?: string }) {
+  function buildUrl(overrides: { year?: string; page?: number; book?: string; tab?: string; q?: string }) {
+    const tab = overrides.tab ?? activeTab;
     const params = new URLSearchParams({
-      year: activeYear,
+      year: overrides.year ?? activeYear,
       book: overrides.book ?? activeBook,
+      tab: tab === ALL_TAB ? "" : tab,
       page: String(overrides.page ?? page),
       q: overrides.q ?? search,
     });
@@ -111,8 +116,11 @@ export function DocumentNumbersClient({
   useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
 
   function selectBook(book: Book) {
-    setActiveTab(ALL_TAB);
-    router.push(buildUrl({ book, page: 1 }));
+    router.push(buildUrl({ book, tab: ALL_TAB, page: 1 }));
+  }
+
+  function selectTab(tab: string) {
+    router.push(buildUrl({ tab, page: 1 }));
   }
 
   function handleDelete(id: string) {
@@ -127,11 +135,9 @@ export function DocumentNumbersClient({
   const allLabels = [...categoryLabels, ...([...new Set(rows.map((r) => r.category_label).filter(Boolean))] as string[]).filter((l) => !categoryLabels.includes(l))];
   const tabs = [ALL_TAB, ...allLabels.filter((l) => bookOf(l) === activeBook)];
 
-  // Tab filtering still only applies within the current (already
-  // book-and-year-scoped) page — a book with many distinct categories could
-  // in principle split unevenly across pages the same way books used to,
-  // but that's a narrower, pre-existing tradeoff, not what was reported.
-  const visibleRows = rows.filter((r) => activeTab === ALL_TAB || r.category_label === activeTab);
+  // Tab is now a server-side filter too (see selectTab) — rows is already
+  // scoped to it, no client-side re-filtering needed.
+  const visibleRows = rows;
 
   function handleCreate(formData: FormData) {
     setError(null);
@@ -282,7 +288,7 @@ export function DocumentNumbersClient({
             <button
               key={tab}
               type="button"
-              onClick={() => setActiveTab(tab)}
+              onClick={() => selectTab(tab)}
               className={`px-3 py-1.5 text-sm font-medium border-b-2 -mb-px transition-colors ${
                 activeTab === tab
                   ? "border-primary text-primary"
@@ -298,7 +304,7 @@ export function DocumentNumbersClient({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <select
           value={activeYear}
-          onChange={(e) => router.push(`/document-numbers?year=${e.target.value}&book=${encodeURIComponent(activeBook)}&page=1&q=${encodeURIComponent(search)}`)}
+          onChange={(e) => router.push(buildUrl({ year: e.target.value, page: 1 }))}
           className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
         >
           {years.map((y) => (
