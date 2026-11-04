@@ -1,0 +1,10 @@
+Sarabun (Regular, Bold), from the google/fonts repository (ofl/sarabun),
+licensed under the SIL Open Font License 1.1.
+
+Full license: https://openfontlicense.org/open-font-license-official-text/
+Source: https://github.com/google/fonts/tree/main/ofl/sarabun
+
+Used by lib/qms/signed-cover.ts to render the QMS DAR certification cover
+page, matching the visual family of "TH Sarabun New" used in IRDP's own
+Word template (ใบปะหน้าแทรกลายเซน.docx) without depending on that font's
+less clear redistribution terms.

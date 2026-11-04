@@ -11,13 +11,18 @@ import { DOC_TYPE_CODE_FULL_LABEL, PROCESS_LABEL } from "@/lib/qms-dar";
 // pdf-lib has no OpenType shaping engine, so it can't apply the GPOS
 // mark-to-mark positioning Thai needs when TWO diacritics stack on one
 // consonant (a vowel mark + a tone mark together) — e.g. "ชื่อ" (ื + ่) or
-// "ครั้ง" (ั + ้). Confirmed by testing: a single mark renders fine, but
-// that combo leaves a visible gap where the second mark should stack,
-// every time, including in the most common Thai document-control words
-// ("ชื่อ", "ครั้งที่") — not an edge case, a guaranteed failure on every
-// cover page. resvg (Rust, HarfBuzz-based) shapes correctly; render the
+// "ครั้ง" (ั + ้). resvg (Rust, HarfBuzz-based) shapes correctly; render the
 // cover as an SVG → PNG raster, then embed that one image into the PDF.
-const FONT_PATH = path.join(process.cwd(), "lib/qms/assets/NotoSansThai.ttf");
+//
+// Font: Sarabun (OFL), not the "TH Sarabun New" IRDP's own Word template
+// (ใบปะหน้าแทรกลายเซน.docx) uses — that font's redistribution terms aren't
+// clearly open, and Sarabun is the same typeface lineage (visually close to
+// identical) with an unambiguous OFL license. Layout/colors/sizes below are
+// otherwise taken directly from that docx (measured with python-docx), not
+// guessed from a screenshot.
+const FONT_REGULAR_PATH = path.join(process.cwd(), "lib/qms/assets/Sarabun-Regular.ttf");
+const FONT_BOLD_PATH = path.join(process.cwd(), "lib/qms/assets/Sarabun-Bold.ttf");
+const FONT_FAMILY = "Sarabun";
 
 let cachedLogoDataUri: string | null = null;
 async function loadLogoDataUri(): Promise<string> {
@@ -29,12 +34,14 @@ async function loadLogoDataUri(): Promise<string> {
 }
 
 // resvg/HarfBuzz mis-shapes ำ (SARA AM) immediately followed by เ (the
-// pre-posed vowel in the next syllable) — confirmed by isolating it: "ดำเนิน"
-// renders with the two glyphs overlapping, "ดำ เนิน" (with a real space)
-// renders cleanly, and invisible separators (zero-width space, thin space)
-// did NOT break the bad shaping cluster — only a real space did. This hits
-// extremely common words ("ดำเนินการ", "คำเตือน", "นำเสนอ"), so it has to be
-// handled generically rather than only in the one string that got reported.
+// pre-posed vowel in the next syllable) regardless of font — confirmed with
+// both NotoSansThai and Sarabun: "ดำเนิน" renders with the two glyphs
+// overlapping every time, including after switching fonts for the template
+// match below. "ดำ เนิน" (with a real space) renders cleanly; invisible
+// separators (zero-width space, thin space) did NOT break the bad shaping
+// cluster, only a real space did. This hits extremely common words
+// ("ดำเนินการ", "คำเตือน", "นำเสนอ"), so it's handled generically in esc()
+// rather than only in the one string that got reported.
 function fixSaraAmThoSara(s: string): string {
   return s.replace(/ำ(?=เ)/g, "ำ ");
 }
@@ -74,24 +81,27 @@ function stepForRole(steps: QmsDarStep[], role: QmsStepRoleT): QmsDarStep | unde
   return steps.find((s) => s.roles.includes(role));
 }
 
-const PAGE_W = 595.28;
-const PAGE_H = 841.89;
-const MARGIN_X = 45;
-const CONTENT_W = PAGE_W - MARGIN_X * 2;
-const BLUE = "#1c5499";
-const BLUE_LIGHT = "#e6edf7";
+// ---- Measurements taken directly from ใบปะหน้าแทรกลายเซน.docx ---------------
+const PAGE_W = 595.3;
+const PAGE_H = 841.9;
+const MARGIN_LEFT = 56.7;
+const MARGIN_RIGHT = 51.05;
+const CONTENT_W = PAGE_W - MARGIN_LEFT - MARGIN_RIGHT;
+const TITLE_BLUE = "#2F5496"; // ชื่อเอกสาร heading
+const HEADING_BLUE = "#1F4E79"; // "การจัดทำ / ทบทวน / อนุมัติ"
+const SIG_HEADER_BLUE = "#2E74B5"; // signature table header row fill
+const INFO_LABEL_BG = "#CCECFF";
+const TEXT_COLOR = "#263238";
 const GRAY_BORDER = "#bfc6cd";
 const GRAY_TEXT = "#666666";
-const DARK_TEXT = "#1f1f1f";
-const FONT_FAMILY = "Noto Sans Thai";
 
 /**
- * Builds a one-page certification cover styled after PM-DCC-01's own cover
- * page (IRDP banner, document-info table, 3-column ผู้จัดทำ/ผู้ทบทวน/ผู้อนุมัติ
- * signature table — always 3 separate columns, even if the same person
- * holds more than one of those roles), then prepends it to the approved
- * source PDF (design doc §4, Method A). Only called when the uploaded
- * source file is itself a PDF (see publishDar).
+ * Builds a one-page certification cover matching PM-DCC-01's own cover page
+ * — document-info table, then a 3-column ผู้จัดทำ/ผู้ทบทวน/ผู้อนุมัติ signature
+ * table pinned at the foot of the page (always 3 separate columns, even if
+ * the same person holds more than one of those roles) — then prepends it to
+ * the approved source PDF (design doc §4, Method A). Only called when the
+ * uploaded source file is itself a PDF (see publishDar).
  */
 export async function buildSignedCoverAndMerge(params: {
   sourcePdfBytes: Buffer;
@@ -112,68 +122,76 @@ export async function buildSignedCoverAndMerge(params: {
   const svgParts: string[] = [];
   svgParts.push(`<rect x="0" y="0" width="${PAGE_W}" height="${PAGE_H}" fill="#ffffff"/>`);
 
-  // ---- Header: small logo, no colored banner — matches PM-DCC-01's own
-  // cover (plain white page, logo top-right) rather than a separate brand
-  // treatment for the generated certificate. --------------------------
   const logoH = 26;
   const logoW = logoH * (720 / 309); // irdp-wordmark.png aspect ratio
-  svgParts.push(`<image x="${PAGE_W - MARGIN_X - logoW}" y="${MARGIN_X - 4}" width="${logoW}" height="${logoH}" href="${logoDataUri}" preserveAspectRatio="xMidYMid meet"/>`);
+  svgParts.push(`<image x="${PAGE_W - MARGIN_RIGHT - logoW}" y="${MARGIN_LEFT - 10}" width="${logoW}" height="${logoH}" href="${logoDataUri}" preserveAspectRatio="xMidYMid meet"/>`);
 
-  let y = MARGIN_X + 20;
+  let y = MARGIN_LEFT + 20;
 
-  // ---- Title -----------------------------------------------------------
-  svgParts.push(`<text x="${MARGIN_X}" y="${y}" font-family="${FONT_FAMILY}" font-size="15" fill="${DARK_TEXT}">ใบรับรองการอนุมัติเอกสารระบบบริหารคุณภาพ</text>`);
-  y += 16;
-  svgParts.push(`<text x="${MARGIN_X}" y="${y}" font-family="${FONT_FAMILY}" font-size="9" fill="${GRAY_TEXT}">QMS Document Approval Certificate</text>`);
-  y += 28;
+  // ---- Title: "ระเบียบปฏิบัติงาน" / "(Procedure Manual)" / ชื่อเอกสาร, same
+  // 3-line heading the real document's own cover uses, driven by this DAR's
+  // actual doc type and title rather than a separate "certificate" heading.
+  const fullTypeLabel = DOC_TYPE_CODE_FULL_LABEL[docTypeCode] ?? docTypeCode;
+  const typeMatch = fullTypeLabel.match(/^(.*?)\s*(\(.*\))$/);
+  const typeThai = typeMatch ? typeMatch[1].trim() : fullTypeLabel;
+  const typeEnglish = typeMatch ? typeMatch[2] : "";
+  svgParts.push(`<text x="${MARGIN_LEFT}" y="${y}" font-family="${FONT_FAMILY}" font-weight="bold" font-size="16" fill="${TEXT_COLOR}">${esc(typeThai)}</text>`);
+  y += 20;
+  if (typeEnglish) {
+    svgParts.push(`<text x="${MARGIN_LEFT}" y="${y}" font-family="${FONT_FAMILY}" font-weight="bold" font-size="16" fill="${TEXT_COLOR}">${esc(typeEnglish)}</text>`);
+    y += 28;
+  }
+  svgParts.push(`<text x="${MARGIN_LEFT}" y="${y}" font-family="${FONT_FAMILY}" font-size="24" fill="${TITLE_BLUE}">${esc(title)}</text>`);
+  y += 34;
 
-  // ---- Document info table --------------------------------------------
+  // ---- Document info table (6 rows × [label 24% | value 76%], per the
+  // docx's own column widths — 117.5pt label / 372.5pt value of 490pt). --
   const infoRows: [string, string][] = [
-    ["ประเภทเอกสาร", DOC_TYPE_CODE_FULL_LABEL[docTypeCode] ?? docTypeCode],
+    ["ประเภทเอกสาร", fullTypeLabel],
     ["รหัสเอกสาร", docCode],
     ["ชื่อเอกสาร", title],
     ["เจ้าของกระบวนการ", PROCESS_LABEL[processCode] ?? processCode],
     ["แก้ไขครั้งที่", version],
     ["วันที่มีผลบังคับใช้", new Date(effectiveDate).toLocaleDateString("th-TH", { year: "numeric", month: "long", day: "numeric" })],
   ];
-  const labelW = 150;
-  const rowH = 22;
+  const labelW = CONTENT_W * 0.24;
+  const rowH = 28;
   const tableTop = y;
   for (let i = 0; i < infoRows.length; i++) {
     const [label, value] = infoRows[i];
     const rowY = tableTop + i * rowH;
-    svgParts.push(`<rect x="${MARGIN_X}" y="${rowY}" width="${labelW}" height="${rowH}" fill="${BLUE_LIGHT}" stroke="${GRAY_BORDER}" stroke-width="0.5"/>`);
-    svgParts.push(`<rect x="${MARGIN_X + labelW}" y="${rowY}" width="${CONTENT_W - labelW}" height="${rowH}" fill="none" stroke="${GRAY_BORDER}" stroke-width="0.5"/>`);
-    svgParts.push(`<text x="${MARGIN_X + 8}" y="${rowY + 14}" font-family="${FONT_FAMILY}" font-size="9" fill="${DARK_TEXT}">${esc(label)}</text>`);
-    svgParts.push(`<text x="${MARGIN_X + labelW + 8}" y="${rowY + 14}" font-family="${FONT_FAMILY}" font-size="9.5" fill="${DARK_TEXT}">${esc(value)}</text>`);
+    svgParts.push(`<rect x="${MARGIN_LEFT}" y="${rowY}" width="${labelW}" height="${rowH}" fill="${INFO_LABEL_BG}" stroke="${GRAY_BORDER}" stroke-width="0.5"/>`);
+    svgParts.push(`<rect x="${MARGIN_LEFT + labelW}" y="${rowY}" width="${CONTENT_W - labelW}" height="${rowH}" fill="none" stroke="${GRAY_BORDER}" stroke-width="0.5"/>`);
+    svgParts.push(`<text x="${MARGIN_LEFT + 8}" y="${rowY + 18}" font-family="${FONT_FAMILY}" font-weight="bold" font-size="12" fill="${TEXT_COLOR}">${esc(label)}</text>`);
+    svgParts.push(`<text x="${MARGIN_LEFT + labelW + 8}" y="${rowY + 18}" font-family="${FONT_FAMILY}" font-size="12" fill="${TEXT_COLOR}">${esc(value)}</text>`);
   }
   y = tableTop + infoRows.length * rowH;
 
-  // ---- การจัดทำ / ทบทวน / อนุมัติ, pinned near the bottom of the page
-  // (not flowing right after the info table) — matches the generous gap
-  // on PM-DCC-01's own cover, where the signature block sits at the foot
-  // of the page regardless of how little else is on it. -----------------
+  // ---- การจัดทำ / ทบทวน / อนุมัติ, pinned near the bottom of the page (not
+  // flowing right after the info table) — matches the generous gap the real
+  // cover uses, where the signature block sits at the foot of the page
+  // regardless of how little else is on it. ------------------------------
   const cols: { role: QmsStepRoleT; label: string }[] = [
     { role: "author", label: "ผู้จัดทำ" },
     { role: "reviewer", label: "ผู้ทบทวน" },
     { role: "approver", label: "ผู้อนุมัติ" },
   ];
   const colW = CONTENT_W / 3;
-  const headerH = 22;
-  const bodyH = 110;
+  const headerH = 26;
+  const bodyH = 130;
   const footerBlockH = darNo ? 33 : 22; // reserved for the DAR-no/SHA-256/timestamp lines below the table
-  const tableY = PAGE_H - MARGIN_X - footerBlockH - bodyH - headerH;
-  y = tableY - 20;
-  svgParts.push(`<text x="${MARGIN_X}" y="${y}" font-family="${FONT_FAMILY}" font-size="11" fill="${DARK_TEXT}">การจัดทำ / ทบทวน / อนุมัติ</text>`);
+  const tableY = PAGE_H - MARGIN_LEFT - footerBlockH - bodyH - headerH;
+  y = tableY - 22;
+  svgParts.push(`<text x="${MARGIN_LEFT}" y="${y}" font-family="${FONT_FAMILY}" font-weight="bold" font-size="13" fill="${HEADING_BLUE}">การจัดทำ / ทบทวน / อนุมัติ</text>`);
 
   for (let i = 0; i < cols.length; i++) {
     const { role, label } = cols[i];
-    const cx = MARGIN_X + i * colW;
+    const cx = MARGIN_LEFT + i * colW;
     const centerX = cx + colW / 2;
     const step = stepForRole(steps, role);
 
-    svgParts.push(`<rect x="${cx}" y="${tableY}" width="${colW}" height="${headerH}" fill="${BLUE}" stroke="${GRAY_BORDER}" stroke-width="0.5"/>`);
-    svgParts.push(`<text x="${centerX}" y="${tableY + 15}" font-family="${FONT_FAMILY}" font-size="11" fill="#ffffff" text-anchor="middle">${esc(label)}</text>`);
+    svgParts.push(`<rect x="${cx}" y="${tableY}" width="${colW}" height="${headerH}" fill="${SIG_HEADER_BLUE}" stroke="${GRAY_BORDER}" stroke-width="0.5"/>`);
+    svgParts.push(`<text x="${centerX}" y="${tableY + 18}" font-family="${FONT_FAMILY}" font-weight="bold" font-size="13" fill="#ffffff" text-anchor="middle">${esc(label)}</text>`);
 
     const bodyTop = tableY + headerH;
     svgParts.push(`<rect x="${cx}" y="${bodyTop}" width="${colW}" height="${bodyH}" fill="none" stroke="${GRAY_BORDER}" stroke-width="0.5"/>`);
@@ -184,45 +202,47 @@ export async function buildSignedCoverAndMerge(params: {
         sigDataUri = await tryFetchSignatureDataUri(step.signature_url_snapshot);
       }
       if (sigDataUri) {
-        const w = colW - 24;
-        const h = 36;
-        svgParts.push(`<image x="${centerX - w / 2}" y="${bodyTop + 6}" width="${w}" height="${h}" href="${sigDataUri}" preserveAspectRatio="xMidYMid meet"/>`);
+        const w = colW - 28;
+        const h = 42;
+        svgParts.push(`<image x="${centerX - w / 2}" y="${bodyTop + 10}" width="${w}" height="${h}" href="${sigDataUri}" preserveAspectRatio="xMidYMid meet"/>`);
       }
-      svgParts.push(`<line x1="${cx + 14}" y1="${bodyTop + 50}" x2="${cx + colW - 14}" y2="${bodyTop + 50}" stroke="${GRAY_BORDER}" stroke-width="0.6"/>`);
-      svgParts.push(`<text x="${centerX}" y="${bodyTop + 62}" font-family="${FONT_FAMILY}" font-size="9.5" fill="${DARK_TEXT}" text-anchor="middle">${esc(step.full_name_snapshot)}</text>`);
-      svgParts.push(`<text x="${centerX}" y="${bodyTop + 74}" font-family="${FONT_FAMILY}" font-size="8.5" fill="${GRAY_TEXT}" text-anchor="middle">${esc(step.position_snapshot || "-")}</text>`);
+      svgParts.push(`<line x1="${cx + 16}" y1="${bodyTop + 58}" x2="${cx + colW - 16}" y2="${bodyTop + 58}" stroke="${GRAY_BORDER}" stroke-width="0.6"/>`);
+      svgParts.push(`<text x="${centerX}" y="${bodyTop + 74}" font-family="${FONT_FAMILY}" font-size="11" fill="${TEXT_COLOR}" text-anchor="middle">${esc(step.full_name_snapshot)}</text>`);
+      const posText = step.position_snapshot || "-";
+      svgParts.push(`<text x="${centerX}" y="${bodyTop + 90}" font-family="${FONT_FAMILY}" font-size="10" fill="${GRAY_TEXT}" text-anchor="middle">${esc(posText)}</text>`);
       const dateText = step.acted_at
         ? new Date(step.acted_at).toLocaleDateString("th-TH", { year: "numeric", month: "short", day: "numeric" })
         : "-";
-      svgParts.push(`<text x="${centerX}" y="${bodyTop + 90}" font-family="${FONT_FAMILY}" font-size="8.5" fill="${GRAY_TEXT}" text-anchor="middle">${esc(`วันที่: ${dateText}`)}</text>`);
+      svgParts.push(`<text x="${centerX}" y="${bodyTop + 108}" font-family="${FONT_FAMILY}" font-size="10" fill="${GRAY_TEXT}" text-anchor="middle">${esc(`วันที่: ${dateText}`)}</text>`);
     } else {
-      svgParts.push(`<text x="${centerX}" y="${bodyTop + bodyH / 2}" font-family="${FONT_FAMILY}" font-size="10" fill="${GRAY_TEXT}" text-anchor="middle">-</text>`);
+      svgParts.push(`<text x="${centerX}" y="${bodyTop + bodyH / 2}" font-family="${FONT_FAMILY}" font-size="11" fill="${GRAY_TEXT}" text-anchor="middle">-</text>`);
     }
   }
-  // ---- DCC check / QMR note (not part of the official cover template,
-  // but still worth keeping on record) — sits in the gap between the info
-  // table and the signature block rather than crowding either one. ------
+
+  // ---- DCC check / QMR note (not part of the official cover template, but
+  // still worth keeping on record) — sits in the gap between the info table
+  // and the signature block rather than crowding either one. -------------
   const dcc = stepForRole(steps, "dcc");
   const qmr = stepForRole(steps, "qmr");
-  let noteY = tableTop + infoRows.length * rowH + 22;
+  let noteY = tableTop + infoRows.length * rowH + 24;
   for (const extra of [dcc && { r: "ตรวจสอบโดย DCC", s: dcc }, qmr && { r: "รับรองโดย QMR", s: qmr }] as const) {
     if (!extra || !extra.s) continue;
     const when = extra.s.acted_at ? new Date(extra.s.acted_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : "-";
     const line = `${extra.r}: ${extra.s.full_name_snapshot} (${extra.s.position_snapshot}) เมื่อ ${when}`;
-    svgParts.push(`<text x="${MARGIN_X}" y="${noteY}" font-family="${FONT_FAMILY}" font-size="8.5" fill="${GRAY_TEXT}">${esc(line)}</text>`);
-    noteY += 13;
+    svgParts.push(`<text x="${MARGIN_LEFT}" y="${noteY}" font-family="${FONT_FAMILY}" font-size="9" fill="${GRAY_TEXT}">${esc(line)}</text>`);
+    noteY += 14;
   }
 
   // ---- Footer — directly below the signature table, within the space
   // reserved for it (footerBlockH) when the table's position was computed.
   let footerY = tableY + headerH + bodyH + 16;
   if (darNo) {
-    svgParts.push(`<text x="${MARGIN_X}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7.5" fill="${GRAY_TEXT}">${esc(`เลขที่ใบคำขอดำเนินการเอกสาร (DAR): ${darNo}`)}</text>`);
+    svgParts.push(`<text x="${MARGIN_LEFT}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7.5" fill="${GRAY_TEXT}">${esc(`เลขที่ใบคำขอดำเนินการเอกสาร (DAR): ${darNo}`)}</text>`);
     footerY += 11;
   }
-  svgParts.push(`<text x="${MARGIN_X}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7" fill="#8c8c8c">${esc(`SHA-256 ของไฟล์ต้นฉบับ: ${sourceSha256}`)}</text>`);
+  svgParts.push(`<text x="${MARGIN_LEFT}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7" fill="#8c8c8c">${esc(`SHA-256 ของไฟล์ต้นฉบับ: ${sourceSha256}`)}</text>`);
   svgParts.push(
-    `<text x="${PAGE_W - MARGIN_X}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7.5" fill="#8c8c8c" text-anchor="end">${esc(`ออกโดยระบบ QMS ของ IRDP เมื่อ ${new Date().toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}`)}</text>`
+    `<text x="${PAGE_W - MARGIN_RIGHT}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7.5" fill="#8c8c8c" text-anchor="end">${esc(`ออกโดยระบบ QMS ของ IRDP เมื่อ ${new Date().toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}`)}</text>`
   );
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PAGE_W}" height="${PAGE_H}" viewBox="0 0 ${PAGE_W} ${PAGE_H}">${svgParts.join("")}</svg>`;
@@ -231,7 +251,7 @@ export async function buildSignedCoverAndMerge(params: {
   // as one full-page image — sidesteps pdf-lib's text layout entirely.
   const resvg = new Resvg(svg, {
     fitTo: { mode: "zoom", value: 2 },
-    font: { fontFiles: [FONT_PATH], loadSystemFonts: false, defaultFontFamily: FONT_FAMILY },
+    font: { fontFiles: [FONT_REGULAR_PATH, FONT_BOLD_PATH], loadSystemFonts: false, defaultFontFamily: FONT_FAMILY },
   });
   const coverPng = resvg.render().asPng();
 
