@@ -342,6 +342,15 @@ export async function publishDar(darId: string) {
       .eq("status", "active")
       .maybeSingle();
 
+    // qms_documents enforces only one "active" row per doc_code (a partial
+    // unique index, see 0045) — the old active row has to be superseded
+    // *before* the new one is inserted as active, not after, or the insert
+    // itself collides with the row it was about to replace.
+    if (existingActive) {
+      const { error: supersedeErr } = await admin.from("qms_documents").update({ status: "superseded" }).eq("id", existingActive.id);
+      if (supersedeErr) return { error: supersedeErr.message };
+    }
+
     const { data: inserted, error } = await admin
       .from("qms_documents")
       .insert({
@@ -363,10 +372,15 @@ export async function publishDar(darId: string) {
       })
       .select("id")
       .single();
-    if (error || !inserted) return { error: error?.message ?? "ประกาศใช้ไม่สำเร็จ" };
+    if (error || !inserted) {
+      // Roll the supersede back so a failed publish doesn't leave the org
+      // with zero active copies of a document that's still in force.
+      if (existingActive) await admin.from("qms_documents").update({ status: "active" }).eq("id", existingActive.id);
+      return { error: error?.message ?? "ประกาศใช้ไม่สำเร็จ" };
+    }
 
     if (existingActive) {
-      await admin.from("qms_documents").update({ status: "superseded", superseded_by: inserted.id }).eq("id", existingActive.id);
+      await admin.from("qms_documents").update({ superseded_by: inserted.id }).eq("id", existingActive.id);
     }
     await admin.from("qms_dar").update({ resulting_document_id: inserted.id }).eq("id", darId);
 
