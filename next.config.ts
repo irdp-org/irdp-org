@@ -5,6 +5,12 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.join(__dirname),
   },
+  // @resvg/resvg-js ships a native .node binding loaded at runtime — Turbopack
+  // can't bundle that into an ESM chunk ("non-ecmascript placeable asset").
+  // This tells Next to leave it as a real require() against node_modules on
+  // the server instead of trying to bundle it (same reason sharp usually
+  // needs this treatment).
+  serverExternalPackages: ["@resvg/resvg-js"],
   experimental: {
     serverActions: {
       // Server Actions default to a 1MB body limit, which silently rejects
