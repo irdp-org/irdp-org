@@ -406,4 +406,85 @@ export async function removeQmr(employeeId: string) {
   }
 }
 
+/** Admin-only, for cleaning up test/mistaken DAR entries — not part of the
+ * normal lifecycle (a real DAR that needs to go away should be returned or
+ * cancelled, not deleted, so the audit trail stays intact). */
+export async function deleteDar(darId: string) {
+  try {
+    const employee = await getCurrentEmployee();
+    if (!employee || !isAdmin(employee.role)) return { error: "ไม่มีสิทธิ์" };
+    const admin = createAdminClient();
+    const { data: dar } = await admin.from("qms_dar").select("resulting_document_id").eq("id", darId).maybeSingle();
+    if (dar?.resulting_document_id) return { error: "ใบนี้ประกาศใช้เอกสารไปแล้ว ลบไม่ได้ (เอกสารที่ประกาศใช้แล้วต้องยกเลิกผ่านขั้นตอนปกติ)" };
+    const { error } = await admin.from("qms_dar").delete().eq("id", darId);
+    if (error) return { error: error.message };
+    revalidatePath("/qms/dar");
+    return { ok: true };
+  } catch {
+    return { error: "ไม่มีสิทธิ์" };
+  }
+}
+
+/**
+ * DCC reassigns the DAR's *current* step to a stand-in (e.g. the original
+ * person is on leave) instead of admin silently approving on their behalf.
+ * Keeps the original assignee, who delegated it, and why on the step record
+ * — the stand-in still has to actually open the file and click approve
+ * themselves, so this changes *who's asked*, not the fact that someone has
+ * to look at the document before it's signed off.
+ */
+export async function delegateDarStep(darId: string, newEmployeeId: string, reason: string) {
+  try {
+    const dcc = await assertDcc();
+    if (!reason.trim()) return { error: "กรุณาระบุเหตุผลที่มอบหมาย" };
+
+    const admin = createAdminClient();
+    const { data: dar } = await admin.from("qms_dar").select("status, current_step, steps, doc_code, title").eq("id", darId).single();
+    if (!dar) return { error: "ไม่พบคำขอ" };
+    if (dar.status !== "pending") return { error: "คำขอนี้ไม่ได้อยู่ระหว่างรออนุมัติ" };
+
+    const steps = dar.steps as QmsDarStep[];
+    const step = steps[dar.current_step];
+    if (!step || step.status !== "current") return { error: "ขั้นนี้ไม่ได้อยู่ระหว่างรออนุมัติ" };
+    if (step.employee_id === newEmployeeId) return { error: "เลือกคนเดิมอยู่ ไม่ต้องมอบหมาย" };
+
+    const { data: newEmp } = await admin.from("employees").select("id, full_name, position").eq("id", newEmployeeId).single();
+    if (!newEmp) return { error: "ไม่พบพนักงานที่เลือก" };
+
+    const nextSteps = [...steps];
+    nextSteps[dar.current_step] = {
+      ...step,
+      employee_id: newEmp.id,
+      full_name_snapshot: newEmp.full_name,
+      position_snapshot: newEmp.position ?? "",
+      delegation: {
+        original_employee_id: step.employee_id,
+        original_name_snapshot: step.full_name_snapshot,
+        delegated_by_employee_id: dcc.id,
+        delegated_by_name_snapshot: dcc.full_name,
+        reason: reason.trim(),
+        delegated_at: new Date().toISOString(),
+      },
+    };
+
+    const { error } = await admin.from("qms_dar").update({ steps: nextSteps, updated_at: new Date().toISOString() }).eq("id", darId);
+    if (error) return { error: error.message };
+
+    await notify({
+      userId: newEmp.id,
+      type: "qms_dar_pending",
+      title: `รอ${stepRoleLabels(nextSteps[dar.current_step])} (มอบหมายแทน): ${dar.doc_code}`,
+      body: dar.title,
+      link: `/qms/dar/${darId}`,
+    });
+
+    revalidatePath("/qms/dar");
+    revalidatePath(`/qms/dar/${darId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("[qms-dar] delegate failed", err);
+    return { error: err instanceof Error && err.message === "ไม่มีสิทธิ์ (ต้องเป็น DCC)" ? err.message : "มอบหมายไม่สำเร็จ" };
+  }
+}
+
 export { isQmr };

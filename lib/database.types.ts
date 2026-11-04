@@ -53,6 +53,17 @@ export type QmsDarStep = {
   acted_at: string | null;
   note: string | null;
   signature_url_snapshot: string | null;
+  // Set only when DCC reassigned this step to a stand-in (e.g. the original
+  // person is on leave) — keeps who was *supposed* to sign, who actually
+  // did, and why, all on the record rather than silently swapping employee_id.
+  delegation?: {
+    original_employee_id: string;
+    original_name_snapshot: string;
+    delegated_by_employee_id: string;
+    delegated_by_name_snapshot: string;
+    reason: string;
+    delegated_at: string;
+  } | null;
 };
 
 type TableShape<Row, Insert = Partial<Row>, Update = Partial<Row>> = {

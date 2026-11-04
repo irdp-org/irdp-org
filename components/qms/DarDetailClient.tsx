@@ -2,10 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, XCircle, ExternalLink, FileSignature } from "lucide-react";
+import { CheckCircle2, XCircle, ExternalLink, FileSignature, UserCog, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { actOnDarStep, publishDar } from "@/app/(app)/qms/dar/actions";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { actOnDarStep, publishDar, delegateDarStep, deleteDar } from "@/app/(app)/qms/dar/actions";
 import { DOC_TYPE_CODE_LABEL, DAR_STATUS_LABEL, STEP_ROLE_LABEL, stepRoleLabels } from "@/lib/qms-dar";
 import type { QmsDarStep } from "@/lib/database.types";
 import { cn } from "@/lib/utils";
@@ -40,17 +43,25 @@ export function DarDetailClient({
   dar,
   canAct,
   canPublish,
+  canDelegate,
+  canDelete,
   hasSignature,
+  employeeOptions,
 }: {
   dar: DarDetail;
   canAct: boolean;
   canPublish: boolean;
+  canDelegate: boolean;
+  canDelete: boolean;
   hasSignature: boolean;
+  employeeOptions: { id: string; full_name: string; position: string | null }[];
 }) {
   const router = useRouter();
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [delegateOpen, setDelegateOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   function act(action: "approve" | "reject") {
     setError(null);
@@ -77,22 +88,52 @@ export function DarDetailClient({
     });
   }
 
+  function handleDelete() {
+    startTransition(async () => {
+      const res = await deleteDar(dar.id);
+      if (res?.error) {
+        setError(res.error);
+        setConfirmDelete(false);
+        return;
+      }
+      router.push("/qms/dar");
+    });
+  }
+
   return (
     <div className="flex flex-col gap-4 pb-8">
       <div className="rounded-2xl border border-border bg-white p-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {dar.dar_no && <span className="text-xs font-mono text-muted-foreground">{dar.dar_no}</span>}
-          <span
-            className={cn(
-              "px-1.5 py-0.5 rounded-full text-[10px] font-medium",
-              dar.status === "approved" && "bg-success/10 text-success",
-              dar.status === "pending" && "bg-amber-100 text-amber-700",
-              dar.status === "returned" && "bg-danger/10 text-danger",
-              dar.status === "cancelled" && "bg-muted text-muted-foreground"
-            )}
-          >
-            {DAR_STATUS_LABEL[dar.status]}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {dar.dar_no && <span className="text-xs font-mono text-muted-foreground">{dar.dar_no}</span>}
+            <span
+              className={cn(
+                "px-1.5 py-0.5 rounded-full text-[10px] font-medium",
+                dar.status === "approved" && "bg-success/10 text-success",
+                dar.status === "pending" && "bg-amber-100 text-amber-700",
+                dar.status === "returned" && "bg-danger/10 text-danger",
+                dar.status === "cancelled" && "bg-muted text-muted-foreground"
+              )}
+            >
+              {DAR_STATUS_LABEL[dar.status]}
+            </span>
+          </div>
+          {canDelete &&
+            (confirmDelete ? (
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-muted-foreground">ลบใบนี้ทิ้ง?</span>
+                <button type="button" onClick={handleDelete} disabled={isPending} className="font-medium text-danger">
+                  ยืนยัน
+                </button>
+                <button type="button" onClick={() => setConfirmDelete(false)} className="text-muted-foreground">
+                  ยกเลิก
+                </button>
+              </div>
+            ) : (
+              <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs text-danger hover:text-danger" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="h-3.5 w-3.5" /> ลบ
+              </Button>
+            ))}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
           {DOC_TYPE_CODE_LABEL[dar.doc_type_code]} · {CONFIDENTIALITY_LABEL[dar.confidentiality]}
@@ -114,7 +155,14 @@ export function DarDetailClient({
       </div>
 
       <div className="rounded-2xl border border-border bg-white p-4">
-        <h3 className="mb-3 text-sm font-semibold text-foreground">สายอนุมัติ</h3>
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-foreground">สายอนุมัติ</h3>
+          {canDelegate && (
+            <Button type="button" variant="ghost" size="sm" className="gap-1 text-xs" onClick={() => setDelegateOpen(true)}>
+              <UserCog className="h-3.5 w-3.5" /> มอบหมายชั่วคราว
+            </Button>
+          )}
+        </div>
         <ol className="flex flex-col gap-3">
           {dar.steps.map((step, i) => (
             <li key={i} className="flex items-start gap-3">
@@ -134,6 +182,13 @@ export function DarDetailClient({
                   {stepRoleLabels(step)}: {step.full_name_snapshot}
                 </p>
                 <p className="text-xs text-muted-foreground">{step.position_snapshot}</p>
+                {step.delegation && (
+                  <p className="mt-0.5 flex items-center gap-1 text-xs text-amber-700">
+                    <UserCog className="h-3 w-3" />
+                    มอบหมายแทน {step.delegation.original_name_snapshot} โดย {step.delegation.delegated_by_name_snapshot}
+                    {step.delegation.reason ? ` — ${step.delegation.reason}` : ""}
+                  </p>
+                )}
                 {step.acted_at && (
                   <p className="text-xs text-muted-foreground">
                     {step.status === "rejected" ? "ตีกลับเมื่อ " : "ลงนามเมื่อ "}
@@ -146,6 +201,16 @@ export function DarDetailClient({
           ))}
         </ol>
       </div>
+
+      {canDelegate && (
+        <DelegateDialog
+          open={delegateOpen}
+          onOpenChange={setDelegateOpen}
+          darId={dar.id}
+          currentName={dar.steps[dar.steps.findIndex((s) => s.status === "current")]?.full_name_snapshot ?? ""}
+          employeeOptions={employeeOptions}
+        />
+      )}
 
       {canAct && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
@@ -189,5 +254,87 @@ export function DarDetailClient({
         <p className="text-sm text-muted-foreground">รอ{STEP_ROLE_LABEL[dar.steps[dar.steps.findIndex((s) => s.status === "current")]?.roles[0] ?? "author"]}ดำเนินการ</p>
       )}
     </div>
+  );
+}
+
+function DelegateDialog({
+  open,
+  onOpenChange,
+  darId,
+  currentName,
+  employeeOptions,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  darId: string;
+  currentName: string;
+  employeeOptions: { id: string; full_name: string; position: string | null }[];
+}) {
+  const router = useRouter();
+  const [newEmployeeId, setNewEmployeeId] = useState("");
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function handleSubmit() {
+    setError(null);
+    if (!newEmployeeId) {
+      setError("กรุณาเลือกผู้รับมอบหมาย");
+      return;
+    }
+    if (!reason.trim()) {
+      setError("กรุณาระบุเหตุผล");
+      return;
+    }
+    startTransition(async () => {
+      const res = await delegateDarStep(darId, newEmployeeId, reason);
+      if (res?.error) {
+        setError(res.error);
+        return;
+      }
+      setNewEmployeeId("");
+      setReason("");
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>มอบหมายชั่วคราว</DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-muted-foreground">
+            ขั้นนี้รออยู่ที่ <span className="font-medium text-foreground">{currentName}</span> — เลือกผู้รับมอบหมายให้ดำเนินการแทนชั่วคราว
+            (ยังต้องเปิดไฟล์และกดอนุมัติเองอยู่ ระบบจะบันทึกไว้ว่ามอบหมายจากใครและเพราะอะไร)
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label>มอบหมายให้</Label>
+            <Select value={newEmployeeId} onValueChange={setNewEmployeeId}>
+              <SelectTrigger className="w-full"><SelectValue placeholder="เลือกพนักงาน" /></SelectTrigger>
+              <SelectContent>
+                {employeeOptions.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.full_name}{e.position ? ` — ${e.position}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label>เหตุผล</Label>
+            <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="เช่น ลาพักร้อน" rows={2} />
+          </div>
+          {error && <p className="text-sm text-danger">{error}</p>}
+          <DialogFooter>
+            <Button type="button" disabled={isPending} onClick={handleSubmit}>
+              {isPending ? "กำลังมอบหมาย..." : "มอบหมาย"}
+            </Button>
+          </DialogFooter>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

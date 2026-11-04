@@ -27,6 +27,10 @@ export default async function QmsDarDetailPage({ params }: { params: Promise<{ i
 
   const { data: creator } = await admin.from("employees").select("full_name").eq("id", dar.created_by).single();
 
+  const employeeOptions = isDcc
+    ? (await admin.from("employees").select("id, full_name, position").eq("status", "active").order("full_name")).data ?? []
+    : [];
+
   const steps = dar.steps as QmsDarStep[];
   // Match by *position* (current_step), not by searching for this employee's
   // id anywhere in the chain — the same person can appear at more than one
@@ -62,7 +66,10 @@ export default async function QmsDarDetailPage({ params }: { params: Promise<{ i
           }}
           canAct={canAct}
           canPublish={isDcc && dar.status === "approved" && !dar.resulting_document_id}
+          canDelegate={isDcc && dar.status === "pending"}
+          canDelete={isAdmin(employee.role)}
           hasSignature={!!employee.signature_url}
+          employeeOptions={employeeOptions}
         />
       </div>
     </div>
