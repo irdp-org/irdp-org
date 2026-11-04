@@ -14,15 +14,17 @@ import { DOC_TYPE_CODE_FULL_LABEL, PROCESS_LABEL } from "@/lib/qms-dar";
 // "ครั้ง" (ั + ้). resvg (Rust, HarfBuzz-based) shapes correctly; render the
 // cover as an SVG → PNG raster, then embed that one image into the PDF.
 //
-// Font: Sarabun (OFL), not the "TH Sarabun New" IRDP's own Word template
-// (ใบปะหน้าแทรกลายเซน.docx) uses — that font's redistribution terms aren't
-// clearly open, and Sarabun is the same typeface lineage (visually close to
-// identical) with an unambiguous OFL license. Layout/colors/sizes below are
-// otherwise taken directly from that docx (measured with python-docx), not
-// guessed from a screenshot.
-const FONT_REGULAR_PATH = path.join(process.cwd(), "lib/qms/assets/Sarabun-Regular.ttf");
-const FONT_BOLD_PATH = path.join(process.cwd(), "lib/qms/assets/Sarabun-Bold.ttf");
-const FONT_FAMILY = "Sarabun";
+// Font: Noto Sans Thai, not Sarabun or "TH Sarabun New" (the font IRDP's
+// own Word template, ใบปะหน้าแทรกลายเซน.docx, uses) — tried switching to
+// Sarabun for a closer visual match, but a wider side-by-side comparison at
+// multiple sizes didn't show it as more reliable than Noto Sans Thai for
+// ำ-containing words, and Noto Sans Thai is the font this module has the
+// most testing history with. The one confirmed, reproducible bug (ำ
+// immediately before เ) is unrelated to font choice — see fixSaraAmThoSara
+// below — and affects both fonts equally.
+const FONT_REGULAR_PATH = path.join(process.cwd(), "lib/qms/assets/NotoSansThai.ttf");
+const FONT_BOLD_PATH = path.join(process.cwd(), "lib/qms/assets/NotoSansThai-Bold.ttf");
+const FONT_FAMILY = "Noto Sans Thai";
 
 let cachedLogoDataUri: string | null = null;
 async function loadLogoDataUri(): Promise<string> {
@@ -126,7 +128,7 @@ export async function buildSignedCoverAndMerge(params: {
   const logoW = logoH * (720 / 309); // irdp-wordmark.png aspect ratio
   svgParts.push(`<image x="${PAGE_W - MARGIN_RIGHT - logoW}" y="${MARGIN_LEFT - 10}" width="${logoW}" height="${logoH}" href="${logoDataUri}" preserveAspectRatio="xMidYMid meet"/>`);
 
-  let y = MARGIN_LEFT + 20;
+  let y = MARGIN_LEFT + 44;
 
   // ---- Title: "ระเบียบปฏิบัติงาน" / "(Procedure Manual)" / ชื่อเอกสาร, same
   // 3-line heading the real document's own cover uses, driven by this DAR's
@@ -180,7 +182,8 @@ export async function buildSignedCoverAndMerge(params: {
   const headerH = 26;
   const bodyH = 130;
   const footerBlockH = darNo ? 33 : 22; // reserved for the DAR-no/SHA-256/timestamp lines below the table
-  const tableY = PAGE_H - MARGIN_LEFT - footerBlockH - bodyH - headerH;
+  const BOTTOM_MARGIN = 36; // tighter than MARGIN_LEFT — pushes the signature block further down the page, per feedback
+  const tableY = PAGE_H - BOTTOM_MARGIN - footerBlockH - bodyH - headerH;
   y = tableY - 22;
   svgParts.push(`<text x="${MARGIN_LEFT}" y="${y}" font-family="${FONT_FAMILY}" font-weight="bold" font-size="13" fill="${HEADING_BLUE}">การจัดทำ / ทบทวน / อนุมัติ</text>`);
 
