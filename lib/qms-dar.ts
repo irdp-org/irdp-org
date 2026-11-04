@@ -8,6 +8,34 @@ export const DOC_TYPE_CODE_LABEL: Record<string, string> = {
   SD: "เอกสารประกอบ (SD)",
 };
 
+// Full English name instead of the bare code — matches the "ประเภทเอกสาร"
+// row wording on the real PM-DCC-01 cover page (e.g. "ระเบียบปฏิบัติงาน
+// (Procedure Manual)"), used only by the generated certification cover.
+export const DOC_TYPE_CODE_FULL_LABEL: Record<string, string> = {
+  QM: "คู่มือคุณภาพ (Quality Manual)",
+  PM: "ระเบียบปฏิบัติงาน (Procedure Manual)",
+  WI: "วิธีปฏิบัติงาน (Work Instruction)",
+  FM: "แบบฟอร์ม (Form)",
+  SD: "เอกสารประกอบ (Supporting Document)",
+};
+
+// "เจ้าของกระบวนการ" wording per SD-DCC-01-01's process code — best-effort
+// full names for the certification cover; falls back to the bare code for
+// any process not listed here (e.g. a newly added department).
+export const PROCESS_LABEL: Record<string, string> = {
+  DCC: "ศูนย์ควบคุมเอกสารและข้อมูล (Document Control Center : DCC)",
+  QMS: "ระบบบริหารคุณภาพ (Quality Management System)",
+  MGT: "ฝ่ายบริหารองค์กร (Management)",
+  PA: "ฝ่ายประเมินผล (Performance Assessment)",
+  RD: "ฝ่ายวิจัยและพัฒนา (Research & Development)",
+  TR: "ฝ่ายฝึกอบรม (Training)",
+  SALE: "ฝ่ายขาย (Sales)",
+  HR: "ฝ่ายธุรการ - งานบุคคล (Human Resources)",
+  ADM: "ฝ่ายธุรการ - จัดซื้อ (Administration)",
+  FIN: "ฝ่ายบัญชีและการเงิน (Finance)",
+  IT: "ฝ่ายเทคโนโลยีสารสนเทศ (IT)",
+};
+
 export const STEP_ROLE_LABEL: Record<QmsStepRoleT, string> = {
   author: "ผู้จัดทำ",
   reviewer: "ผู้ทบทวน",

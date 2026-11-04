@@ -315,6 +315,8 @@ export async function publishDar(darId: string) {
           sourcePdfBytes: sourceBytes,
           darNo: dar.dar_no,
           docCode: dar.doc_code,
+          docTypeCode: dar.doc_type_code,
+          processCode: dar.process_code,
           title: dar.title,
           version,
           effectiveDate: dar.effective_date,
