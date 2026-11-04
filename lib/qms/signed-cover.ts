@@ -28,8 +28,19 @@ async function loadLogoDataUri(): Promise<string> {
   return cachedLogoDataUri;
 }
 
+// resvg/HarfBuzz mis-shapes ำ (SARA AM) immediately followed by เ (the
+// pre-posed vowel in the next syllable) — confirmed by isolating it: "ดำเนิน"
+// renders with the two glyphs overlapping, "ดำ เนิน" (with a real space)
+// renders cleanly, and invisible separators (zero-width space, thin space)
+// did NOT break the bad shaping cluster — only a real space did. This hits
+// extremely common words ("ดำเนินการ", "คำเตือน", "นำเสนอ"), so it has to be
+// handled generically rather than only in the one string that got reported.
+function fixSaraAmThoSara(s: string): string {
+  return s.replace(/ำ(?=เ)/g, "ำ ");
+}
+
 function esc(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return fixSaraAmThoSara(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 /** Fetches a signer's saved signature image as a data URI for inline SVG
