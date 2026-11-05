@@ -1,4 +1,5 @@
 import "server-only";
+import type { docs_v1 } from "googleapis";
 import { driveClient, docsClient } from "./google-sa";
 import { DRIVE_FOLDER_ID } from "./google-drive";
 
@@ -151,6 +152,63 @@ export async function fillItemTable(
   if (fillReqs.length) {
     await docs.documents.batchUpdate({ documentId, requestBody: { requests: fillReqs } });
   }
+}
+
+/**
+ * Find a literal marker (e.g. "{{ลายเซ็นผู้อนุมัติ}}") anywhere in the doc
+ * body — including inside table cells — delete it, and insert an inline
+ * image in its place. Template convention: style the marker text white so
+ * the page still looks correct even if stamping never runs (e.g. a claim
+ * that's rejected, or an approver with no signature on file yet).
+ *
+ * Returns false (no-op, no error) if the marker isn't found — callers may
+ * call this speculatively on templates that don't define this slot.
+ */
+export async function stampSignatureAtMarker(
+  documentId: string,
+  marker: string,
+  imageUrl: string,
+  size: { width: number; height: number } = { width: 90, height: 36 }
+): Promise<boolean> {
+  const docs = docsClient();
+  const doc = await docs.documents.get({ documentId });
+
+  const findStart = (content: docs_v1.Schema$StructuralElement[] | undefined): number | null => {
+    for (const el of content ?? []) {
+      for (const e of el.paragraph?.elements ?? []) {
+        const text = e.textRun?.content ?? "";
+        const idx = text.indexOf(marker);
+        if (idx >= 0 && e.startIndex != null) return e.startIndex + idx;
+      }
+      for (const row of el.table?.tableRows ?? []) {
+        for (const cell of row.tableCells ?? []) {
+          const found = findStart(cell.content);
+          if (found != null) return found;
+        }
+      }
+    }
+    return null;
+  };
+
+  const start = findStart(doc.data.body?.content);
+  if (start == null) return false;
+
+  await docs.documents.batchUpdate({
+    documentId,
+    requestBody: {
+      requests: [
+        { deleteContentRange: { range: { startIndex: start, endIndex: start + marker.length } } },
+        {
+          insertInlineImage: {
+            location: { index: start },
+            uri: imageUrl,
+            objectSize: { width: { magnitude: size.width, unit: "PT" }, height: { magnitude: size.height, unit: "PT" } },
+          },
+        },
+      ],
+    },
+  });
+  return true;
 }
 
 /** Append evidence images to the end of a Google Doc (best-effort — a failed

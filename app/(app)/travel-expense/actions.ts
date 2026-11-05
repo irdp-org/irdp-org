@@ -304,6 +304,17 @@ export async function decideClaim(id: string, decision: "approved" | "rejected" 
   const { error } = await supabase.from("travel_expense_claims").update({ status: decision }).eq("id", id);
   if (error) return { error: error.message };
 
+  // Stamp the approver's signature into the certificate — best-effort, a
+  // Drive/Docs hiccup shouldn't block the approval itself. Skips cleanly if
+  // the approver hasn't uploaded a signature yet or no doc template is set.
+  if (decision === "approved" && employee.signature_url) {
+    try {
+      await generateTravelDoc(id, false, employee.signature_url);
+    } catch (err) {
+      console.error("[travel-expense] signature stamping failed", err);
+    }
+  }
+
   if (claim) {
     const label = decision === "approved" ? "อนุมัติแล้ว" : decision === "rejected" ? "ไม่อนุมัติ" : "ตีกลับให้แก้ไข";
     await notify({
@@ -327,14 +338,30 @@ export async function deleteClaim(id: string) {
   return { ok: true };
 }
 
+// Template marker for the approver's signature — style this run white in
+// the Google Doc template so it's invisible until an approval stamps it.
+// Searched/replaced via stampSignatureAtMarker, never through the plain
+// replaceAllText `replacements` map (that can only ever insert text).
+const APPROVER_SIGNATURE_MARKER = "{{ลายเซ็นผู้อนุมัติ}}";
+
+function docIdFromUrl(url: string): string | null {
+  return url.match(/\/d\/([^/]+)/)?.[1] ?? null;
+}
+
 // ── ใบรับรองแทนใบเสร็จรับเงิน (item: travel certificate) ──────────────────────
-export async function generateTravelDoc(id: string, sendEmail: boolean) {
+// `approverSignatureUrl`, when given, stamps that signature image over
+// APPROVER_SIGNATURE_MARKER in the doc — called from decideClaim on
+// approval. Stamping is idempotent: once the marker text is found and
+// replaced with the image, a later call simply finds nothing to stamp.
+export async function generateTravelDoc(id: string, sendEmail: boolean, approverSignatureUrl?: string | null) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "unauthorized" };
   const templateId = process.env.DOC_TEMPLATE_TRAVEL_CERT;
   if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบรับรองฯ (DOC_TEMPLATE_TRAVEL_CERT)" };
 
-  const { generateDocFromTemplate, appendImagesToDoc, fillItemTable } = await import("@/lib/google-docs");
+  const { generateDocFromTemplate, appendImagesToDoc, fillItemTable, stampSignatureAtMarker } = await import(
+    "@/lib/google-docs"
+  );
   const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
   const { createAdminClient } = await import("@/lib/supabase/admin");
   const { MODE_LABELS, formatBaht, bahtText } = await import("@/lib/travel");
@@ -348,8 +375,15 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   if (!claim) return { error: "ไม่พบเอกสาร" };
 
   // Reuse the doc already generated for this claim instead of creating a
-  // new copy every time someone (e.g. an approver) opens it.
+  // new copy every time someone (e.g. an approver) opens it. If this call
+  // carries an approver signature (i.e. we're being called from the
+  // approval step), stamp it into the existing doc too — the claim may
+  // have been previewed/generated earlier, before approval.
   if (claim.generated_doc_url) {
+    if (approverSignatureUrl) {
+      const docId = docIdFromUrl(claim.generated_doc_url);
+      if (docId) await stampSignatureAtMarker(docId, APPROVER_SIGNATURE_MARKER, approverSignatureUrl);
+    }
     await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", claim.generated_doc_url);
     return { ok: true, url: claim.generated_doc_url };
   }
@@ -444,6 +478,8 @@ export async function generateTravelDoc(id: string, sendEmail: boolean) {
   // Attach evidence images at the end of the certificate
   const attachments = (claim.attachment_urls ?? []) as string[];
   if (attachments.length > 0) await appendImagesToDoc(docId, attachments);
+
+  if (approverSignatureUrl) await stampSignatureAtMarker(docId, APPROVER_SIGNATURE_MARKER, approverSignatureUrl);
 
   await supabase.from("travel_expense_claims").update({ generated_doc_url: url }).eq("id", id);
   await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", url);
