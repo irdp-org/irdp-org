@@ -30,8 +30,11 @@ export default async function BookingPage({
   const supabase = await createClient();
   // "Upcoming" window: today (Bangkok, start of day) through 30 days ahead —
   // covers both bookings starting soon and ones already in progress today.
-  const todayStartBkk = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" }));
-  todayStartBkk.setHours(0, 0, 0, 0);
+  const BKK_OFFSET_MS = 7 * 60 * 60 * 1000;
+  const bkkNow = new Date(Date.now() + BKK_OFFSET_MS);
+  const todayStartBkk = new Date(
+    Date.UTC(bkkNow.getUTCFullYear(), bkkNow.getUTCMonth(), bkkNow.getUTCDate()) - BKK_OFFSET_MS
+  );
   const now = todayStartBkk.toISOString();
   const horizon = new Date(todayStartBkk.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
