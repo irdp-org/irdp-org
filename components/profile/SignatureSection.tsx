@@ -24,7 +24,13 @@ function SignaturePad({ onSave, isPending }: { onSave: (dataUrl: string) => void
   function pointerPos(e: React.PointerEvent<HTMLCanvasElement>) {
     const canvas = canvasRef.current!;
     const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    // canvas's drawing buffer (width/height attrs) is fixed, but it renders
+    // at whatever CSS size the layout gives it (w-full) — without rescaling,
+    // strokes land at the wrong spot on any screen narrower/wider than the
+    // buffer, worse the further from the top-left corner.
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
   }
 
   function start(e: React.PointerEvent<HTMLCanvasElement>) {
