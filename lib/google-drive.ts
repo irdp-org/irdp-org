@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import { driveClient } from "./google-sa";
 
 /** Drive folder that holds uploaded document images (shared with the SA). */
-export const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || "1yFenpKVtY1IjmFtQXlMxPjTRteSHl3Rx";
+export const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || "1IaHDxj525JaiMJ2GtOJ9WXu-1fe0qQbi";
 
 export type DriveUpload = { id: string; webViewLink: string; webContentLink: string };
 

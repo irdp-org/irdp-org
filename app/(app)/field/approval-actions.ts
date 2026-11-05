@@ -143,30 +143,3 @@ export async function acknowledgeFieldRequest(id: string) {
   revalidatePath("/field");
   return { ok: true };
 }
-
-/** Marks selected approved requests as exported (sets exported_at) and
- * returns CSV-ready rows — no real accounting system integration this
- * phase, per the kickoff. */
-export async function markExported(ids: string[]) {
-  const employee = await getCurrentEmployee();
-  if (!employee || (employee.role !== "admin" && employee.role !== "hr")) {
-    return { error: "unauthorized" };
-  }
-  if (!ids.length) return { error: "ไม่มีรายการที่เลือก" };
-
-  const supabase = await createClient();
-  const exportedAt = new Date().toISOString();
-
-  const { data: rows, error } = await supabase
-    .from("field_requests")
-    .update({ exported_at: exportedAt })
-    .in("id", ids)
-    .eq("status", "approved")
-    .select(
-      "id, employee_id, type, work_date, planned_start, planned_end, pay_x1_hours, pay_x15_hours, pay_x3_hours, ot_hours"
-    );
-
-  if (error) return { error: error.message };
-  revalidatePath("/field");
-  return { ok: true, rows: rows ?? [] };
-}

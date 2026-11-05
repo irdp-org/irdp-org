@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { Download } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { FIELD_TYPE_LABELS_TH } from "@/lib/ot";
 import { buildCsv, triggerDownload } from "@/lib/export-csv";
-import { markExported } from "@/app/(app)/field/approval-actions";
 import type { FieldApprovalQueueRow } from "./FieldApprovalList";
 
 function buildExportCsv(rows: FieldApprovalQueueRow[]): string {
@@ -28,11 +26,8 @@ function buildExportCsv(rows: FieldApprovalQueueRow[]): string {
 }
 
 export function ExportPanel({ rows }: { rows: FieldApprovalQueueRow[] }) {
-  const router = useRouter();
-  const exportable = rows.filter((r) => r.status === "approved" && !r.exported_at);
+  const exportable = rows.filter((r) => r.status === "approved");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
 
   if (exportable.length === 0) return null;
 
@@ -45,26 +40,16 @@ export function ExportPanel({ rows }: { rows: FieldApprovalQueueRow[] }) {
     });
   }
 
-  function handleExport() {
+  function handleDownload() {
     const ids = Array.from(selected);
     if (!ids.length) return;
-    setError(null);
-    startTransition(async () => {
-      const res = await markExported(ids);
-      if ("error" in res && res.error) {
-        setError(res.error);
-        return;
-      }
-      const selectedRows = rows.filter((r) => selected.has(r.id));
-      triggerDownload(`field-export-${format(new Date(), "yyyy-MM-dd")}.csv`, buildExportCsv(selectedRows));
-      setSelected(new Set());
-      router.refresh();
-    });
+    const selectedRows = rows.filter((r) => selected.has(r.id));
+    triggerDownload(`field-export-${format(new Date(), "yyyy-MM-dd")}.csv`, buildExportCsv(selectedRows));
   }
 
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border bg-surface p-3">
-      <p className="text-sm font-medium text-foreground">ส่งออกให้การเงิน ({exportable.length} รายการรอส่งออก)</p>
+      <p className="text-sm font-medium text-foreground">ดาวน์โหลดเป็น CSV ({exportable.length} รายการ)</p>
       <ul className="flex flex-col gap-1">
         {exportable.map((r) => (
           <li key={r.id} className="flex items-center gap-2 text-sm">
@@ -81,15 +66,14 @@ export function ExportPanel({ rows }: { rows: FieldApprovalQueueRow[] }) {
           </li>
         ))}
       </ul>
-      {error && <p className="text-sm text-danger">{error}</p>}
       <Button
         type="button"
         size="sm"
         className="self-start"
-        disabled={isPending || selected.size === 0}
-        onClick={handleExport}
+        disabled={selected.size === 0}
+        onClick={handleDownload}
       >
-        <Download className="h-4 w-4" /> Export ที่เลือก ({selected.size}) เป็น CSV
+        <Download className="h-4 w-4" /> ดาวน์โหลดเป็น CSV ({selected.size})
       </Button>
     </div>
   );
