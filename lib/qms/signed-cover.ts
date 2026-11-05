@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { PDFDocument } from "pdf-lib";
 import { Resvg } from "@resvg/resvg-js";
+import { driveClient } from "@/lib/google-sa";
 import type { QmsDarStep, QmsStepRoleT } from "@/lib/database.types";
 import { DOC_TYPE_CODE_FULL_LABEL, PROCESS_LABEL } from "@/lib/qms-dar";
 
@@ -55,8 +56,35 @@ function esc(s: string): string {
 /** Fetches a signer's saved signature image as a data URI for inline SVG
  * embedding. Best-effort: any failure (unreachable URL, unsupported format)
  * just means no image is drawn — the typed name/date/position next to it is
- * the authoritative record either way. */
+ * the authoritative record either way.
+ *
+ * Goes through Drive's authenticated files.get(alt=media) for the ORIGINAL
+ * file bytes rather than hitting the public `/thumbnail?id=` proxy
+ * (driveThumbUrl) the signature_url column stores — that proxy regenerates
+ * its own JPEG/PNG rendition and, for signature PNGs with a transparent
+ * background, has been observed flattening the transparency to solid BLACK
+ * instead of leaving it transparent (or filling white). The raw file bytes
+ * preserve the real alpha channel, which resvg composites correctly against
+ * this page's white background. */
 async function tryFetchSignatureDataUri(url: string): Promise<string | null> {
+  const fileId = url.match(/[?&]id=([^&]+)/)?.[1];
+  if (fileId) {
+    try {
+      const drive = driveClient();
+      const [meta, media] = await Promise.all([
+        drive.files.get({ fileId, fields: "mimeType", supportsAllDrives: true }),
+        drive.files.get({ fileId, alt: "media", supportsAllDrives: true }, { responseType: "arraybuffer" }),
+      ]);
+      const mimeType = meta.data.mimeType;
+      if (mimeType === "image/png" || mimeType === "image/jpeg") {
+        const bytes = Buffer.from(media.data as ArrayBuffer);
+        return `data:${mimeType};base64,${bytes.toString("base64")}`;
+      }
+    } catch {
+      // fall through to the thumbnail-proxy fetch below
+    }
+  }
+
   try {
     const res = await fetch(url);
     if (!res.ok) return null;
@@ -116,7 +144,10 @@ export async function buildSignedCoverAndMerge(params: {
   effectiveDate: string;
   steps: QmsDarStep[];
 }): Promise<{ mergedPdfBytes: Buffer; sourceSha256: string }> {
-  const { sourcePdfBytes, darNo, docCode, docTypeCode, processCode, title, version, effectiveDate, steps } = params;
+  // darNo intentionally unused — it used to drive a footer line that's been
+  // removed from the page; kept in the param type so callers don't need to
+  // change their call sites.
+  const { sourcePdfBytes, docCode, docTypeCode, processCode, title, version, effectiveDate, steps } = params;
   const sourceSha256 = createHash("sha256").update(sourcePdfBytes).digest("hex");
 
   const logoDataUri = await loadLogoDataUri();
@@ -128,7 +159,7 @@ export async function buildSignedCoverAndMerge(params: {
   const logoW = logoH * (720 / 309); // irdp-wordmark.png aspect ratio
   svgParts.push(`<image x="${PAGE_W - MARGIN_RIGHT - logoW}" y="${MARGIN_LEFT - 10}" width="${logoW}" height="${logoH}" href="${logoDataUri}" preserveAspectRatio="xMidYMid meet"/>`);
 
-  let y = MARGIN_LEFT + 44;
+  let y = MARGIN_LEFT + 64;
 
   // ---- Title: "ระเบียบปฏิบัติงาน" / "(Procedure Manual)" / ชื่อเอกสาร, same
   // 3-line heading the real document's own cover uses, driven by this DAR's
@@ -144,7 +175,7 @@ export async function buildSignedCoverAndMerge(params: {
     y += 28;
   }
   svgParts.push(`<text x="${MARGIN_LEFT}" y="${y}" font-family="${FONT_FAMILY}" font-size="24" fill="${TITLE_BLUE}">${esc(title)}</text>`);
-  y += 34;
+  y += 54;
 
   // ---- Document info table (6 rows × [label 24% | value 76%], per the
   // docx's own column widths — 117.5pt label / 372.5pt value of 490pt). --
@@ -181,11 +212,10 @@ export async function buildSignedCoverAndMerge(params: {
   const colW = CONTENT_W / 3;
   const headerH = 26;
   const bodyH = 130;
-  const footerBlockH = darNo ? 33 : 22; // reserved for the DAR-no/SHA-256/timestamp lines below the table
   const BOTTOM_MARGIN = 36; // tighter than MARGIN_LEFT — pushes the signature block further down the page, per feedback
-  const tableY = PAGE_H - BOTTOM_MARGIN - footerBlockH - bodyH - headerH;
+  const tableY = PAGE_H - BOTTOM_MARGIN - bodyH - headerH;
   y = tableY - 22;
-  svgParts.push(`<text x="${MARGIN_LEFT}" y="${y}" font-family="${FONT_FAMILY}" font-weight="bold" font-size="13" fill="${HEADING_BLUE}">การจัดทำ / ทบทวน / อนุมัติ</text>`);
+  svgParts.push(`<text x="${MARGIN_LEFT}" y="${y}" font-family="${FONT_FAMILY}" font-weight="bold" font-size="13" fill="${HEADING_BLUE}">การจัดทำ&#160;&#160;/&#160;&#160;ทบทวน&#160;&#160;/&#160;&#160;อนุมัติ</text>`);
 
   for (let i = 0; i < cols.length; i++) {
     const { role, label } = cols[i];
@@ -221,32 +251,6 @@ export async function buildSignedCoverAndMerge(params: {
       svgParts.push(`<text x="${centerX}" y="${bodyTop + bodyH / 2}" font-family="${FONT_FAMILY}" font-size="11" fill="${GRAY_TEXT}" text-anchor="middle">-</text>`);
     }
   }
-
-  // ---- DCC check / QMR note (not part of the official cover template, but
-  // still worth keeping on record) — sits in the gap between the info table
-  // and the signature block rather than crowding either one. -------------
-  const dcc = stepForRole(steps, "dcc");
-  const qmr = stepForRole(steps, "qmr");
-  let noteY = tableTop + infoRows.length * rowH + 24;
-  for (const extra of [dcc && { r: "ตรวจสอบโดย DCC", s: dcc }, qmr && { r: "รับรองโดย QMR", s: qmr }] as const) {
-    if (!extra || !extra.s) continue;
-    const when = extra.s.acted_at ? new Date(extra.s.acted_at).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : "-";
-    const line = `${extra.r}: ${extra.s.full_name_snapshot} (${extra.s.position_snapshot}) เมื่อ ${when}`;
-    svgParts.push(`<text x="${MARGIN_LEFT}" y="${noteY}" font-family="${FONT_FAMILY}" font-size="9" fill="${GRAY_TEXT}">${esc(line)}</text>`);
-    noteY += 14;
-  }
-
-  // ---- Footer — directly below the signature table, within the space
-  // reserved for it (footerBlockH) when the table's position was computed.
-  let footerY = tableY + headerH + bodyH + 16;
-  if (darNo) {
-    svgParts.push(`<text x="${MARGIN_LEFT}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7.5" fill="${GRAY_TEXT}">${esc(`เลขที่ใบคำขอดำเนินการเอกสาร (DAR): ${darNo}`)}</text>`);
-    footerY += 11;
-  }
-  svgParts.push(`<text x="${MARGIN_LEFT}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7" fill="#8c8c8c">${esc(`SHA-256 ของไฟล์ต้นฉบับ: ${sourceSha256}`)}</text>`);
-  svgParts.push(
-    `<text x="${PAGE_W - MARGIN_RIGHT}" y="${footerY}" font-family="${FONT_FAMILY}" font-size="7.5" fill="#8c8c8c" text-anchor="end">${esc(`ออกโดยระบบ QMS ของ IRDP เมื่อ ${new Date().toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}`)}</text>`
-  );
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${PAGE_W}" height="${PAGE_H}" viewBox="0 0 ${PAGE_W} ${PAGE_H}">${svgParts.join("")}</svg>`;
 
