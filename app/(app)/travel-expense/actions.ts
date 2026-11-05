@@ -338,11 +338,12 @@ export async function deleteClaim(id: string) {
   return { ok: true };
 }
 
-// Template marker for the approver's signature — style this run white in
-// the Google Doc template so it's invisible until an approval stamps it.
-// Searched/replaced via stampSignatureAtMarker, never through the plain
-// replaceAllText `replacements` map (that can only ever insert text).
+// Template markers for signatures — style both runs white in the Google Doc
+// template so they're invisible until stamped. Searched/replaced via
+// stampSignatureAtMarker, never through the plain replaceAllText
+// `replacements` map (that can only ever insert text).
 const APPROVER_SIGNATURE_MARKER = "{{ลายเซ็นผู้อนุมัติ}}";
+const APPLICANT_SIGNATURE_MARKER = "{{ลายเซ็นผู้ยื่น}}";
 
 function docIdFromUrl(url: string): string | null {
   return url.match(/\/d\/([^/]+)/)?.[1] ?? null;
@@ -374,15 +375,26 @@ export async function generateTravelDoc(id: string, sendEmail: boolean, approver
     .single();
   if (!claim) return { error: "ไม่พบเอกสาร" };
 
+  // Fetched up front (not just in the fresh-generation branch below) since
+  // the applicant's own signature stamps regardless of which branch runs —
+  // it's their claim, not tied to the approval step like the approver's is.
+  const admin = createAdminClient();
+  const { data: emp } = await admin
+    .from("employees")
+    .select("full_name, position, signature_url")
+    .eq("id", claim.employee_id)
+    .single();
+
   // Reuse the doc already generated for this claim instead of creating a
-  // new copy every time someone (e.g. an approver) opens it. If this call
-  // carries an approver signature (i.e. we're being called from the
-  // approval step), stamp it into the existing doc too — the claim may
-  // have been previewed/generated earlier, before approval.
+  // new copy every time someone (e.g. an approver) opens it. Stamp
+  // whichever signatures this call has available into the existing doc —
+  // the applicant's on first open, the approver's once approved — since
+  // the claim may have been previewed/generated well before approval.
   if (claim.generated_doc_url) {
-    if (approverSignatureUrl) {
-      const docId = docIdFromUrl(claim.generated_doc_url);
-      if (docId) await stampSignatureAtMarker(docId, APPROVER_SIGNATURE_MARKER, approverSignatureUrl);
+    const docId = docIdFromUrl(claim.generated_doc_url);
+    if (docId) {
+      if (emp?.signature_url) await stampSignatureAtMarker(docId, APPLICANT_SIGNATURE_MARKER, emp.signature_url);
+      if (approverSignatureUrl) await stampSignatureAtMarker(docId, APPROVER_SIGNATURE_MARKER, approverSignatureUrl);
     }
     await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", claim.generated_doc_url);
     return { ok: true, url: claim.generated_doc_url };
@@ -394,8 +406,6 @@ export async function generateTravelDoc(id: string, sendEmail: boolean, approver
     .eq("claim_id", id)
     .order("sort_order");
 
-  const admin = createAdminClient();
-  const { data: emp } = await admin.from("employees").select("full_name, position").eq("id", claim.employee_id).single();
   const head = await deptHeadName(claim.employee_id);
   const dept = await deptNameOf(claim.employee_id);
 
@@ -479,6 +489,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean, approver
   const attachments = (claim.attachment_urls ?? []) as string[];
   if (attachments.length > 0) await appendImagesToDoc(docId, attachments);
 
+  if (emp?.signature_url) await stampSignatureAtMarker(docId, APPLICANT_SIGNATURE_MARKER, emp.signature_url);
   if (approverSignatureUrl) await stampSignatureAtMarker(docId, APPROVER_SIGNATURE_MARKER, approverSignatureUrl);
 
   await supabase.from("travel_expense_claims").update({ generated_doc_url: url }).eq("id", id);
