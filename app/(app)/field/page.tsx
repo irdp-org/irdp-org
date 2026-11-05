@@ -2,11 +2,9 @@ import { format } from "date-fns";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
 import { getSignedCheckinPhotoUrl } from "@/lib/storage";
-import { canEdit } from "@/lib/rbac";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { FieldRequestsClient, type OwnFieldRequest } from "@/components/field/FieldRequestsClient";
 import { FieldApprovalList, type FieldApprovalQueueRow } from "@/components/field/FieldApprovalList";
-import { ExportPanel } from "@/components/field/ExportPanel";
 import { RequestTabs } from "@/components/shared/RequestTabs";
 
 const CAN_SEE_APPROVALS = ["dept_head", "hr", "admin", "exec"];
@@ -177,7 +175,6 @@ export default async function FieldPage({
 
   const { tab } = await searchParams;
   const defaultTab = tab === "approvals" && showApprovals ? "approvals" : "mine";
-  const canExport = canEdit(employee.role);
 
   return (
     <div>
@@ -189,7 +186,6 @@ export default async function FieldPage({
           approvals={
             showApprovals ? (
               <div className="flex flex-col gap-3">
-                {canExport && <ExportPanel rows={approvalRows} />}
                 <FieldApprovalList
                   rows={approvalRows}
                   role={employee.role}
