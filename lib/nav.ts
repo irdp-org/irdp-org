@@ -5,10 +5,7 @@ import {
   CalendarPlus,
   CalendarRange,
   Package,
-  Bell,
   ShieldCheck,
-  Users,
-  Map,
   BarChart2,
   ScanLine,
   Clock,
@@ -50,7 +47,6 @@ export const NAV_ITEMS: NavItem[] = [
   // ทั่วไป
   { href: "/", label: "หน้าหลัก", icon: Home, group: "ทั่วไป" },
   { href: "/qr", label: "สร้าง QR Code", icon: QrCode, group: "ทั่วไป" },
-  { href: "/notifications", label: "การแจ้งเตือน", icon: Bell, group: "ทั่วไป" },
   { href: "/announcements", label: "ข่าวสาร", icon: Megaphone, group: "ทั่วไป" },
   { href: "/directory", label: "สมุดรายชื่อ", icon: BookUser, group: "ทั่วไป" },
   { href: "/org", label: "ข้อมูลองค์กร", icon: Building2, group: "ทั่วไป" },
@@ -77,10 +73,9 @@ export const NAV_ITEMS: NavItem[] = [
   // ฝึกอบรม
   { href: "/training", label: "ระบบอบรม (TMS)", icon: GraduationCap, group: "ฝึกอบรม", trainingAccess: true },
 
-  // การจัดการ (admin/hr/exec/dept_head)
-  { href: "/admin/employees", label: "จัดการพนักงาน", icon: Users, group: "การจัดการ", roles: ["admin", "hr"] },
-  { href: "/admin/work-locations", label: "สถานที่ทำงาน", icon: Map, group: "การจัดการ", roles: ["admin", "hr"] },
-  { href: "/admin/assets", label: "คลังทรัพย์สิน", icon: Package, group: "การจัดการ", roles: ["admin", "hr", "exec", "dept_head"] },
+  // การจัดการ (admin/hr/exec/dept_head) — จัดการพนักงาน/สถานที่ทำงาน/
+  // คลังทรัพย์สิน removed: duplicates of modules already inside "ผู้ดูแลระบบ"
+  // below, same hrefs (/admin/employees, /admin/work-locations, /admin/assets).
   { href: "/reports", label: "รีพอร์ต", icon: BarChart2, group: "การจัดการ", roles: ["admin", "hr", "exec", "dept_head"] },
   { href: "/admin/logs", label: "บันทึกกิจกรรม", icon: ScrollText, group: "การจัดการ", roles: ["admin", "hr"] },
   { href: "/admin", label: "ผู้ดูแลระบบ", icon: ShieldCheck, group: "การจัดการ", roles: ["admin"] },

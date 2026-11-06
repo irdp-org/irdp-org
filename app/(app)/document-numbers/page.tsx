@@ -8,7 +8,6 @@ import { ALL_BOOKS, BOOK_INTERNAL, bookOf } from "@/lib/document-number-books";
 export const dynamic = "force-dynamic";
 
 const EARLIEST_YEAR_BE = 2560; // bounds the year picker; no query needed to build it
-const PAGE_SIZE = 50; // some years have 1,000+ rows in one book — page it instead of loading them all
 const DEPT_PA = "0a6d5693-1e48-4d25-adee-4c720519fa28"; // ฝ่ายประเมินผล — only dept whose register uses หมายเหตุ
 
 function escapeIlike(s: string) {
@@ -20,7 +19,7 @@ function escapeIlike(s: string) {
 export default async function DocumentNumbersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string; page?: string; q?: string; book?: string; tab?: string }>;
+  searchParams: Promise<{ year?: string; q?: string; book?: string; tab?: string }>;
 }) {
   const employee = await getCurrentEmployee();
   if (!employee) return null;
@@ -28,9 +27,8 @@ export default async function DocumentNumbersPage({
   const supabase = await createClient();
 
   const currentYearBe = new Date().getFullYear() + 543;
-  const { year: yearParam, page: pageParam, q: qParam, book: bookParam, tab: tabParam } = await searchParams;
+  const { year: yearParam, q: qParam, book: bookParam, tab: tabParam } = await searchParams;
   const yearBe = Number(yearParam) || currentYearBe;
-  const page = Math.max(1, Number(pageParam) || 1);
   const search = qParam ?? "";
   const activeBook = (ALL_BOOKS as readonly string[]).includes(bookParam ?? "") ? bookParam! : BOOK_INTERNAL;
   const activeTab = tabParam ?? "";
@@ -64,14 +62,16 @@ export default async function DocumentNumbersPage({
     ? [...new Set((categories ?? []).filter((c) => bookCategoryIds.includes(c.id) && c.label === activeTab).map((c) => c.id))]
     : null;
 
-  // Scoping to one year AND one page at a time (instead of fetching the full
-  // 2,800+ row table, or even a whole year, on every load) is what actually
-  // fixes the slow load.
-  const from = (page - 1) * PAGE_SIZE;
-  const to = from + PAGE_SIZE - 1;
+  // Scoped to one year at a time (never the full 2,800+ row table) — within
+  // a year, every matching row is loaded in one shot and sorted newest-first,
+  // no further pagination. Switching year/book/tab still refetches from the
+  // server (this page is force-dynamic), which is slower than a client-side
+  // filter would be, but keeps every query simple and correct — the known
+  // tradeoff, accepted over the previous page-of-50 approach where switching
+  // tabs could show almost nothing because the slice wasn't re-fetched.
   let query = supabase
     .from("document_numbers")
-    .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, remark, created_at", { count: "exact" })
+    .select("id, department_id, category_id, seq, doc_no, title, recipient, issued_date, issued_by, attachment_url, remark, created_at")
     .eq("year_be", yearBe);
   if (tabCategoryIds) {
     // A specific tab is always a real category — never the "uncategorized"
@@ -100,8 +100,8 @@ export default async function DocumentNumbersPage({
     query = query.or(orParts.join(","));
   }
 
-  const [{ data: rows, count: totalCount }, { data: recipients }] = await Promise.all([
-    query.order("created_at", { ascending: false }).range(from, to),
+  const [{ data: rows }, { data: recipients }] = await Promise.all([
+    query.order("created_at", { ascending: false }),
     supabase.from("document_recipients").select("name").order("name"),
   ]);
 
@@ -163,9 +163,6 @@ export default async function DocumentNumbersPage({
           activeYear={String(yearBe)}
           activeBook={activeBook}
           activeTab={activeTab}
-          page={page}
-          totalCount={totalCount ?? 0}
-          pageSize={PAGE_SIZE}
           search={search}
           showRemark={isOversight(employee.role) || employee.department_id === DEPT_PA}
         />
