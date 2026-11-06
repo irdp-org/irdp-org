@@ -345,8 +345,36 @@ export async function deleteClaim(id: string) {
 const APPROVER_SIGNATURE_MARKER = "{{ลายเซ็นผู้อนุมัติ}}";
 const APPLICANT_SIGNATURE_MARKER = "{{ลายเซ็นผู้ยื่น}}";
 
+// The two "ผู้รับรอง" (certifier) signature slots at the foot of the form are
+// standing company officers hardcoded into the template by name (ดร. เสรี
+// นนทสูติ / ศ.ดร. วรภัทร โตธนะเกษม) — unlike ผู้ยื่น/ผู้อนุมัติ, they're the
+// same two people on every claim, not derived from who's acting on this
+// particular one. Stamped alongside the applicant's own signature, not tied
+// to the approval decision.
+const CERTIFIER_MARKERS: { employeeId: string; marker: string }[] = [
+  { employeeId: "1bc71982-e479-40a5-a5ed-7709351ed5a6", marker: "{{ลายเซ็นseree}}" }, // ดร. เสรี นนทสูติ
+  { employeeId: "a93dd2b9-2b78-47ca-bdc8-48e632456770", marker: "{{ลายเซ็นwaraptr}}" }, // ศ.ดร. วรภัทร โตธนะเกษม
+];
+
 function docIdFromUrl(url: string): string | null {
   return url.match(/\/d\/([^/]+)/)?.[1] ?? null;
+}
+
+async function stampCertifiers(docId: string) {
+  const { stampSignatureAtMarker } = await import("@/lib/google-docs");
+  const { createAdminClient } = await import("@/lib/supabase/admin");
+  const admin = createAdminClient();
+  const { data: certifiers } = await admin
+    .from("employees")
+    .select("id, signature_url")
+    .in(
+      "id",
+      CERTIFIER_MARKERS.map((c) => c.employeeId)
+    );
+  for (const { employeeId, marker } of CERTIFIER_MARKERS) {
+    const url = certifiers?.find((c) => c.id === employeeId)?.signature_url;
+    if (url) await stampSignatureAtMarker(docId, marker, url);
+  }
 }
 
 // ── ใบรับรองแทนใบเสร็จรับเงิน (item: travel certificate) ──────────────────────
@@ -395,6 +423,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean, approver
     if (docId) {
       if (emp?.signature_url) await stampSignatureAtMarker(docId, APPLICANT_SIGNATURE_MARKER, emp.signature_url);
       if (approverSignatureUrl) await stampSignatureAtMarker(docId, APPROVER_SIGNATURE_MARKER, approverSignatureUrl);
+      await stampCertifiers(docId);
     }
     await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", claim.generated_doc_url);
     return { ok: true, url: claim.generated_doc_url };
@@ -503,6 +532,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean, approver
 
   if (emp?.signature_url) await stampSignatureAtMarker(docId, APPLICANT_SIGNATURE_MARKER, emp.signature_url);
   if (approverSignatureUrl) await stampSignatureAtMarker(docId, APPROVER_SIGNATURE_MARKER, approverSignatureUrl);
+  await stampCertifiers(docId);
 
   await supabase.from("travel_expense_claims").update({ generated_doc_url: url }).eq("id", id);
   await emailDocIfRequested(sendEmail, claim.employee_id, "ใบรับรองแทนใบเสร็จรับเงิน", url);

@@ -168,9 +168,21 @@ export async function updateSignature(formData: FormData) {
     return { error: "กรุณาอัปโหลดรูปหรือเซ็นลายเซ็นก่อนบันทึก" };
   }
 
+  // Flatten onto a white background: a surprising number of signature PNGs
+  // (hand-drawn canvas exports, some phone scans) have the "blank" area fully
+  // transparent rather than opaque white. That's invisible in most viewers,
+  // which default to compositing transparency over white — but both Google's
+  // own Drive thumbnail proxy and Docs' insertInlineImage fetch instead
+  // flatten transparency to solid BLACK, so the signature shows up on a black
+  // box everywhere it gets stamped into a document. Baking in a real white
+  // background here removes the ambiguity for every downstream consumer.
+  const sharp = (await import("sharp")).default;
+  buffer = await sharp(buffer).flatten({ background: "#ffffff" }).png().toBuffer();
+  mimeType = "image/png";
+
   const { getOrCreatePath, uploadToDrive, driveThumbUrl, deleteFromDrive } = await import("@/lib/google-drive");
   const folderId = await getOrCreatePath(["ลายเซ็นพนักงาน", employee.full_name]);
-  const ext = mimeType === "image/png" ? "png" : mimeType === "image/jpeg" ? "jpg" : "webp";
+  const ext = "png";
   const up = await uploadToDrive(buffer, `signature-${Date.now()}.${ext}`, mimeType, folderId);
   // driveThumbUrl (not webContentLink) — same choice as every other
   // Drive-hosted photo preview in this app (checkin selfies, travel
