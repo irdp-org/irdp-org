@@ -2,12 +2,78 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Pencil, Camera, User } from "lucide-react";
+import { Plus, Trash2, Pencil, Camera, User, Download, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
-import { addParticipant, updateParticipant, deleteParticipant } from "@/app/(app)/training/courses/actions";
+import { addParticipant, updateParticipant, deleteParticipant, importParticipants } from "@/app/(app)/training/courses/actions";
 
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+
+// Matches the column order/labels import-template/route.ts generates — keep
+// in sync if that route's HEADERS array ever changes.
+const CSV_HEADER_KEY: Record<string, string> = {
+  "คำนำหน้า": "prefix",
+  "ชื่อ": "first_name",
+  "นามสกุล": "last_name",
+  "ชื่อเล่น": "nickname",
+  "ตำแหน่ง": "position",
+  "หน่วยงาน": "organization",
+  "เบอร์โทร": "phone",
+  "อีเมล": "email",
+  "หมายเหตุ": "note",
+};
+
+/** Minimal RFC4180-ish CSV parser — quoted fields, embedded commas/newlines,
+ * escaped "" for a literal quote. Good enough for a file round-tripped
+ * through the template this same app generates (and Excel/Sheets exports,
+ * which follow the same quoting rules). */
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  const s = text.replace(/^﻿/, "");
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (s[i + 1] === '"') { field += '"'; i++; } else inQuotes = false;
+      } else {
+        field += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      row.push(field);
+      field = "";
+    } else if (c === "\r") {
+      // skip — \n (below) terminates the row
+    } else if (c === "\n") {
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += c;
+    }
+  }
+  if (field !== "" || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
+function csvToParticipantRows(text: string): Record<string, string>[] {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return [];
+  const keys = rows[0].map((h) => CSV_HEADER_KEY[h.trim()] ?? h.trim());
+  return rows.slice(1).map((cells) => {
+    const obj: Record<string, string> = {};
+    keys.forEach((key, i) => { obj[key] = (cells[i] ?? "").trim(); });
+    return obj;
+  });
+}
 
 type Participant = {
   id: string;
@@ -43,6 +109,34 @@ export function ParticipantsClient({
   const [error, setError] = useState<string | null>(null);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const [importResult, setImportResult] = useState<{ inserted: number; rowErrors: { row: number; message: string }[] } | null>(null);
+  const [isImporting, startImportTransition] = useTransition();
+
+  function handleImportFile(file: File | undefined) {
+    if (!file) return;
+    setError(null);
+    setImportResult(null);
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = String(reader.result ?? "");
+      const rows = csvToParticipantRows(text);
+      if (rows.length === 0) {
+        setError("ไม่พบรายชื่อในไฟล์ — ตรวจสอบว่าเป็นไฟล์เทมเพลตที่กรอกแล้ว");
+        return;
+      }
+      startImportTransition(async () => {
+        const res = await importParticipants(courseId, batchId, rows);
+        if (importInputRef.current) importInputRef.current.value = "";
+        if ("error" in res && res.error) { setError(res.error); return; }
+        if ("ok" in res) {
+          setImportResult({ inserted: res.inserted, rowErrors: res.rowErrors });
+          router.refresh();
+        }
+      });
+    };
+    reader.readAsText(file, "utf-8");
+  }
 
   function applyPhotoFile(file: File | undefined) {
     if (!file) return;
@@ -187,11 +281,48 @@ export function ParticipantsClient({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Add button */}
+      {/* Add + bulk import */}
       {!showForm && (
-        <Button type="button" variant="outline" className="gap-2 self-start border-blue-200 text-blue-600 hover:bg-blue-50" onClick={openAdd}>
-          <Plus className="h-4 w-4" /> เพิ่มผู้เข้าอบรม
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button type="button" variant="outline" className="gap-2 border-blue-200 text-blue-600 hover:bg-blue-50" onClick={openAdd}>
+            <Plus className="h-4 w-4" /> เพิ่มผู้เข้าอบรม
+          </Button>
+          <a
+            href={`/training/courses/${courseId}/batches/${batchId}/import-template`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground hover:bg-surface"
+          >
+            <Download className="h-4 w-4" /> ดาวน์โหลดเทมเพลต CSV
+          </a>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-1.5"
+            disabled={isImporting}
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Upload className="h-4 w-4" /> {isImporting ? "กำลังนำเข้า..." : "นำเข้าจาก CSV"}
+          </Button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="hidden"
+            onChange={(e) => handleImportFile(e.target.files?.[0])}
+          />
+        </div>
+      )}
+      {!showForm && error && <p className="text-xs text-danger">{error}</p>}
+      {importResult && (
+        <div className="rounded-lg border border-border bg-surface px-3 py-2 text-xs text-foreground">
+          นำเข้าสำเร็จ {importResult.inserted} รายชื่อ
+          {importResult.rowErrors.length > 0 && (
+            <ul className="mt-1 list-disc pl-4 text-danger">
+              {importResult.rowErrors.map((e, i) => (
+                <li key={i}>แถวที่ {e.row}: {e.message}</li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {/* Inline add/edit form */}

@@ -307,3 +307,64 @@ export async function deleteParticipant(id: string, courseId: string, batchId: s
   revalidatePath(`/training/courses/${courseId}/batches/${batchId}`);
   return {};
 }
+
+/** Bulk-insert a batch's roster from a CSV the user filled in offline
+ * (downloaded via the import-template route, same field shape as the
+ * one-at-a-time add form). Rows are validated independently — a typo in one
+ * row doesn't block the rest — then inserted in a single statement so the
+ * revalidated page shows everyone at once instead of one row at a time. */
+type ImportRowError = { row: number; message: string };
+type ImportResult =
+  | { error: string; rowErrors?: ImportRowError[] }
+  | { ok: true; inserted: number; rowErrors: ImportRowError[] };
+
+export async function importParticipants(
+  courseId: string,
+  batchId: string,
+  rows: Record<string, string>[]
+): Promise<ImportResult> {
+  const employee = await getCurrentEmployee();
+  if (!employee) return { error: "ไม่มีสิทธิ์" };
+  if (rows.length === 0) return { error: "ไม่มีรายชื่อในไฟล์" };
+  if (rows.length > 1000) return { error: "นำเข้าได้ครั้งละไม่เกิน 1,000 รายชื่อ" };
+
+  const toInsert: (Omit<z.infer<typeof participantSchema>, "organization"> & {
+    organization: string | null;
+    course_id: string;
+    batch_id: string;
+  })[] = [];
+  const rowErrors: { row: number; message: string }[] = [];
+
+  rows.forEach((raw, i) => {
+    const parsed = participantSchema.safeParse({
+      prefix: raw.prefix || undefined,
+      first_name: raw.first_name,
+      last_name: raw.last_name,
+      nickname: raw.nickname || undefined,
+      position: raw.position || undefined,
+      organization: raw.organization || undefined,
+      phone: raw.phone || undefined,
+      email: raw.email || undefined,
+      note: raw.note || undefined,
+    });
+    if (!parsed.success) {
+      rowErrors.push({ row: i + 2, message: parsed.error.issues[0].message }); // +2: 1-indexed + header row
+      return;
+    }
+    toInsert.push({
+      ...parsed.data,
+      organization: parsed.data.organization?.trim() || null,
+      course_id: courseId,
+      batch_id: batchId,
+    });
+  });
+
+  if (toInsert.length === 0) return { error: "ทุกแถวมีข้อมูลไม่ครบ ไม่มีรายชื่อที่นำเข้าได้", rowErrors };
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("training_participants").insert(toInsert);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/training/courses/${courseId}/batches/${batchId}`);
+  return { ok: true as const, inserted: toInsert.length, rowErrors };
+}
