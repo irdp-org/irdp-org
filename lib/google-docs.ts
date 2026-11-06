@@ -3,6 +3,11 @@ import type { docs_v1 } from "googleapis";
 import { driveClient, docsClient } from "./google-sa";
 import { DRIVE_FOLDER_ID } from "./google-drive";
 
+/** Extracts the document id from a generated `docs.google.com/document/d/<id>/edit` URL. */
+export function docIdFromUrl(url: string): string | null {
+  return url.match(/\/d\/([^/]+)/)?.[1] ?? null;
+}
+
 /**
  * Generate a document from a Google Docs template:
  *   1. copy the template into the shared Drive folder (or `folderId`, if given)

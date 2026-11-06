@@ -340,7 +340,7 @@ export async function generateAssetDoc(assignmentId: string, sendEmail: boolean)
   const templateId = process.env.DOC_TEMPLATE_ASSET;
   if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบรับ-คืนอุปกรณ์ (DOC_TEMPLATE_ASSET)" };
 
-  const { generateDocFromTemplate } = await import("@/lib/google-docs");
+  const { generateDocFromTemplate, stampSignatureAtMarker, docIdFromUrl } = await import("@/lib/google-docs");
   const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
 
   const admin = createAdminClient();
@@ -351,9 +351,15 @@ export async function generateAssetDoc(assignmentId: string, sendEmail: boolean)
     .single();
   if (!a) return { error: "ไม่พบรายการมอบหมาย" };
 
-  const [{ data: asset }, { data: emp }] = await Promise.all([
+  // ณัฏฐ์ภรณ์ หงษ์เผือก is a standing co-signer hardcoded into the template
+  // by name ({{ลายเซ็นnattporn}}) — the same person on every asset form,
+  // not derived from who's involved in this particular assignment.
+  const NATTPORN_ID = "d0ab9331-a916-4c2c-8c59-0ec1a7fe4250";
+
+  const [{ data: asset }, { data: emp }, { data: nattporn }] = await Promise.all([
     admin.from("assets").select("name, category, asset_tag, serial").eq("id", a.asset_id).single(),
-    admin.from("employees").select("full_name").eq("id", a.employee_id).single(),
+    admin.from("employees").select("full_name, position, signature_url").eq("id", a.employee_id).single(),
+    admin.from("employees").select("signature_url").eq("id", NATTPORN_ID).single(),
   ]);
 
   const { getOrCreateDatedFolder } = await import("@/lib/google-drive");
@@ -363,6 +369,8 @@ export async function generateAssetDoc(assignmentId: string, sendEmail: boolean)
     `ใบรับคืนอุปกรณ์-${asset?.name ?? ""}-${emp?.full_name ?? ""}`,
     {
     ผู้รับผิดชอบ: emp?.full_name ?? "",
+    ชื่อ: emp?.full_name ?? "",
+    ตำแหน่ง: emp?.position ?? "",
     ฝ่าย: await deptNameOf(a.employee_id),
     ชื่ออุปกรณ์: asset?.name ?? "",
     ประเภท: asset?.category ?? "",
@@ -372,9 +380,21 @@ export async function generateAssetDoc(assignmentId: string, sendEmail: boolean)
     วันที่คืน: a.returned_at ? dLabel(a.returned_at) : "-",
     วันที่: dLabel(new Date().toISOString()),
     หัวหน้าฝ่าย: await deptHeadName(a.employee_id),
+    ผู้อนุมัติ: await deptHeadName(a.employee_id),
     },
     folderId
   );
+
+  const assetDocId = docIdFromUrl(url);
+  if (assetDocId) {
+    if (emp?.signature_url) await stampSignatureAtMarker(assetDocId, "{{ลายเซ็นผู้ยื่น}}", emp.signature_url);
+    if (nattporn?.signature_url) await stampSignatureAtMarker(assetDocId, "{{ลายเซ็นnattporn}}", nattporn.signature_url);
+    // {{ลายเซ็นผู้อนุมัติ}} is deliberately left unstamped: there's no
+    // in-system approval step for asset assignments (the dept head's
+    // "เห็นสมควรอนุญาต/ไม่อนุญาต" on the form is a paper-only formality
+    // right now), so auto-stamping it would misrepresent an approval that
+    // never actually happened. Marker is styled white, so it stays blank.
+  }
 
   await emailDocIfRequested(sendEmail, a.employee_id, `ใบรับ-คืนอุปกรณ์ ${asset?.name ?? ""}`, url);
   return { ok: true, url };

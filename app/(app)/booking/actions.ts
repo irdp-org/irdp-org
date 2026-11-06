@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 import { notify } from "@/lib/notify";
 import { createEvent, updateEvent, deleteEvent } from "@/lib/google-calendar";
-import { generateDocFromTemplate } from "@/lib/google-docs";
+import { generateDocFromTemplate, stampSignatureAtMarker, docIdFromUrl } from "@/lib/google-docs";
 import { sendMail } from "@/lib/gmail";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -661,10 +661,16 @@ export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
   const { data: b } = await admin.from("van_bookings").select("*").eq("id", bookingId).single();
   if (!b) return { error: "ไม่พบการจอง" };
 
+  const { data: requesterEmp } = await admin.from("employees").select("signature_url").eq("id", b.requester_id).single();
+
   // Reuse the doc already generated for this booking (e.g. by the requester)
   // instead of creating a new copy every time someone — including an
   // approver just opening it — clicks "ออกเอกสาร".
   if (b.generated_doc_url) {
+    const docId = docIdFromUrl(b.generated_doc_url);
+    if (docId && requesterEmp?.signature_url) {
+      await stampSignatureAtMarker(docId, "{{ลายเซ็นผู้ยื่น}}", requesterEmp.signature_url);
+    }
     await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองรถ ${dLabel(b.start_at)}`, b.generated_doc_url);
     return { ok: true, url: b.generated_doc_url };
   }
@@ -685,8 +691,8 @@ export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
     templateId,
     `ใบจองรถ-${dLabel(b.start_at)}-${requesterName}`,
     {
-    เมื่อวันที่: dLabel(new Date().toISOString()),
-    ชื่อผู้จอง: requesterName,
+    วันที่: dLabel(new Date().toISOString()),
+    ชื่อ: requesterName,
     ตำแหน่ง: byId.get(b.requester_id)?.position ?? "",
     ฝ่าย: await deptNameOf(b.requester_id),
     ขอใช้ไปสถานที่: b.destination ?? "",
@@ -703,6 +709,11 @@ export async function generateVanDoc(bookingId: string, sendEmail: boolean) {
     folderId
   );
 
+  const vanDocId = docIdFromUrl(url);
+  if (vanDocId && requesterEmp?.signature_url) {
+    await stampSignatureAtMarker(vanDocId, "{{ลายเซ็นผู้ยื่น}}", requesterEmp.signature_url);
+  }
+
   await admin.from("van_bookings").update({ generated_doc_url: url }).eq("id", bookingId);
   await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองรถ ${dLabel(b.start_at)}`, url);
   return { ok: true, url };
@@ -718,12 +729,16 @@ export async function generateRoomDoc(bookingId: string, sendEmail: boolean) {
   const { data: b } = await admin.from("room_bookings").select("*").eq("id", bookingId).single();
   if (!b) return { error: "ไม่พบการจอง" };
 
+  const { data: reqEmp } = await admin.from("employees").select("full_name, position, signature_url").eq("id", b.requester_id).single();
+
   if (b.generated_doc_url) {
+    const docId = docIdFromUrl(b.generated_doc_url);
+    if (docId && reqEmp?.signature_url) {
+      await stampSignatureAtMarker(docId, "{{ลายเซ็นผู้ยื่น}}", reqEmp.signature_url);
+    }
     await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองห้องประชุม ${dLabel(b.start_at)}`, b.generated_doc_url);
     return { ok: true, url: b.generated_doc_url };
   }
-
-  const { data: reqEmp } = await admin.from("employees").select("full_name, position").eq("id", b.requester_id).single();
   const { data: room } = await admin.from("rooms").select("name").eq("id", b.room_id).single();
 
   const requesterName = reqEmp?.full_name ?? "";
@@ -733,19 +748,24 @@ export async function generateRoomDoc(bookingId: string, sendEmail: boolean) {
     templateId,
     `ใบจองห้อง-${dLabel(b.start_at)}-${requesterName}`,
     {
-    เมื่อวันที่: dLabel(new Date().toISOString()),
-    ชื่อผู้จอง: requesterName,
+    วันที่: dLabel(new Date().toISOString()),
+    ชื่อ: requesterName,
     ตำแหน่ง: reqEmp?.position ?? "",
-    ฝ่ายงาน: await deptNameOf(b.requester_id),
+    ฝ่าย: await deptNameOf(b.requester_id),
     ห้องประชุมที่ต้องการจอง: room?.name ?? "",
     จำนวนผู้เข้าประชุม: "",
     วัตถุประสงค์: b.title ?? "",
     ตั้งแต่: `${dLabel(b.start_at)} ${tLabel(b.start_at)}`,
     ถึง: `${dLabel(b.end_at)} ${tLabel(b.end_at)}`,
-    หัวหน้าฝ่าย: await deptHeadName(b.requester_id),
+    ผู้อนุมัติ: await deptHeadName(b.requester_id),
     },
     folderId
   );
+
+  const roomDocId = docIdFromUrl(url);
+  if (roomDocId && reqEmp?.signature_url) {
+    await stampSignatureAtMarker(roomDocId, "{{ลายเซ็นผู้ยื่น}}", reqEmp.signature_url);
+  }
 
   await admin.from("room_bookings").update({ generated_doc_url: url }).eq("id", bookingId);
   await emailDocIfRequested(sendEmail, b.requester_id, `ใบจองห้องประชุม ${dLabel(b.start_at)}`, url);

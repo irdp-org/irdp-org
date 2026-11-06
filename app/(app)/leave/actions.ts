@@ -233,20 +233,42 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
   const templateId = process.env.DOC_TEMPLATE_LEAVE;
   if (!templateId) return { error: "ยังไม่ได้ตั้งค่าแม่แบบใบลา (DOC_TEMPLATE_LEAVE)" };
 
-  const { generateDocFromTemplate } = await import("@/lib/google-docs");
+  const { generateDocFromTemplate, stampSignatureAtMarker, docIdFromUrl } = await import("@/lib/google-docs");
   const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
   const { createAdminClient } = await import("@/lib/supabase/admin");
 
   const supabase = await createClient();
   const { data: r } = await supabase
     .from("leave_requests")
-    .select("employee_id, leave_code, start_at, end_at, hours, reason, created_at")
+    .select("employee_id, leave_code, start_at, end_at, hours, reason, created_at, status")
     .eq("id", id)
     .single();
   if (!r) return { error: "ไม่พบคำขอลา" };
 
   const admin = createAdminClient();
-  const { data: emp } = await admin.from("employees").select("full_name, position").eq("id", r.employee_id).single();
+  const { data: emp } = await admin.from("employees").select("full_name, position, signature_url").eq("id", r.employee_id).single();
+
+  // No cached doc url for leave_requests (unlike travel-expense/bookings) —
+  // every generation is fresh, so the approver's signature is simply
+  // whatever the request's actual current status reflects: present once
+  // someone has really approved it, not assumed in advance the way the
+  // dept head's printed NAME already is below.
+  let approverSignatureUrl: string | null = null;
+  if (r.status === "approved") {
+    const { data: appr } = await admin
+      .from("approvals")
+      .select("actor_id")
+      .eq("entity", "leave_requests")
+      .eq("entity_id", id)
+      .eq("action", "approve")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (appr) {
+      const { data: approver } = await admin.from("employees").select("signature_url").eq("id", appr.actor_id).single();
+      approverSignatureUrl = approver?.signature_url ?? null;
+    }
+  }
 
   const days = (r.hours / 7.5).toFixed(1).replace(/\.0$/, "");
   const { getOrCreateDatedFolder } = await import("@/lib/google-drive");
@@ -256,6 +278,7 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
     `ใบลา-${dLabel(r.start_at)}-${emp?.full_name ?? ""}`,
     {
     ผู้ลา: emp?.full_name ?? "",
+    ชื่อ: emp?.full_name ?? "",
     ตำแหน่ง: emp?.position ?? "",
     ฝ่าย: await deptNameOf(r.employee_id),
     ประเภทการลา: LEAVE_LABELS_TH[r.leave_code],
@@ -263,11 +286,17 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
     วันที่สิ้นสุด: dLabel(r.end_at),
     จำนวนวัน: days,
     เหตุผล: r.reason ?? "",
-    วันที่ยื่น: dLabel(r.created_at),
+    วันที่: dLabel(r.created_at),
     หัวหน้าฝ่าย: await deptHeadName(r.employee_id),
     },
     folderId
   );
+
+  const leaveDocId = docIdFromUrl(url);
+  if (leaveDocId) {
+    if (emp?.signature_url) await stampSignatureAtMarker(leaveDocId, "{{ลายเซ็นผู้ยื่น}}", emp.signature_url);
+    if (approverSignatureUrl) await stampSignatureAtMarker(leaveDocId, "{{ลายเซ็นผู้อนุมัติ}}", approverSignatureUrl);
+  }
 
   await emailDocIfRequested(sendEmail, r.employee_id, `ใบลา ${dLabel(r.start_at)}`, url);
   return { ok: true, url };
