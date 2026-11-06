@@ -236,9 +236,13 @@ export function TravelApprovalList({
                       <span className="font-medium text-foreground">{formatBaht(it.amount)} บาท</span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {[it.from_location, it.to_location].filter(Boolean).join(" → ")}
-                      {" · "}{MODE_LABELS[it.mode] ?? it.mode}
-                      {it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : ""}
+                      {[
+                        [it.from_location, it.to_location].filter(Boolean).join(" → "),
+                        (MODE_LABELS[it.mode] ?? it.mode) +
+                          (it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : ""),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
                     {it.note && <span className="text-xs text-muted-foreground">{it.note}</span>}
                   </div>

@@ -3,7 +3,15 @@
 /** Private-car reimbursement rate: 6 THB per km. */
 export const KM_RATE = 6;
 
-export const TRAVEL_MODES: { value: string; label: string; isCar?: boolean }[] = [
+/**
+ * `isNonTravel` marks an expense that isn't a journey — postage, un-receipted
+ * parcels — so the UI can drop the จาก/ถึง route fields and the generated
+ * certificate line skips the "จาก X ถึง Y โดย…" phrasing that only makes
+ * sense for an actual trip. They still belong on this form: it's the
+ * ใบรับรองแทนใบเสร็จรับเงิน (receipt-substitute certificate), which covers any
+ * expense lacking a receipt, not travel alone.
+ */
+export const TRAVEL_MODES: { value: string; label: string; isCar?: boolean; isNonTravel?: boolean }[] = [
   { value: "bus", label: "รถเมล์" },
   { value: "transit", label: "รถไฟฟ้า (BTS/MRT)" },
   { value: "grab", label: "Grab" },
@@ -11,7 +19,17 @@ export const TRAVEL_MODES: { value: string; label: string; isCar?: boolean }[] =
   { value: "taxi", label: "แท็กซี่" },
   { value: "private_car", label: "รถยนต์ส่วนตัว (6 บาท/กม.)", isCar: true },
   { value: "other", label: "อื่นๆ" },
+  { value: "postage", label: "ค่าส่งไปรษณีย์", isNonTravel: true },
+  { value: "parcel", label: "ค่าพัสดุ (ไม่มีใบเสร็จ)", isNonTravel: true },
 ];
+
+/** Expense rows that aren't a journey — no origin/destination, no ขาไป/ขากลับ. */
+export const NON_TRAVEL_MODES = new Set(
+  TRAVEL_MODES.filter((m) => m.isNonTravel).map((m) => m.value)
+);
+export function isNonTravelMode(mode: string): boolean {
+  return NON_TRAVEL_MODES.has(mode);
+}
 
 export const MODE_LABELS: Record<string, string> = Object.fromEntries(
   TRAVEL_MODES.map((m) => [m.value, m.label])

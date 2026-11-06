@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
-import { TRAVEL_MODES, MODE_LABELS, KM_RATE, formatBaht } from "@/lib/travel";
+import { TRAVEL_MODES, MODE_LABELS, KM_RATE, formatBaht, isNonTravelMode } from "@/lib/travel";
 import {
   saveClaim,
   deleteClaim,
@@ -340,9 +340,13 @@ export function TravelExpenseClient({
                       <span className="font-medium text-foreground">{formatBaht(it.amount)} บาท</span>
                     </div>
                     <span className="text-xs text-muted-foreground">
-                      {[it.from_location, it.to_location].filter(Boolean).join(" → ")}
-                      {" · "}{MODE_LABELS[it.mode] ?? it.mode}
-                      {it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : ""}
+                      {[
+                        [it.from_location, it.to_location].filter(Boolean).join(" → "),
+                        (MODE_LABELS[it.mode] ?? it.mode) +
+                          (it.mode === "private_car" && it.km ? ` (${it.km} กม.)` : ""),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </span>
                     {it.note && <span className="text-xs text-muted-foreground">{it.note}</span>}
                   </div>
@@ -569,29 +573,8 @@ function ClaimForm({
                 )}
               </div>
               <Input type="date" value={r.travel_date} onChange={(e) => updateRow(i, { travel_date: e.target.value })} />
-              <div className="grid grid-cols-2 gap-2">
-                <LocationAutocomplete
-                  placeholder="จาก"
-                  value={r.from_location}
-                  onChange={(v) => updateRow(i, { from_location: v })}
-                  options={savedLocations}
-                />
-                <LocationAutocomplete
-                  placeholder="ถึง"
-                  value={r.to_location}
-                  onChange={(v) => updateRow(i, { to_location: v })}
-                  options={savedLocations}
-                />
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="self-start gap-1 text-xs text-muted-foreground"
-                onClick={() => addReturnLeg(i)}
-              >
-                <ArrowLeftRight className="h-3.5 w-3.5" /> เพิ่มขากลับ (สลับจาก-ถึง)
-              </Button>
+              {/* Type first: postage/parcel rows have no route, so picking the
+                  type up front decides which fields even appear below. */}
               <select
                 value={r.mode}
                 onChange={(e) => updateRow(i, { mode: e.target.value })}
@@ -601,6 +584,33 @@ function ClaimForm({
                   <option key={m.value} value={m.value}>{m.label}</option>
                 ))}
               </select>
+              {!isNonTravelMode(r.mode) && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <LocationAutocomplete
+                      placeholder="จาก"
+                      value={r.from_location}
+                      onChange={(v) => updateRow(i, { from_location: v })}
+                      options={savedLocations}
+                    />
+                    <LocationAutocomplete
+                      placeholder="ถึง"
+                      value={r.to_location}
+                      onChange={(v) => updateRow(i, { to_location: v })}
+                      options={savedLocations}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="self-start gap-1 text-xs text-muted-foreground"
+                    onClick={() => addReturnLeg(i)}
+                  >
+                    <ArrowLeftRight className="h-3.5 w-3.5" /> เพิ่มขากลับ (สลับจาก-ถึง)
+                  </Button>
+                </>
+              )}
               {r.mode === "private_car" ? (
                 <div className="flex items-center gap-2">
                   <Input
@@ -621,7 +631,15 @@ function ClaimForm({
                   onChange={(e) => updateRow(i, { amount: e.target.value })}
                 />
               )}
-              <Input placeholder="หมายเหตุ (ไม่บังคับ)" value={r.note} onChange={(e) => updateRow(i, { note: e.target.value })} />
+              <Input
+                placeholder={
+                  isNonTravelMode(r.mode)
+                    ? "รายละเอียด เช่น ส่งเอกสารถึงสำนักงาน ก.พ."
+                    : "หมายเหตุ (ไม่บังคับ)"
+                }
+                value={r.note}
+                onChange={(e) => updateRow(i, { note: e.target.value })}
+              />
             </div>
           ))}
 

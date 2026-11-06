@@ -365,7 +365,7 @@ export async function generateTravelDoc(id: string, sendEmail: boolean, approver
   );
   const { dLabel, deptHeadName, deptNameOf, emailDocIfRequested } = await import("@/lib/doc-gen");
   const { createAdminClient } = await import("@/lib/supabase/admin");
-  const { MODE_LABELS, formatBaht, bahtText } = await import("@/lib/travel");
+  const { MODE_LABELS, formatBaht, bahtText, isNonTravelMode } = await import("@/lib/travel");
 
   const supabase = await createClient();
   const { data: claim } = await supabase
@@ -461,6 +461,18 @@ export async function generateTravelDoc(id: string, sendEmail: boolean, approver
     (items ?? []).map((it, i) => {
       const sameDayAsPrev = i > 0 && items![i - 1].travel_date === it.travel_date;
       if (!sameDayAsPrev) dayPair = null;
+
+      // Postage / un-receipted parcels aren't a journey: no route, no
+      // ขาไป/ขากลับ, and they must not disturb the dayPair tracking that
+      // labels the real legs around them.
+      if (isNonTravelMode(it.mode)) {
+        const label = MODE_LABELS[it.mode] ?? it.mode;
+        return {
+          date: sameDayAsPrev ? "" : dShort(it.travel_date),
+          detail: `${label}${it.note ? ` (${it.note})` : ""}`.trim(),
+          amount: formatBaht(it.amount),
+        };
+      }
 
       let legLabel = "";
       if (it.from_location && it.to_location) {
