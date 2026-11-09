@@ -123,3 +123,74 @@ export async function deleteFromDrive(fileId: string): Promise<void> {
     // best-effort
   }
 }
+
+// ── Staff-facing shortcut tree ───────────────────────────────────────────────
+// "เอกสารสำหรับพนักงาน/<ฝ่าย>/" mirrors the internal "01_ระบบ" storage with
+// Drive shortcuts, not copies — browsing it directly in Drive always points
+// at the file the app currently considers current, with zero extra storage.
+const STAFF_ROOT = "เอกสารสำหรับพนักงาน";
+const SHORTCUT_MIME = "application/vnd.google-apps.shortcut";
+
+async function findDeptShortcuts(deptFolderId: string, docCode: string) {
+  const safe = docCode.replace(/'/g, "\\'");
+  const drive = driveClient();
+  const { data } = await drive.files.list({
+    q: `'${deptFolderId}' in parents and trashed=false and name contains '${safe} '`,
+    fields: "files(id)",
+    supportsAllDrives: true,
+    includeItemsFromAllDrives: true,
+  });
+  return data.files ?? [];
+}
+
+/** Create/replace a published document's shortcut under
+ * เอกสารสำหรับพนักงาน/<deptName>/ so it always points at the current
+ * revision — matched by a `"<docCode> "` name prefix since the title can
+ * change between revisions of the same doc_code. Best-effort: a Drive
+ * hiccup here must never block the publish itself, so every failure is
+ * caught and logged rather than thrown. */
+export async function upsertStaffShortcut(
+  deptName: string,
+  docCode: string,
+  title: string,
+  targetFileId: string
+): Promise<void> {
+  try {
+    const drive = driveClient();
+    const staffRoot = await getOrCreateSubfolder(STAFF_ROOT);
+    const deptFolder = await getOrCreateSubfolder(deptName, staffRoot);
+
+    for (const f of await findDeptShortcuts(deptFolder, docCode)) {
+      await drive.files.delete({ fileId: f.id!, supportsAllDrives: true }).catch(() => {});
+    }
+
+    await drive.files.create({
+      requestBody: {
+        name: `${docCode} ${title}`,
+        mimeType: SHORTCUT_MIME,
+        parents: [deptFolder],
+        shortcutDetails: { targetId: targetFileId },
+      },
+      fields: "id",
+      supportsAllDrives: true,
+    });
+  } catch (err) {
+    console.error("[google-drive] upsertStaffShortcut failed", err);
+  }
+}
+
+/** Remove a doc_code's shortcut from the staff-facing tree — e.g. when a
+ * document is cancelled/made obsolete. Same best-effort reasoning as
+ * upsertStaffShortcut. */
+export async function removeStaffShortcut(deptName: string, docCode: string): Promise<void> {
+  try {
+    const drive = driveClient();
+    const staffRoot = await getOrCreateSubfolder(STAFF_ROOT);
+    const deptFolder = await getOrCreateSubfolder(deptName, staffRoot);
+    for (const f of await findDeptShortcuts(deptFolder, docCode)) {
+      await drive.files.delete({ fileId: f.id!, supportsAllDrives: true }).catch(() => {});
+    }
+  } catch (err) {
+    console.error("[google-drive] removeStaffShortcut failed", err);
+  }
+}

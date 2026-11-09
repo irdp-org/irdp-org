@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee, type Employee } from "@/lib/auth";
 import { isAdmin } from "@/lib/rbac";
 import { notify } from "@/lib/notify";
-import { getOrCreatePath, uploadToDrive, downloadFromDrive } from "@/lib/google-drive";
+import { getOrCreatePath, uploadToDrive, downloadFromDrive, upsertStaffShortcut, removeStaffShortcut } from "@/lib/google-drive";
 import { buildDarSteps, resetDarSteps, stepRoleLabels } from "@/lib/qms-dar";
 import { buildSignedCoverAndMerge } from "@/lib/qms/signed-cover";
 import type { QmsDarStep, QmsDocTypeCodeT, QmsDocTypeT } from "@/lib/database.types";
@@ -287,9 +287,20 @@ export async function publishDar(darId: string) {
 
     if (dar.action_type === "cancel") {
       if (!dar.target_document_id) return { error: "ไม่พบเอกสารที่จะยกเลิก" };
+      const { data: targetDoc } = await admin
+        .from("qms_documents")
+        .select("doc_code, department_id")
+        .eq("id", dar.target_document_id)
+        .single();
       const { error } = await admin.from("qms_documents").update({ status: "obsolete" }).eq("id", dar.target_document_id);
       if (error) return { error: error.message };
       await admin.from("qms_dar").update({ resulting_document_id: dar.target_document_id }).eq("id", darId);
+
+      if (targetDoc?.department_id) {
+        const { data: dept } = await admin.from("departments").select("name").eq("id", targetDoc.department_id).single();
+        if (dept?.name) await removeStaffShortcut(dept.name, targetDoc.doc_code);
+      }
+
       revalidatePath("/qms");
       revalidatePath(`/qms/dar/${darId}`);
       return { ok: true };
@@ -383,6 +394,9 @@ export async function publishDar(darId: string) {
       await admin.from("qms_documents").update({ superseded_by: inserted.id }).eq("id", existingActive.id);
     }
     await admin.from("qms_dar").update({ resulting_document_id: inserted.id }).eq("id", darId);
+
+    const { data: dept } = await admin.from("departments").select("name").eq("id", dar.department_id).single();
+    if (dept?.name) await upsertStaffShortcut(dept.name, dar.doc_code, dar.title, publishedGoogleFileId);
 
     revalidatePath("/qms");
     revalidatePath("/qms/dar");
