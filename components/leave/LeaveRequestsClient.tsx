@@ -71,6 +71,7 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [isPending, startTransition] = useTransition();
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const filtered = requests.filter((r) => {
     if (filterType !== "all" && r.leave_code !== filterType) return false;
@@ -79,8 +80,13 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
   });
 
   function handleCancel(id: string) {
+    setCancelError(null);
     startTransition(async () => {
-      await cancelLeaveRequest(id);
+      const res = await cancelLeaveRequest(id);
+      if (res && "error" in res && res.error) {
+        setCancelError(res.error);
+        return;
+      }
       router.refresh();
     });
   }
@@ -97,6 +103,8 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
       >
         <Plus className="h-4 w-4" /> ยื่นคำขอลา
       </Button>
+
+      {cancelError && <p className="text-sm text-danger">{cancelError}</p>}
 
       {/* Filter row */}
       {requests.length > 0 && (
