@@ -27,66 +27,30 @@ function buildExportCsv(rows: ApprovalQueueRow[]): string {
 export function LeaveExportPanel({ rows }: { rows: ApprovalQueueRow[] }) {
   const router = useRouter();
   const exportable = rows.filter((r) => r.status === "approved" && !r.exported_at);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
   if (exportable.length === 0) return null;
 
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   function handleExport() {
-    const ids = Array.from(selected);
-    if (!ids.length) return;
     setError(null);
     startTransition(async () => {
+      const ids = exportable.map((r) => r.id);
       const res = await markLeaveExported(ids);
       if ("error" in res && res.error) {
         setError(res.error);
         return;
       }
-      const selectedRows = rows.filter((r) => selected.has(r.id));
-      triggerDownload(`leave-export-${format(new Date(), "yyyy-MM-dd")}.csv`, buildExportCsv(selectedRows));
-      setSelected(new Set());
+      triggerDownload(`leave-export-${format(new Date(), "yyyy-MM-dd")}.csv`, buildExportCsv(exportable));
       router.refresh();
     });
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-dashed border-border bg-surface p-3">
-      <p className="text-sm font-medium text-foreground">ส่งออกให้การเงิน ({exportable.length} รายการรอส่งออก)</p>
-      <ul className="flex flex-col gap-1">
-        {exportable.map((r) => (
-          <li key={r.id} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={selected.has(r.id)}
-              onChange={() => toggle(r.id)}
-              className="h-4 w-4"
-            />
-            <span className="text-foreground">
-              {r.employee.full_name} · {LEAVE_LABELS_TH[r.leave_code] ?? r.leave_code} ·{" "}
-              {format(new Date(r.start_at), "d MMM")} · {r.hours} ชม.
-            </span>
-          </li>
-        ))}
-      </ul>
+    <div className="flex flex-col gap-2">
       {error && <p className="text-sm text-danger">{error}</p>}
-      <Button
-        type="button"
-        size="sm"
-        className="self-start"
-        disabled={isPending || selected.size === 0}
-        onClick={handleExport}
-      >
-        <Download className="h-4 w-4" /> Export ที่เลือก ({selected.size}) เป็น CSV
+      <Button type="button" variant="outline" size="sm" className="gap-1.5 self-start" disabled={isPending} onClick={handleExport}>
+        <Download className="h-4 w-4" /> ดาวน์โหลด CSV
       </Button>
     </div>
   );
