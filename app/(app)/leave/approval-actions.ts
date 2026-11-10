@@ -67,74 +67,87 @@ export async function decideLeaveRequest(id: string, action: ApprovalAction, not
   }
 
   if (action === "approve") {
-    const { data: requester } = await supabase
-      .from("employee_directory")
-      .select("id, full_name, department_id")
-      .eq("id", row.employee_id)
-      .single();
-
-    if (requester) {
-      // dept_head approving someone else's leave is neither the event owner
-      // nor can_edit() per cal_write RLS — admin client bypasses that
-      // cleanly, same pattern as lib/notify.ts.
-      const admin = createAdminClient();
-      const { data: calRow } = await admin
-        .from("calendar_events")
-        .insert({
-          title: `ลา: ${requester.full_name}`,
-          type: "leave",
-          scope: "personal",
-          owner_id: requester.id,
-          department_id: requester.department_id,
-          start_at: row.start_at,
-          end_at: row.end_at,
-          source_module: "leave",
-          source_id: row.id,
-        })
-        .select("id")
-        .single();
-
-      if (calRow) {
-        // Leave isn't van/room/camera — goes on the same "other activities"
-        // calendar as holidays/meetings.
-        const google = await createEvent("holiday", {
-          title: `ลา: ${requester.full_name}`,
-          startAt: row.start_at,
-          endAt: row.end_at,
-          allDay: true,
-        });
-        if (google) {
-          await admin
-            .from("calendar_events")
-            .update({
-              google_event_id: google.id,
-              google_etag: google.etag,
-              last_synced_at: new Date().toISOString(),
-            })
-            .eq("id", calRow.id);
-        }
-      }
-    }
-
-    const { data: execs } = await supabase
-      .from("employee_directory")
-      .select("id")
-      .eq("role", "exec");
-    await Promise.allSettled(
-      (execs ?? []).map((e) =>
-        notify({
-          userId: e.id,
-          type: "leave_acknowledge_pending",
-          title: "มีคำขอลาที่อนุมัติแล้วรอรับทราบ",
-          body: `${LEAVE_LABELS_TH[row.leave_code]} ${row.hours} ชม.`,
-          link: "/leave?tab=approvals",
-        })
-      )
-    );
+    await runPostApprovalSideEffects(row);
   }
 
   revalidatePath("/leave");
   return { ok: true };
+}
+
+/**
+ * Puts an approved leave request on the calendar and asks all execs to
+ * acknowledge it. Shared between the normal approve click (decideLeaveRequest
+ * above) and the auto-approve path for dept heads / no-approver employees
+ * (createLeaveRequest in actions.ts) — same end state either way, approved
+ * leave always needs a calendar entry and an exec FYI.
+ */
+export async function runPostApprovalSideEffects(row: {
+  id: string;
+  employee_id: string;
+  leave_code: Database["public"]["Enums"]["leave_code_t"];
+  hours: number;
+  start_at: string;
+  end_at: string;
+}) {
+  const admin = createAdminClient();
+
+  const { data: requester } = await admin
+    .from("employee_directory")
+    .select("id, full_name, department_id")
+    .eq("id", row.employee_id)
+    .single();
+
+  if (requester) {
+    const { data: calRow } = await admin
+      .from("calendar_events")
+      .insert({
+        title: `ลา: ${requester.full_name}`,
+        type: "leave",
+        scope: "personal",
+        owner_id: requester.id,
+        department_id: requester.department_id,
+        start_at: row.start_at,
+        end_at: row.end_at,
+        source_module: "leave",
+        source_id: row.id,
+      })
+      .select("id")
+      .single();
+
+    if (calRow) {
+      // Leave isn't van/room/camera — goes on the same "other activities"
+      // calendar as holidays/meetings.
+      const google = await createEvent("holiday", {
+        title: `ลา: ${requester.full_name}`,
+        startAt: row.start_at,
+        endAt: row.end_at,
+        allDay: true,
+      });
+      if (google) {
+        await admin
+          .from("calendar_events")
+          .update({
+            google_event_id: google.id,
+            google_etag: google.etag,
+            last_synced_at: new Date().toISOString(),
+          })
+          .eq("id", calRow.id);
+      }
+    }
+  }
+
+  const { data: execs } = await admin.from("employee_directory").select("id").eq("role", "exec");
+  await Promise.allSettled(
+    (execs ?? []).map((e) =>
+      notify({
+        userId: e.id,
+        type: "leave_acknowledge_pending",
+        title: "มีคำขอลาที่อนุมัติแล้วรอรับทราบ",
+        body: `${LEAVE_LABELS_TH[row.leave_code]} ${row.hours} ชม.`,
+        link: "/leave?tab=approvals",
+      })
+    )
+  );
 }
 
 /**

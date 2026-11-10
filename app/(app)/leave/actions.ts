@@ -28,6 +28,18 @@ function guessContentType(ext: string): string {
   return EXT_TO_MIME[ext.toLowerCase()] ?? "application/octet-stream";
 }
 
+// สุประภาดา โชติมณี is the sole member of "สำนักกรรมการผู้จัดการ" — no
+// dept_head role exists in that department, so (like every other dept_head)
+// nobody actually sits above her to approve. Her leave, and every active
+// dept_head's own leave, skips the approve step entirely and goes straight
+// to the existing exec-acknowledge flow (วรภัทร/เสรี/คณิตา รับทราบ แทนอนุมัติ)
+// instead of waiting on an approve click that structurally can't come from
+// within their own department.
+const NO_APPROVER_EMPLOYEE_ID = "1821971f-61bb-4e3d-bd5c-e38190cf7d13";
+function needsNoApproval(employee: Employee): boolean {
+  return (employee.role === "dept_head" && employee.status === "active") || employee.id === NO_APPROVER_EMPLOYEE_ID;
+}
+
 // admin/hr have no dept_head above them — nobody would ever be found by the
 // normal department_id+dept_head lookup, so their own submissions silently
 // reached zero recipients. Instead, notify all execs directly as an FYI;
@@ -97,6 +109,7 @@ export async function createLeaveRequest(formData: FormData) {
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "ข้อมูลไม่ถูกต้อง" };
 
   const submit = formData.get("submit") === "true";
+  const autoApprove = submit && needsNoApproval(employee);
   const supabase = await createClient();
   const hours = await computeLeaveHours(supabase, parsed.data);
   const { startAt, endAt } = leaveDateRangeToTimestamps(
@@ -115,12 +128,18 @@ export async function createLeaveRequest(formData: FormData) {
       end_at: endAt,
       hours,
       reason: parsed.data.reason ?? null,
-      status: submit ? "submitted" : "draft",
+      status: autoApprove ? "approved" : submit ? "submitted" : "draft",
+      decided_at: autoApprove ? new Date().toISOString() : null,
     })
-    .select("id")
+    .select("id, employee_id, leave_code, hours, start_at, end_at")
     .single();
 
   if (error || !row) return { error: error?.message ?? "บันทึกคำขอลาไม่สำเร็จ" };
+
+  if (autoApprove) {
+    const { runPostApprovalSideEffects } = await import("./approval-actions");
+    await runPostApprovalSideEffects(row);
+  }
 
   const file = formData.get("certFile");
   if (file instanceof File && file.size > 0) {
@@ -144,7 +163,7 @@ export async function createLeaveRequest(formData: FormData) {
     }
   }
 
-  if (submit) {
+  if (submit && !autoApprove) {
     await notifySubmission(
       employee,
       "มีคำขอลาใหม่รออนุมัติ",
@@ -178,6 +197,7 @@ export async function updateLeaveRequest(id: string, formData: FormData) {
   }
 
   const submit = formData.get("submit") === "true";
+  const autoApprove = submit && needsNoApproval(employee);
   const supabase = await createClient();
   const hours = await computeLeaveHours(supabase, parsed.data);
   const { startAt, endAt } = leaveDateRangeToTimestamps(
@@ -188,8 +208,14 @@ export async function updateLeaveRequest(id: string, formData: FormData) {
   );
 
   // RLS (leave_update) only allows this while status is draft/returned — the
-  // DB rejects it otherwise, so no extra status check needed here.
-  const { error } = await supabase
+  // DB rejects it otherwise, so no extra status check needed here. The
+  // autoApprove branch goes straight to "approved", which enforce_request_rules()
+  // only permits from role dept_head/admin/exec — สุประภาดา is a plain
+  // "employee", so that update has to go through the admin client (service
+  // role has no current_role_t(), which the trigger treats as unrestricted)
+  // rather than her own session.
+  const client = autoApprove ? createAdminClient() : supabase;
+  const { error } = await client
     .from("leave_requests")
     .update({
       leave_code: parsed.data.leaveCode,
@@ -197,13 +223,24 @@ export async function updateLeaveRequest(id: string, formData: FormData) {
       end_at: endAt,
       hours,
       reason: parsed.data.reason ?? null,
-      status: submit ? "submitted" : "draft",
+      status: autoApprove ? "approved" : submit ? "submitted" : "draft",
+      decided_at: autoApprove ? new Date().toISOString() : null,
     })
     .eq("id", id);
 
   if (error) return { error: error.message };
 
-  if (submit) {
+  if (autoApprove) {
+    const { runPostApprovalSideEffects } = await import("./approval-actions");
+    await runPostApprovalSideEffects({
+      id,
+      employee_id: employee.id,
+      leave_code: parsed.data.leaveCode,
+      hours,
+      start_at: startAt,
+      end_at: endAt,
+    });
+  } else if (submit) {
     await notifySubmission(
       employee,
       "มีคำขอลาแก้ไขแล้วรออนุมัติ",
