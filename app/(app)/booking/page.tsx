@@ -50,7 +50,7 @@ export default async function BookingPage({
     supabase.from("rooms").select("id, name, size").eq("active", true).order("name"),
     supabase
       .from("van_bookings")
-      .select("id, vehicle_id, requester_id, driver_id, destination, purpose, start_at, end_at, status, has_tollway, has_fuel, other_expense")
+      .select("id, vehicle_id, requester_id, driver_id, destination, purpose, start_at, end_at, status, has_tollway, has_fuel, other_expense, generated_doc_url")
       .eq("status", "booked")
       .gte("end_at", now)
       .lte("start_at", horizon)
@@ -133,6 +133,7 @@ export default async function BookingPage({
     has_fuel: b.has_fuel,
     other_expense: b.other_expense,
     passengers: passengersByBooking.get(b.id) ?? [],
+    generated_doc_url: b.generated_doc_url,
   }));
 
   // ── Shaped data for rooms ──────────────────────────────────────────────────

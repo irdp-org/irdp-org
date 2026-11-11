@@ -47,23 +47,47 @@ function revalidateAll() {
 // Google Calendar helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** After DB trigger creates the calendar_events row, push to Google and save google_event_id. */
-async function pushVanToGoogle(bookingId: string, destination: string | null, purpose: string | null, startAt: string, endAt: string) {
+/** After DB trigger creates the calendar_events row, push to Google and save
+ * google_event_id. Fetches requester + passengers itself (rather than
+ * taking them as params) so both create and edit call sites always show the
+ * current full picture — who booked it and who's riding along — not just
+ * whatever purpose text was passed in at that call site. */
+async function pushVanToGoogle(bookingId: string) {
   const admin = createAdminClient();
-  const { data: ce } = await admin
-    .from("calendar_events")
-    .select("id, google_event_id")
-    .eq("source_module", "van")
-    .eq("source_id", bookingId)
-    .maybeSingle();
-  if (!ce) return;
+  const [{ data: ce }, { data: booking }] = await Promise.all([
+    admin
+      .from("calendar_events")
+      .select("id, google_event_id")
+      .eq("source_module", "van")
+      .eq("source_id", bookingId)
+      .maybeSingle(),
+    admin.from("van_bookings").select("destination, purpose, start_at, end_at, requester_id").eq("id", bookingId).single(),
+  ]);
+  if (!ce || !booking) return;
 
-  const title = `จองรถ: ${destination ?? "ไม่ระบุปลายทาง"}`;
+  const [{ data: requester }, { data: pax }] = await Promise.all([
+    admin.from("employees").select("full_name").eq("id", booking.requester_id).single(),
+    admin.from("van_passengers").select("employee_id").eq("booking_id", bookingId),
+  ]);
+  const paxIds = (pax ?? []).map((p) => p.employee_id);
+  const { data: paxEmps } = paxIds.length
+    ? await admin.from("employees").select("full_name").in("id", paxIds)
+    : { data: [] };
+  const paxNames = (paxEmps ?? []).map((p) => p.full_name).join(", ") || "ไม่มี";
+
+  const title = `จองรถ: ${booking.destination ?? "ไม่ระบุปลายทาง"}`;
+  const descriptionLines = [
+    booking.purpose,
+    `ผู้จอง: ${requester?.full_name ?? "ไม่ระบุ"}`,
+    `ผู้ร่วมเดินทาง: ${paxNames}`,
+  ].filter(Boolean);
+  const description = descriptionLines.join("\n");
+
   if (ce.google_event_id) {
-    const r = await updateEvent("van", ce.google_event_id, { title, description: purpose, startAt, endAt, allDay: false });
+    const r = await updateEvent("van", ce.google_event_id, { title, description, startAt: booking.start_at, endAt: booking.end_at, allDay: false });
     if (r?.etag) await admin.from("calendar_events").update({ google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
   } else {
-    const r = await createEvent("van", { title, description: purpose, startAt, endAt, allDay: false });
+    const r = await createEvent("van", { title, description, startAt: booking.start_at, endAt: booking.end_at, allDay: false });
     if (r?.id) await admin.from("calendar_events").update({ google_event_id: r.id, google_etag: r.etag, last_synced_at: new Date().toISOString() }).eq("id", ce.id);
   }
 }
@@ -238,7 +262,7 @@ export async function createVanBooking(formData: FormData) {
   );
 
   // Push to Google Calendar (DB trigger already created calendar_events row)
-  await pushVanToGoogle(booking.id, destination || null, purpose, startAt, endAt);
+  await pushVanToGoogle(booking.id);
 
   revalidateAll();
   return { ok: true, id: booking.id };
@@ -301,7 +325,7 @@ export async function updateVanBooking(
     return { error: error.message };
   }
 
-  await pushVanToGoogle(id, destination || null, purpose, startAt, endAt);
+  await pushVanToGoogle(id);
 
   revalidateAll();
   return { ok: true };

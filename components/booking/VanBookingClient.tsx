@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Bus, Plus, X, Trash2 } from "lucide-react";
+import { Bus, Plus, X, Trash2, ExternalLink } from "lucide-react";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ export type VanBookingRow = {
   has_fuel: boolean;
   other_expense: string | null;
   passengers: { employee_id: string; full_name: string }[];
+  generated_doc_url: string | null;
 };
 
 export type VehicleInfo = {
@@ -156,6 +157,17 @@ export function VanBookingClient({
         return (
           <div className="flex shrink-0 items-center gap-1">
             <GenerateDocButton id={b.id} generate={generateVanDoc} label="ออกใบจองรถ" />
+            {b.generated_doc_url && (
+              <a
+                href={b.generated_doc_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="เปิดเอกสารที่สร้างไว้"
+                className="inline-flex h-9 w-9 items-center justify-center text-muted-foreground hover:text-primary"
+              >
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            )}
             {cancellable && b.status === "booked" && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
