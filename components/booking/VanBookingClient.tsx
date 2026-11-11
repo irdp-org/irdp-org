@@ -20,6 +20,7 @@ import {
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
 import { VanBookingSheet, type EmployeeOption } from "./VanBookingSheet";
+import { VanBookingEditDateDialog } from "./VanBookingEditDateDialog";
 import { cancelVanBooking, adminDeleteVanBooking, generateVanDoc } from "@/app/(app)/booking/actions";
 import { GenerateDocButton } from "./GenerateDocButton";
 
@@ -54,6 +55,7 @@ type Props = {
   employees: EmployeeOption[];
   currentEmployeeId: string;
   canEdit: boolean;
+  isAdmin: boolean;
 };
 
 function formatTimeRange(startAt: string, endAt: string) {
@@ -84,6 +86,7 @@ export function VanBookingClient({
   employees,
   currentEmployeeId,
   canEdit,
+  isAdmin,
 }: Props) {
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -156,6 +159,16 @@ export function VanBookingClient({
         const cancellable = isMine || canEdit;
         return (
           <div className="flex shrink-0 items-center gap-1">
+            {isAdmin && b.status === "booked" && (
+              <VanBookingEditDateDialog
+                bookingId={b.id}
+                vehicleId={b.vehicle_id}
+                destination={b.destination}
+                purpose={b.purpose}
+                startAt={b.start_at}
+                endAt={b.end_at}
+              />
+            )}
             <GenerateDocButton id={b.id} generate={generateVanDoc} label="ออกใบจองรถ" />
             {b.generated_doc_url && (
               <a

@@ -355,6 +355,7 @@ export default async function BookingPage({
               employees={employeeOptions}
               currentEmployeeId={employee.id}
               canEdit={userCanEdit}
+              isAdmin={employee.role === "admin"}
             />
           </TabsContent>
 

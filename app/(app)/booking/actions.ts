@@ -289,6 +289,10 @@ export async function updateVanBooking(
 ) {
   const employee = await getCurrentEmployee();
   if (!employee) return { error: "unauthorized" };
+  // Admin-only, deliberately not even hr/the requester themselves — rescheduling
+  // someone else's trip (and the vehicle/driver that comes with it) needs to go
+  // through one gatekeeper, not whoever happens to have hr's broader edit rights.
+  if (employee.role !== "admin") return { error: "เฉพาะแอดมินเท่านั้นที่แก้ไขวันเวลาการจองรถได้" };
 
   const date = String(formData.get("date") ?? "");
   const startTime = String(formData.get("startTime") ?? "");
