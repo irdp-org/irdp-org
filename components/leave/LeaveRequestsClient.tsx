@@ -25,11 +25,21 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
+import { Input } from "@/components/ui/input";
 import { LeaveRequestSheet } from "./LeaveRequestSheet";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { cancelLeaveRequest, generateLeaveDoc } from "@/app/(app)/leave/actions";
 import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 import { CalendarDays } from "lucide-react";
+import type { LeaveCodeT } from "@/lib/database.types";
+
+export type LeaveBalanceRow = {
+  leave_code: LeaveCodeT;
+  entitled_hours: number;
+  carried_hours: number;
+  used_hours: number;
+  available_hours: number;
+};
 
 export type OwnLeaveRequest = {
   id: string;
@@ -63,21 +73,43 @@ const STATUS_VARIANT: Record<OwnLeaveRequest["status"], "default" | "secondary" 
   cancelled: "outline",
 };
 
-export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] }) {
+export function LeaveRequestsClient({
+  requests,
+  balances = [],
+  year = new Date().getFullYear(),
+}: {
+  requests: OwnLeaveRequest[];
+  balances?: LeaveBalanceRow[];
+  year?: number;
+}) {
   const router = useRouter();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editing, setEditing] = useState<OwnLeaveRequest | null>(null);
   const [detailItem, setDetailItem] = useState<OwnLeaveRequest | null>(null);
   const [filterType, setFilterType] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterFrom, setFilterFrom] = useState<string>("");
+  const [filterTo, setFilterTo] = useState<string>("");
   const [isPending, startTransition] = useTransition();
   const [cancelError, setCancelError] = useState<string | null>(null);
 
   const filtered = requests.filter((r) => {
     if (filterType !== "all" && r.leave_code !== filterType) return false;
     if (filterStatus !== "all" && r.status !== filterStatus) return false;
+    // Overlap check, not strict containment — a multi-day leave that merely
+    // crosses into the selected range should still show up, not just ones
+    // that start and end fully inside it.
+    const startDate = r.start_at.slice(0, 10);
+    const endDate = r.end_at.slice(0, 10);
+    if (filterFrom && endDate < filterFrom) return false;
+    if (filterTo && startDate > filterTo) return false;
     return true;
   });
+
+  const balanceByCode = new Map(balances.map((b) => [b.leave_code, b]));
+  const usedThisYearHours = requests
+    .filter((r) => r.status === "approved" && new Date(r.start_at).getFullYear() === year)
+    .reduce((sum, r) => sum + r.hours, 0);
 
   function handleCancel(id: string) {
     setCancelError(null);
@@ -106,6 +138,35 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
 
       {cancelError && <p className="text-sm text-danger">{cancelError}</p>}
 
+      {/* Summary dashboard — balance per leave type for the year */}
+      {balances.length > 0 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {(["sick", "personal", "vacation"] as const).map((code) => {
+            const b = balanceByCode.get(code);
+            const entitledHours = (b?.entitled_hours ?? 0) + (b?.carried_hours ?? 0);
+            const usedHours = b?.used_hours ?? 0;
+            const availableHours = b?.available_hours ?? entitledHours;
+            return (
+              <div key={code} className="rounded-xl border border-border bg-surface p-4">
+                <p className="text-sm font-medium text-foreground">{LEAVE_LABELS_TH[code]} ({year})</p>
+                <p className="mt-1 text-2xl font-semibold text-foreground">
+                  {(availableHours / 7.5).toFixed(1).replace(/\.0$/, "")} <span className="text-sm font-normal text-muted-foreground">วันคงเหลือ</span>
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  ใช้ไปแล้ว {usedHours} ชม. ({(usedHours / 7.5).toFixed(1).replace(/\.0$/, "")} วัน) จากสิทธิ์ {entitledHours} ชม.
+                </p>
+              </div>
+            );
+          })}
+          <div className="rounded-xl border border-border bg-surface p-4 sm:col-span-3">
+            <p className="text-sm font-medium text-foreground">รวมทุกประเภทที่ลาไปแล้ว ({year})</p>
+            <p className="mt-1 text-xl font-semibold text-foreground">
+              {usedThisYearHours} ชม. ({(usedThisYearHours / 7.5).toFixed(1).replace(/\.0$/, "")} วัน)
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Filter row */}
       {requests.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -133,6 +194,31 @@ export function LeaveRequestsClient({ requests }: { requests: OwnLeaveRequest[] 
                 <option key={s} value={s}>{label}</option>
               ))}
             </select>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-sm">
+            <Input
+              type="date"
+              value={filterFrom}
+              onChange={(e) => setFilterFrom(e.target.value)}
+              className="h-auto border-none bg-transparent p-0 text-sm"
+            />
+            <span className="text-muted-foreground">ถึง</span>
+            <Input
+              type="date"
+              value={filterTo}
+              onChange={(e) => setFilterTo(e.target.value)}
+              className="h-auto border-none bg-transparent p-0 text-sm"
+            />
+            {(filterFrom || filterTo) && (
+              <button
+                type="button"
+                onClick={() => { setFilterFrom(""); setFilterTo(""); }}
+                className="text-muted-foreground hover:text-foreground"
+                aria-label="ล้างช่วงวันที่"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </div>
       )}

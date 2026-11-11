@@ -50,6 +50,13 @@ export default async function LeavePage({
     returnNote: latestReturnNoteById.get(r.id) ?? null,
   }));
 
+  const currentYear = new Date().getFullYear();
+  const { data: balances } = await supabase
+    .from("leave_balance_view")
+    .select("leave_code, entitled_hours, carried_hours, used_hours, available_hours")
+    .eq("employee_id", employee.id)
+    .eq("year", currentYear);
+
   const showApprovals = CAN_SEE_APPROVALS.includes(employee.role);
   let approvalRows: ApprovalQueueRow[] = [];
   let departments: { id: string; name: string }[] = [];
@@ -122,7 +129,7 @@ export default async function LeavePage({
       <div className="px-4 md:px-6">
         <RequestTabs
           defaultTab={defaultTab}
-          mine={<LeaveRequestsClient requests={ownRequests} />}
+          mine={<LeaveRequestsClient requests={ownRequests} balances={balances ?? []} year={currentYear} />}
           approvals={
             showApprovals ? (
               <ApprovalList rows={approvalRows} role={employee.role} currentEmployeeId={employee.id} departments={departments} />
