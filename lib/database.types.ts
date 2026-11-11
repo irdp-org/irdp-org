@@ -231,6 +231,7 @@ export interface Database {
         approver_id: string | null;
         decided_at: string | null;
         exported_at: string | null;
+        generated_doc_url: string | null;
         created_at: string;
         updated_at: string;
       }>;

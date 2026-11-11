@@ -277,7 +277,7 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
   const supabase = await createClient();
   const { data: r } = await supabase
     .from("leave_requests")
-    .select("employee_id, leave_code, start_at, end_at, hours, reason, created_at, status")
+    .select("employee_id, leave_code, start_at, end_at, hours, reason, created_at, status, generated_doc_url")
     .eq("id", id)
     .single();
   if (!r) return { error: "ไม่พบคำขอลา" };
@@ -285,11 +285,10 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
   const admin = createAdminClient();
   const { data: emp } = await admin.from("employees").select("full_name, position, signature_url").eq("id", r.employee_id).single();
 
-  // No cached doc url for leave_requests (unlike travel-expense/bookings) —
-  // every generation is fresh, so the approver's signature is simply
-  // whatever the request's actual current status reflects: present once
-  // someone has really approved it, not assumed in advance the way the
-  // dept head's printed NAME already is below.
+  // Approver signature is looked up fresh every time regardless of caching —
+  // a request can go from unapproved to approved *after* the doc was first
+  // generated, so re-stamping on the same cached doc (below) still needs the
+  // current state, not whatever was true the first time someone clicked.
   let approverSignatureUrl: string | null = null;
   if (r.status === "approved") {
     const { data: appr } = await admin
@@ -305,6 +304,19 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
       const { data: approver } = await admin.from("employees").select("signature_url").eq("id", appr.actor_id).single();
       approverSignatureUrl = approver?.signature_url ?? null;
     }
+  }
+
+  // Reuse the doc already generated for this request instead of creating a
+  // new copy every time someone clicks "ออกเอกสาร" again — same pattern as
+  // van/room bookings (generateVanDoc/generateRoomDoc).
+  if (r.generated_doc_url) {
+    const cachedDocId = docIdFromUrl(r.generated_doc_url);
+    if (cachedDocId) {
+      if (emp?.signature_url) await stampSignatureAtMarker(cachedDocId, "{{ลายเซ็นผู้ยื่น}}", emp.signature_url);
+      if (approverSignatureUrl) await stampSignatureAtMarker(cachedDocId, "{{ลายเซ็นผู้อนุมัติ}}", approverSignatureUrl);
+    }
+    await emailDocIfRequested(sendEmail, r.employee_id, `ใบลา ${dLabel(r.start_at)}`, r.generated_doc_url);
+    return { ok: true, url: r.generated_doc_url };
   }
 
   const days = (r.hours / 7.5).toFixed(1).replace(/\.0$/, "");
@@ -335,6 +347,7 @@ export async function generateLeaveDoc(id: string, sendEmail: boolean) {
     if (approverSignatureUrl) await stampSignatureAtMarker(leaveDocId, "{{ลายเซ็นผู้อนุมัติ}}", approverSignatureUrl);
   }
 
+  await admin.from("leave_requests").update({ generated_doc_url: url }).eq("id", id);
   await emailDocIfRequested(sendEmail, r.employee_id, `ใบลา ${dLabel(r.start_at)}`, url);
   return { ok: true, url };
 }
