@@ -177,6 +177,26 @@ export function ApprovalList({
     });
   }
 
+  /** Dept heads often come back to a pile of pending requests at once —
+   * approve everything currently visible (after name/dept filters) in one
+   * click instead of one-by-one. Only touches rows actually awaiting this
+   * person's approve action (status === "submitted"). */
+  function approveAll(ids: string[]) {
+    startTransition(async () => {
+      await Promise.all(ids.map((id) => decideLeaveRequest(id, "approve")));
+      router.refresh();
+    });
+  }
+
+  /** Same idea for execs, who see every approved leave org-wide and can
+   * rack up 100+ pending acknowledgements. */
+  function acknowledgeAll(ids: string[]) {
+    startTransition(async () => {
+      await Promise.all(ids.map((id) => acknowledgeLeaveRequest(id)));
+      router.refresh();
+    });
+  }
+
   function cancelApproved(id: string, reason: string) {
     startTransition(async () => {
       await adminCancelApprovedLeave(id, reason);
@@ -232,6 +252,29 @@ export function ApprovalList({
         )}
       </div>
       {canExport && <LeaveExportPanel rows={filtered} />}
+
+      {(() => {
+        const pendingApproveIds = canApprove ? filtered.filter((r) => r.status === "submitted").map((r) => r.id) : [];
+        const pendingAcknowledgeIds = isExec
+          ? filtered.filter((r) => r.status === "approved" && !r.acknowledgements.some((a) => a.actor_id === currentEmployeeId)).map((r) => r.id)
+          : [];
+        if (pendingApproveIds.length === 0 && pendingAcknowledgeIds.length === 0) return null;
+        return (
+          <div className="flex flex-wrap gap-2">
+            {pendingApproveIds.length > 0 && (
+              <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => approveAll(pendingApproveIds)}>
+                <Check className="h-4 w-4" /> อนุมัติทั้งหมด ({pendingApproveIds.length})
+              </Button>
+            )}
+            {pendingAcknowledgeIds.length > 0 && (
+              <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => acknowledgeAll(pendingAcknowledgeIds)}>
+                <Check className="h-4 w-4" /> รับทราบทั้งหมด ({pendingAcknowledgeIds.length})
+              </Button>
+            )}
+          </div>
+        );
+      })()}
+
       {filtered.length === 0 && (
         <EmptyState icon={ClipboardList} title="ไม่พบรายการที่ตรงกับตัวกรอง" />
       )}
