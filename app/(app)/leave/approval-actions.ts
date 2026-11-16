@@ -6,7 +6,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getCurrentEmployee } from "@/lib/auth";
 import { notify } from "@/lib/notify";
 import { LEAVE_LABELS_TH } from "@/lib/leave";
-import { createEvent, deleteEvent } from "@/lib/google-calendar";
+import { deleteEvent } from "@/lib/google-calendar";
 import type { Database } from "@/lib/database.types";
 
 type ApprovalAction = "approve" | "reject" | "return" | "cancel";
@@ -98,42 +98,23 @@ export async function runPostApprovalSideEffects(row: {
     .single();
 
   if (requester) {
-    const { data: calRow } = await admin
-      .from("calendar_events")
-      .insert({
-        title: `ลา: ${requester.full_name}`,
-        type: "leave",
-        scope: "personal",
-        owner_id: requester.id,
-        department_id: requester.department_id,
-        start_at: row.start_at,
-        end_at: row.end_at,
-        source_module: "leave",
-        source_id: row.id,
-      })
-      .select("id")
-      .single();
-
-    if (calRow) {
-      // Leave isn't van/room/camera — goes on the same "other activities"
-      // calendar as holidays/meetings.
-      const google = await createEvent("holiday", {
-        title: `ลา: ${requester.full_name}`,
-        startAt: row.start_at,
-        endAt: row.end_at,
-        allDay: true,
-      });
-      if (google) {
-        await admin
-          .from("calendar_events")
-          .update({
-            google_event_id: google.id,
-            google_etag: google.etag,
-            last_synced_at: new Date().toISOString(),
-          })
-          .eq("id", calRow.id);
-      }
-    }
+    // scope: "personal" keeps this correctly restricted in-app (RLS only
+    // shows it to the owner + hr/admin/exec) — but it was ALSO being pushed
+    // to the shared "holiday" Google Calendar with the person's real name,
+    // which has its own sharing permissions entirely outside this app's
+    // RLS and is visible company-wide. Leave is meant to be private, so it
+    // stays in-app only now; it no longer syncs to Google Calendar at all.
+    await admin.from("calendar_events").insert({
+      title: `ลา: ${requester.full_name}`,
+      type: "leave",
+      scope: "personal",
+      owner_id: requester.id,
+      department_id: requester.department_id,
+      start_at: row.start_at,
+      end_at: row.end_at,
+      source_module: "leave",
+      source_id: row.id,
+    });
   }
 
   const { data: execs } = await admin.from("employee_directory").select("id").eq("role", "exec");
