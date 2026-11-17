@@ -21,7 +21,7 @@ export default async function FieldPage({
   const [{ data: requests }, { data: locations }] = await Promise.all([
     supabase
       .from("field_requests")
-      .select("id, type, location_id, work_date, planned_start, planned_end, ot_hours, status, reason, attachments")
+      .select("id, type, location_id, location_text, work_date, planned_start, planned_end, ot_hours, status, reason, attachments")
       .eq("employee_id", employee.id)
       .order("work_date", { ascending: false }),
     supabase
@@ -86,7 +86,7 @@ export default async function FieldPage({
     const { data: queue } = await supabase
       .from("field_requests")
       .select(
-        "id, employee_id, type, location_id, work_date, planned_start, planned_end, ot_hours, pay_x1_hours, pay_x15_hours, pay_x3_hours, status, reason, exported_at, attachments"
+        "id, employee_id, type, location_id, location_text, work_date, planned_start, planned_end, ot_hours, pay_x1_hours, pay_x15_hours, pay_x3_hours, status, reason, exported_at, attachments"
       )
       .order("created_at", { ascending: false })
       .limit(500);
@@ -144,6 +144,7 @@ export default async function FieldPage({
           id: r.id,
           type: r.type,
           location_id: r.location_id,
+          location_text: r.location_text,
           location_name: loc?.name ?? null,
           work_date: r.work_date,
           planned_start: r.planned_start,

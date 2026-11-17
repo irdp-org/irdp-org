@@ -9,6 +9,7 @@ export const fieldRequestSchema = z
   .object({
     type: z.enum(["offsite", "wfh", "ot"]),
     locationId: z.string().optional(),
+    locationText: z.string().max(200).optional(),
     workDate: z.string().min(1, "กรุณาเลือกวันที่"),
     plannedStart: z.string().optional(),
     plannedEnd: z.string().optional(),
@@ -18,11 +19,11 @@ export const fieldRequestSchema = z
     message: "กรุณาเลือกสถานที่",
     path: ["locationId"],
   })
-  .refine((v) => (v.type !== "offsite" && v.type !== "ot") || !!v.plannedStart, {
+  .refine((v) => !!v.plannedStart, {
     message: "กรุณากรอกเวลาเริ่ม",
     path: ["plannedStart"],
   })
-  .refine((v) => (v.type !== "offsite" && v.type !== "ot") || !!v.plannedEnd, {
+  .refine((v) => !!v.plannedEnd, {
     message: "กรุณากรอกเวลาสิ้นสุด",
     path: ["plannedEnd"],
   })

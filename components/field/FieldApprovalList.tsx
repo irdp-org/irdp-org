@@ -51,6 +51,7 @@ export type FieldApprovalQueueRow = {
   id: string;
   type: AttendanceTypeT;
   location_id: string | null;
+  location_text?: string | null;
   location_name: string | null;
   work_date: string;
   planned_start: string | null;
@@ -392,6 +393,7 @@ export function FieldApprovalList({
             id: editing.id,
             type: editing.type as "offsite" | "wfh" | "ot",
             location_id: editing.location_id,
+            location_text: editing.location_text,
             work_date: editing.work_date,
             planned_start: editing.planned_start,
             planned_end: editing.planned_end,

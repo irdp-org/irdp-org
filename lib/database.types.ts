@@ -521,6 +521,7 @@ export interface Database {
         employee_id: string;
         type: AttendanceTypeT;
         location_id: string | null;
+        location_text: string | null;
         work_date: string;
         planned_start: string | null;
         planned_end: string | null;

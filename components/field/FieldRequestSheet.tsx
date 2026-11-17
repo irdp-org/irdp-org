@@ -35,6 +35,7 @@ type ExistingRequest = {
   id: string;
   type: "offsite" | "wfh" | "ot";
   location_id: string | null;
+  location_text?: string | null;
   work_date: string;
   planned_start: string | null;
   planned_end: string | null;
@@ -84,6 +85,7 @@ export function FieldRequestSheet({
     return {
       type: existing?.type ?? "offsite",
       locationId: existing?.location_id ?? locations[0]?.id ?? "",
+      locationText: existing?.location_text ?? "",
       workDate: existing?.work_date ?? "",
       plannedStart: toTimeInput(existing?.planned_start ?? null) || "08:30",
       plannedEnd: toTimeInput(existing?.planned_end ?? null) || "17:00",
@@ -147,6 +149,7 @@ export function FieldRequestSheet({
       const formData = new FormData();
       formData.set("type", values.type);
       formData.set("locationId", values.locationId ?? "");
+      formData.set("locationText", values.locationText ?? "");
       formData.set("workDate", values.workDate);
       formData.set("plannedStart", values.plannedStart ?? "");
       formData.set("plannedEnd", values.plannedEnd ?? "");
@@ -216,6 +219,13 @@ export function FieldRequestSheet({
             </div>
           )}
 
+          {type === "wfh" && (
+            <div className="flex flex-col gap-1.5">
+              <Label>สถานที่ (ไม่บังคับ)</Label>
+              <Input placeholder="เช่น บ้าน, ต่างจังหวัด..." {...form.register("locationText")} />
+            </div>
+          )}
+
           <div className="flex flex-col gap-1.5">
             <Label>วันที่</Label>
             <Input type="date" {...form.register("workDate")} />
@@ -228,47 +238,41 @@ export function FieldRequestSheet({
             </div>
           )}
 
-          {(type === "offsite" || type === "ot") && (
-            <>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <Label>เวลาเริ่ม</Label>
-                  <Input type="time" {...form.register("plannedStart")} />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>เวลาสิ้นสุด</Label>
-                  <Input type="time" {...form.register("plannedEnd")} />
-                </div>
-              </div>
-              {(form.formState.errors.plannedStart || form.formState.errors.plannedEnd) && (
-                <p className="text-sm text-danger">
-                  {form.formState.errors.plannedStart?.message ??
-                    form.formState.errors.plannedEnd?.message}
-                </p>
-              )}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label>เวลาเริ่ม</Label>
+              <Input type="time" {...form.register("plannedStart")} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>เวลาสิ้นสุด</Label>
+              <Input type="time" {...form.register("plannedEnd")} />
+            </div>
+          </div>
+          {(form.formState.errors.plannedStart || form.formState.errors.plannedEnd) && (
+            <p className="text-sm text-danger">
+              {form.formState.errors.plannedStart?.message ??
+                form.formState.errors.plannedEnd?.message}
+            </p>
+          )}
 
-              {type === "offsite" && otPreview && (
-                <div className="flex flex-col gap-1 rounded-xl bg-surface px-3 py-2 text-sm">
-                  {otPreview.ot_hours > 0 ? (
-                    <span className="text-foreground">
-                      OT โดยประมาณ {otPreview.ot_hours} ชม.
-                      {otPreview.x1_5_hours > 0 && ` (×1.5: ${otPreview.x1_5_hours} ชม.)`}
-                      {otPreview.x3_hours > 0 && ` (×3: ${otPreview.x3_hours} ชม.)`}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">ไม่มี OT จากช่วงเวลานี้</span>
-                  )}
-                  {weeklyPreview && (
-                    <span
-                      className={weeklyTotal > 36 ? "text-danger" : "text-muted-foreground"}
-                    >
-                      สะสมสัปดาห์นี้ {weeklyPreview.week_ot_hours} ชม. + คำขอนี้ ≈ {weeklyTotal.toFixed(2)} ชม.
-                      {weeklyTotal > 36 && " — เกิน 36 ชม./สัปดาห์"}
-                    </span>
-                  )}
-                </div>
+          {type === "offsite" && otPreview && (
+            <div className="flex flex-col gap-1 rounded-xl bg-surface px-3 py-2 text-sm">
+              {otPreview.ot_hours > 0 ? (
+                <span className="text-foreground">
+                  OT โดยประมาณ {otPreview.ot_hours} ชม.
+                  {otPreview.x1_5_hours > 0 && ` (×1.5: ${otPreview.x1_5_hours} ชม.)`}
+                  {otPreview.x3_hours > 0 && ` (×3: ${otPreview.x3_hours} ชม.)`}
+                </span>
+              ) : (
+                <span className="text-muted-foreground">ไม่มี OT จากช่วงเวลานี้</span>
               )}
-            </>
+              {weeklyPreview && (
+                <span className={weeklyTotal > 36 ? "text-danger" : "text-muted-foreground"}>
+                  สะสมสัปดาห์นี้ {weeklyPreview.week_ot_hours} ชม. + คำขอนี้ ≈ {weeklyTotal.toFixed(2)} ชม.
+                  {weeklyTotal > 36 && " — เกิน 36 ชม./สัปดาห์"}
+                </span>
+              )}
+            </div>
           )}
 
           <div className="flex flex-col gap-1.5">

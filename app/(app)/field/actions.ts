@@ -91,14 +91,14 @@ export async function checkWfhConflict(workDate: string) {
 
 function buildRow(employeeId: string, parsed: FieldRequestInput, status: "draft" | "submitted") {
   const isOffsite = parsed.type === "offsite";
-  const hasTimeRange = parsed.type === "offsite" || parsed.type === "ot";
   return {
     employee_id: employeeId,
     type: parsed.type,
     location_id: isOffsite ? parsed.locationId! : null,
+    location_text: parsed.type === "wfh" ? parsed.locationText || null : null,
     work_date: parsed.workDate,
-    planned_start: hasTimeRange ? fieldTimeToIso(parsed.workDate, parsed.plannedStart!) : null,
-    planned_end: hasTimeRange ? fieldTimeToIso(parsed.workDate, parsed.plannedEnd!) : null,
+    planned_start: parsed.plannedStart ? fieldTimeToIso(parsed.workDate, parsed.plannedStart) : null,
+    planned_end: parsed.plannedEnd ? fieldTimeToIso(parsed.workDate, parsed.plannedEnd) : null,
     reason: parsed.reason ?? null,
     status,
     // OT fields are intentionally omitted — fn_field_autofill (trigger)
@@ -112,6 +112,7 @@ function parseForm(formData: FormData) {
   return fieldRequestSchema.safeParse({
     type: formData.get("type"),
     locationId: formData.get("locationId") || undefined,
+    locationText: formData.get("locationText") || undefined,
     workDate: formData.get("workDate"),
     plannedStart: formData.get("plannedStart") || undefined,
     plannedEnd: formData.get("plannedEnd") || undefined,

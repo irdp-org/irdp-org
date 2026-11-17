@@ -34,6 +34,7 @@ export type OwnFieldRequest = {
   id: string;
   type: AttendanceTypeT;
   location_id: string | null;
+  location_text?: string | null;
   location_name?: string | null;
   location_lat?: number | null;
   location_lng?: number | null;
@@ -154,8 +155,8 @@ export function FieldRequestsClient({
             {
               key: "location",
               label: "สถานที่",
-              sortValue: (r) => r.location_name ?? "",
-              render: (r) => <span className="text-foreground">{r.location_name || "-"}</span>,
+              sortValue: (r) => r.location_name ?? r.location_text ?? "",
+              render: (r) => <span className="text-foreground">{r.location_name || r.location_text || "-"}</span>,
             },
             {
               key: "ot_hours",
@@ -428,6 +429,7 @@ export function FieldRequestsClient({
                 id: editing.id,
                 type: editing.type as "offsite" | "wfh" | "ot",
                 location_id: editing.location_id,
+                location_text: editing.location_text,
                 work_date: editing.work_date,
                 planned_start: editing.planned_start,
                 planned_end: editing.planned_end,
