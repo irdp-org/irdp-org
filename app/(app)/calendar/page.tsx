@@ -47,14 +47,19 @@ export default async function CalendarPage({
     .lte("start_at", activityWindowEnd)
     .order("start_at", { ascending: true });
 
-  // Lets the employee subscribe to the org's shared Google Calendar from
-  // their own phone — this is the same calendar holiday/meeting/merit/
-  // activity/booking events already sync to (not leave, which stays
-  // in-app only on purpose).
-  const googleCalendarId = process.env.GOOGLE_CALENDAR_ID_HOLIDAY;
-  const googleSubscribeUrl = googleCalendarId
-    ? `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(googleCalendarId)}`
-    : null;
+  // Lets the employee subscribe to the org's Google Calendars from their own
+  // phone in one click — van/room/camera bookings and holiday/meeting/merit/
+  // activity events each live on their own separate Google Calendar (not
+  // leave, which stays in-app only on purpose), so this opens all of them.
+  const GOOGLE_CALENDAR_IDS = [
+    process.env.GOOGLE_CALENDAR_ID_VAN,
+    process.env.GOOGLE_CALENDAR_ID_ROOM,
+    process.env.GOOGLE_CALENDAR_ID_CAMERA,
+    process.env.GOOGLE_CALENDAR_ID_HOLIDAY,
+  ].filter((id): id is string => Boolean(id));
+  const googleSubscribeUrls = [...new Set(GOOGLE_CALENDAR_IDS)].map(
+    (id) => `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(id)}`
+  );
 
   return (
     <div>
@@ -65,7 +70,7 @@ export default async function CalendarPage({
           events={events ?? []}
           activities={activities ?? []}
           canManage={canEdit(employee.role)}
-          googleSubscribeUrl={googleSubscribeUrl}
+          googleSubscribeUrls={googleSubscribeUrls}
         />
       </div>
     </div>

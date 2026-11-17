@@ -33,7 +33,7 @@ const ROLE_LABELS_TH: Record<string, string> = {
   employee: "พนักงาน",
 };
 
-const DEPT_TABS = ["ทั้งหมด", "ผู้บริหาร", "ประเมินผล", "วิจัยและพัฒนา", "ฝึกอบรม", "ธุรการ"];
+const DEPT_TABS = ["ทั้งหมด", "ผู้บริหาร", "ประเมินผล", "วิจัยและพัฒนา", "ฝึกอบรม", "ธุรการ", "สำนักกรรมการผู้จัดการ"];
 
 function initials(name: string): string {
   const parts = name.trim().split(" ");

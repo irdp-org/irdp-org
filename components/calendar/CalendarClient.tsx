@@ -12,15 +12,25 @@ export function CalendarClient({
   events,
   activities,
   canManage,
-  googleSubscribeUrl,
+  googleSubscribeUrls,
 }: {
   month: Date;
   events: CalendarEventRow[];
   activities: ActivityHistoryRow[];
   canManage: boolean;
-  googleSubscribeUrl: string | null;
+  googleSubscribeUrls: string[];
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
+
+  // One click subscribes to every org Google Calendar (van/room/camera/
+  // holiday) — opened synchronously within this same click handler so
+  // browsers treat each window.open as part of the user gesture instead of
+  // blocking them as popups.
+  function subscribeToAllCalendars() {
+    for (const url of googleSubscribeUrls) {
+      window.open(url, "_blank", "noopener,noreferrer");
+    }
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -31,11 +41,9 @@ export function CalendarClient({
           </Button>
         )}
         <ActivityHistoryList activities={activities} canManage={canManage} />
-        {googleSubscribeUrl && (
-          <Button asChild type="button" variant="outline" size="sm">
-            <a href={googleSubscribeUrl} target="_blank" rel="noopener noreferrer">
-              <CalendarPlus className="h-4 w-4" /> เพิ่มลง Google Calendar ของฉัน
-            </a>
+        {googleSubscribeUrls.length > 0 && (
+          <Button type="button" variant="outline" size="sm" onClick={subscribeToAllCalendars}>
+            <CalendarPlus className="h-4 w-4" /> เพิ่มลง Google Calendar ของฉัน
           </Button>
         )}
       </div>
