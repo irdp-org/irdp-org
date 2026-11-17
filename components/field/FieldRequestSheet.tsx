@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Paperclip, X } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -39,6 +39,7 @@ type ExistingRequest = {
   planned_start: string | null;
   planned_end: string | null;
   reason: string | null;
+  attachments?: { url: string; name: string; mimeType: string }[];
 };
 
 function toTimeInput(iso: string | null) {
@@ -62,6 +63,22 @@ export function FieldRequestSheet({
   const [weeklyPreview, setWeeklyPreview] = useState<WeeklyOtSummary | null>(null);
   const [wfhConflict, setWfhConflict] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [attachmentFiles, setAttachmentFiles] = useState<File[]>([]);
+
+  function addAttachments(files: FileList | null) {
+    if (!files) return;
+    setAttachmentFiles((prev) => [...prev, ...Array.from(files)]);
+  }
+
+  function removeAttachment(index: number) {
+    setAttachmentFiles((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // Closing via the X button bypasses submitForm's own cleanup, so clear
+  // any picked-but-not-yet-uploaded files whenever the sheet closes.
+  useEffect(() => {
+    if (!open) setAttachmentFiles([]);
+  }, [open]);
 
   const form = useForm<FieldRequestInput>({
     resolver: zodResolver(fieldRequestSchema),
@@ -122,6 +139,7 @@ export function FieldRequestSheet({
       formData.set("plannedEnd", values.plannedEnd ?? "");
       formData.set("reason", values.reason ?? "");
       formData.set("submit", String(submit));
+      for (const file of attachmentFiles) formData.append("attachments", file);
 
       startTransition(async () => {
         const action = existing ? updateFieldRequest.bind(null, existing.id) : createFieldRequest;
@@ -132,6 +150,7 @@ export function FieldRequestSheet({
         }
         onOpenChange(false);
         form.reset();
+        setAttachmentFiles([]);
         router.refresh();
       });
     })();
@@ -242,6 +261,55 @@ export function FieldRequestSheet({
           <div className="flex flex-col gap-1.5">
             <Label>เหตุผล</Label>
             <Textarea rows={3} {...form.register("reason")} />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label>เอกสารแนบ (รูป/วิดีโอหลักฐาน)</Label>
+
+            {existing?.attachments && existing.attachments.length > 0 && (
+              <div className="flex flex-col gap-1">
+                {existing.attachments.map((a, i) => (
+                  <a
+                    key={i}
+                    href={a.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-primary underline"
+                  >
+                    <Paperclip className="h-3 w-3 shrink-0" /> {a.name}
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {attachmentFiles.length > 0 && (
+              <div className="flex flex-col gap-1">
+                {attachmentFiles.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between gap-2 rounded-lg bg-surface px-2.5 py-1.5 text-xs">
+                    <span className="flex items-center gap-1.5 truncate text-foreground">
+                      <Paperclip className="h-3 w-3 shrink-0 text-muted-foreground" /> {f.name}
+                    </span>
+                    <button type="button" onClick={() => removeAttachment(i)} className="shrink-0 text-muted-foreground hover:text-danger">
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border px-3 py-2.5 text-sm text-muted-foreground hover:border-primary hover:text-primary">
+              <Paperclip className="h-4 w-4" /> เพิ่มรูป/วิดีโอ (แนบได้หลายไฟล์)
+              <input
+                type="file"
+                accept="image/*,video/*"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  addAttachments(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+            </label>
           </div>
 
           {formError && <p className="text-sm text-danger">{formError}</p>}

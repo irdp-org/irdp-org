@@ -536,6 +536,7 @@ export interface Database {
         pay_x15_hours: number;
         pay_x3_hours: number;
         ot_breakdown: Record<string, unknown> | null;
+        attachments: { url: string; name: string; mimeType: string }[];
         created_at: string;
         updated_at: string;
       }>;

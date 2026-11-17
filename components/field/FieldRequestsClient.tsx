@@ -54,6 +54,7 @@ export type OwnFieldRequest = {
     selfie_url?: string | null;
     photo_url?: string | null;
   }[];
+  attachments?: { url: string; name: string; mimeType: string }[];
 };
 
 const FIELD_TYPE_LABELS_FULL: Record<string, string> = {
@@ -179,6 +180,25 @@ export function FieldRequestsClient({
               key: "attachment",
               label: "ไฟล์แนบ",
               render: (r) => {
+                const files = r.attachments ?? [];
+                if (files.length > 0) {
+                  return (
+                    <div className="flex flex-col gap-0.5">
+                      {files.map((f, i) => (
+                        <a
+                          key={i}
+                          href={f.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          <FileText className="h-4 w-4 shrink-0" /> {f.name}
+                        </a>
+                      ))}
+                    </div>
+                  );
+                }
                 const { url: attachmentUrl } = splitAttachment(r.reason);
                 if (!attachmentUrl) return <span className="text-muted-foreground">-</span>;
                 return (
@@ -403,7 +423,7 @@ export function FieldRequestsClient({
         onOpenChange={setSheetOpen}
         locations={locations}
         existing={
-          editing && editing.type !== "ot"
+          editing
             ? {
                 id: editing.id,
                 type: editing.type as "offsite" | "wfh" | "ot",
@@ -412,6 +432,7 @@ export function FieldRequestsClient({
                 planned_start: editing.planned_start,
                 planned_end: editing.planned_end,
                 reason: editing.reason,
+                attachments: editing.attachments ?? [],
               }
             : null
         }

@@ -15,6 +15,7 @@ import {
   ClipboardList,
   MapPin,
   CheckCircle2,
+  Paperclip,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -64,6 +65,7 @@ export type FieldApprovalQueueRow = {
   employee: { id: string; full_name: string; department_id: string | null };
   acknowledgements: { actor_id: string; actor_name: string; created_at: string }[];
   checkins: FieldCheckinInfo[];
+  attachments?: { url: string; name: string; mimeType: string }[];
 };
 
 const STATUS_VARIANT: Record<RequestStatusT, "default" | "secondary" | "destructive" | "outline"> = {
@@ -290,6 +292,22 @@ export function FieldApprovalList({
                   </span>
                 ) : null}
                 {r.reason && <span className="text-muted-foreground">เหตุผล: {r.reason}</span>}
+                {r.attachments && r.attachments.length > 0 && (
+                  <div className="flex flex-col gap-0.5">
+                    {r.attachments.map((a, i) => (
+                      <a
+                        key={i}
+                        href={a.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        <Paperclip className="h-3.5 w-3.5 shrink-0" /> {a.name}
+                      </a>
+                    ))}
+                  </div>
+                )}
               </div>
               <Badge variant={STATUS_VARIANT[r.status]}>{FIELD_STATUS_LABELS_TH[r.status]}</Badge>
             </div>
@@ -378,6 +396,7 @@ export function FieldApprovalList({
             planned_start: editing.planned_start,
             planned_end: editing.planned_end,
             reason: editing.reason,
+            attachments: editing.attachments ?? [],
           }}
         />
       )}

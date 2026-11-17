@@ -15,9 +15,11 @@ const nextConfig: NextConfig = {
     serverActions: {
       // Server Actions default to a 1MB body limit, which silently rejects
       // any real photo attached to the leave-cert upload (HEIC from an
-      // iPhone camera is routinely several MB). Match the leave-certs
-      // bucket's actual file_size_limit (10MB, see 0002_storage.sql).
-      bodySizeLimit: "20mb",
+      // iPhone camera is routinely several MB), and would be far too small
+      // for the field-request evidence attachments (multiple photos, or a
+      // short video clip) added later — 100MB covers a realistic phone
+      // video clip without requiring a separate chunked-upload path.
+      bodySizeLimit: "100mb",
     },
   },
 };

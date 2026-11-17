@@ -14,6 +14,31 @@ import {
   type FieldRequestInput,
 } from "@/lib/ot";
 
+type FieldAttachment = { url: string; name: string; mimeType: string };
+
+/** Uploads evidence photos/video for an offsite/OT request to a dated,
+ * per-employee Google Drive folder (auto-created if it doesn't exist yet,
+ * same getOrCreateDatedFolder pattern already used for leave docs/travel
+ * receipts — organizes as "หลักฐานนอกสถานที่-OT/<year>/<month>/<ชื่อพนักงาน>/"). */
+async function uploadFieldAttachments(
+  employeeName: string,
+  workDate: string,
+  files: File[]
+): Promise<FieldAttachment[]> {
+  if (files.length === 0) return [];
+  const { getOrCreateDatedFolder, uploadToDrive } = await import("@/lib/google-drive");
+  const folderId = await getOrCreateDatedFolder("หลักฐานนอกสถานที่-OT", workDate, employeeName);
+  const stamp = Date.now();
+  const uploaded: FieldAttachment[] = [];
+  for (const [i, file] of files.entries()) {
+    const buf = Buffer.from(await file.arrayBuffer());
+    const safeName = file.name || `attachment-${i + 1}`;
+    const up = await uploadToDrive(buf, `${stamp}-${i + 1}-${safeName}`, file.type || "application/octet-stream", folderId);
+    uploaded.push({ url: up.webViewLink, name: safeName, mimeType: file.type || "application/octet-stream" });
+  }
+  return uploaded;
+}
+
 // Same admin/hr-no-dept_head fallback as app/(app)/leave/actions.ts's
 // notifySubmission — duplicated rather than shared since the two request
 // types notify about different things and live in separate route trees.
@@ -104,9 +129,12 @@ export async function createFieldRequest(formData: FormData) {
   const submit = formData.get("submit") === "true";
   const supabase = await createClient();
 
+  const newFiles = formData.getAll("attachments").filter((f): f is File => f instanceof File && f.size > 0);
+  const attachments = await uploadFieldAttachments(employee.full_name, parsed.data.workDate, newFiles);
+
   const { data: row, error } = await supabase
     .from("field_requests")
-    .insert(buildRow(employee.id, parsed.data, submit ? "submitted" : "draft"))
+    .insert({ ...buildRow(employee.id, parsed.data, submit ? "submitted" : "draft"), attachments })
     .select("id")
     .single();
 
@@ -135,11 +163,16 @@ export async function updateFieldRequest(id: string, formData: FormData) {
   const submit = formData.get("submit") === "true";
   const supabase = await createClient();
 
+  const newFiles = formData.getAll("attachments").filter((f): f is File => f instanceof File && f.size > 0);
+  const { data: existingRow } = await supabase.from("field_requests").select("attachments").eq("id", id).single();
+  const newAttachments = await uploadFieldAttachments(employee.full_name, parsed.data.workDate, newFiles);
+  const attachments = [...((existingRow?.attachments as FieldAttachment[]) ?? []), ...newAttachments];
+
   // RLS (field_update) only allows this while status is draft/returned —
   // the DB rejects it otherwise, so no extra status check needed here.
   const { error } = await supabase
     .from("field_requests")
-    .update(buildRow(employee.id, parsed.data, submit ? "submitted" : "draft"))
+    .update({ ...buildRow(employee.id, parsed.data, submit ? "submitted" : "draft"), attachments })
     .eq("id", id);
 
   if (error) return { error: error.message };
