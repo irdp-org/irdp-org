@@ -80,17 +80,30 @@ export function FieldRequestSheet({
     if (!open) setAttachmentFiles([]);
   }, [open]);
 
-  const form = useForm<FieldRequestInput>({
-    resolver: zodResolver(fieldRequestSchema),
-    defaultValues: {
+  function buildDefaults(): FieldRequestInput {
+    return {
       type: existing?.type ?? "offsite",
       locationId: existing?.location_id ?? locations[0]?.id ?? "",
       workDate: existing?.work_date ?? "",
       plannedStart: toTimeInput(existing?.planned_start ?? null) || "08:30",
       plannedEnd: toTimeInput(existing?.planned_end ?? null) || "17:00",
       reason: existing?.reason ?? "",
-    },
+    };
+  }
+
+  const form = useForm<FieldRequestInput>({
+    resolver: zodResolver(fieldRequestSchema),
+    defaultValues: buildDefaults(),
   });
+
+  // react-hook-form only reads defaultValues once at mount — this sheet is a
+  // single persistent instance reused for both "create new" and every
+  // "edit" click, so without this the form kept showing whatever the very
+  // first open's values were instead of the row actually being edited.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (open) form.reset(buildDefaults());
+  }, [open, existing]);
 
   const type = form.watch("type");
   const locationId = form.watch("locationId");
