@@ -190,7 +190,7 @@ export function MonthView({
                   <div key={ev.id} className="flex items-start gap-3 rounded-xl border border-border bg-surface px-3 py-3 text-sm">
                     <span className={cn("mt-1 h-2.5 w-2.5 shrink-0 rounded-full", TYPE_DOT[ev.type])} />
                     <div className="flex flex-1 flex-col gap-0.5 min-w-0">
-                      <p className="font-semibold text-foreground">{ev.title}</p>
+                      <p className="font-semibold text-foreground break-words">{ev.title}</p>
                       <p className="text-xs text-muted-foreground">
                         {TYPE_LABEL_TH[ev.type]}
                         {ev.all_day
@@ -198,7 +198,7 @@ export function MonthView({
                           : ` · ${format(new Date(ev.start_at), "HH:mm")}${ev.end_at ? `–${format(new Date(ev.end_at), "HH:mm")}` : ""}`}
                       </p>
                       {ev.description && (
-                        <p className="text-xs text-foreground/70 mt-0.5">{ev.description}</p>
+                        <p className="text-xs text-foreground/70 mt-0.5 break-words">{ev.description}</p>
                       )}
                       {canManage && (bookingTab || isManual) && (
                         <div className="mt-2 flex items-center gap-2">
