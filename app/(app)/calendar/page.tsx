@@ -47,6 +47,15 @@ export default async function CalendarPage({
     .lte("start_at", activityWindowEnd)
     .order("start_at", { ascending: true });
 
+  // Lets the employee subscribe to the org's shared Google Calendar from
+  // their own phone — this is the same calendar holiday/meeting/merit/
+  // activity/booking events already sync to (not leave, which stays
+  // in-app only on purpose).
+  const googleCalendarId = process.env.GOOGLE_CALENDAR_ID_HOLIDAY;
+  const googleSubscribeUrl = googleCalendarId
+    ? `https://calendar.google.com/calendar/u/0/r?cid=${encodeURIComponent(googleCalendarId)}`
+    : null;
+
   return (
     <div>
       <PageHeader title="ปฏิทิน" description="ปฏิทินองค์กร วันลา และการจอง" />
@@ -56,6 +65,7 @@ export default async function CalendarPage({
           events={events ?? []}
           activities={activities ?? []}
           canManage={canEdit(employee.role)}
+          googleSubscribeUrl={googleSubscribeUrl}
         />
       </div>
     </div>

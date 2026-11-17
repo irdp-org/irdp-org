@@ -140,6 +140,16 @@ export function MonthView({
         </Button>
       </div>
 
+      {/* Legend — what each dot color on the grid means */}
+      <div className="mb-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {(Object.keys(TYPE_LABEL_TH) as CalendarEventRow["type"][]).map((t) => (
+          <span key={t} className="flex items-center gap-1">
+            <span className={cn("h-2 w-2 rounded-full", TYPE_DOT[t])} />
+            {TYPE_LABEL_TH[t]}
+          </span>
+        ))}
+      </div>
+
       <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground">
         {WEEKDAYS_TH.map((w) => (
           <div key={w} className="py-1">{w}</div>
@@ -172,6 +182,41 @@ export function MonthView({
             </button>
           );
         })}
+      </div>
+
+      {/* List view — same month, one row per day that actually has something,
+       * skipping empty days entirely rather than listing every date. */}
+      <div className="mt-4 flex flex-col gap-2">
+        <p className="text-sm font-medium text-foreground">รายการในเดือนนี้</p>
+        {days
+          .filter((d) => isSameMonth(d, month) && (eventsByDay.get(format(d, "yyyy-MM-dd"))?.length ?? 0) > 0)
+          .map((day) => {
+            const key = format(day, "yyyy-MM-dd");
+            const dayEvents = eventsByDay.get(key) ?? [];
+            return (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSelectedDay(day)}
+                className="flex flex-col gap-1 rounded-xl border border-border bg-surface px-3 py-2 text-left"
+              >
+                <span className={cn("text-xs font-medium", isToday(day) ? "text-primary" : "text-muted-foreground")}>
+                  {format(day, "d MMMM")}{isToday(day) ? " (วันนี้)" : ""}
+                </span>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                  {dayEvents.map((ev) => (
+                    <span key={ev.id} className="flex items-center gap-1 text-sm text-foreground">
+                      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", TYPE_DOT[ev.type])} />
+                      {ev.title}
+                    </span>
+                  ))}
+                </div>
+              </button>
+            );
+          })}
+        {days.filter((d) => isSameMonth(d, month) && (eventsByDay.get(format(d, "yyyy-MM-dd"))?.length ?? 0) > 0).length === 0 && (
+          <p className="text-sm text-muted-foreground">ไม่มีรายการในเดือนนี้</p>
+        )}
       </div>
 
       <Dialog open={!!selectedDay} onOpenChange={(open) => !open && setSelectedDay(null)}>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, CalendarPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MonthView, type CalendarEventRow } from "./MonthView";
 import { EventSheet } from "./EventSheet";
@@ -12,11 +12,13 @@ export function CalendarClient({
   events,
   activities,
   canManage,
+  googleSubscribeUrl,
 }: {
   month: Date;
   events: CalendarEventRow[];
   activities: ActivityHistoryRow[];
   canManage: boolean;
+  googleSubscribeUrl: string | null;
 }) {
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -29,6 +31,13 @@ export function CalendarClient({
           </Button>
         )}
         <ActivityHistoryList activities={activities} canManage={canManage} />
+        {googleSubscribeUrl && (
+          <Button asChild type="button" variant="outline" size="sm">
+            <a href={googleSubscribeUrl} target="_blank" rel="noopener noreferrer">
+              <CalendarPlus className="h-4 w-4" /> เพิ่มลง Google Calendar ของฉัน
+            </a>
+          </Button>
+        )}
       </div>
       <MonthView month={month} events={events} canManage={canManage} />
       {canManage && <EventSheet open={sheetOpen} onOpenChange={setSheetOpen} />}
