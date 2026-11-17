@@ -141,7 +141,12 @@ export function FieldRequestSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto rounded-t-2xl">
+      <SheetContent
+        side="bottom"
+        className="max-h-[90vh] overflow-y-auto rounded-t-2xl"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <SheetHeader>
           <SheetTitle>{existing ? "แก้ไขคำขอ" : "ยื่นคำขอนอกสถานที่ / WFH"}</SheetTitle>
         </SheetHeader>
