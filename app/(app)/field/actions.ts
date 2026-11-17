@@ -66,13 +66,14 @@ export async function checkWfhConflict(workDate: string) {
 
 function buildRow(employeeId: string, parsed: FieldRequestInput, status: "draft" | "submitted") {
   const isOffsite = parsed.type === "offsite";
+  const hasTimeRange = parsed.type === "offsite" || parsed.type === "ot";
   return {
     employee_id: employeeId,
     type: parsed.type,
     location_id: isOffsite ? parsed.locationId! : null,
     work_date: parsed.workDate,
-    planned_start: isOffsite ? fieldTimeToIso(parsed.workDate, parsed.plannedStart!) : null,
-    planned_end: isOffsite ? fieldTimeToIso(parsed.workDate, parsed.plannedEnd!) : null,
+    planned_start: hasTimeRange ? fieldTimeToIso(parsed.workDate, parsed.plannedStart!) : null,
+    planned_end: hasTimeRange ? fieldTimeToIso(parsed.workDate, parsed.plannedEnd!) : null,
     reason: parsed.reason ?? null,
     status,
     // OT fields are intentionally omitted — fn_field_autofill (trigger)

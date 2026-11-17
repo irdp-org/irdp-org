@@ -86,7 +86,7 @@ export default async function TimelinePage({
   for (const f of fieldRows ?? []) {
     push(f.work_date, {
       kind: "field",
-      label: FIELD_TYPE_LABELS_TH[f.type as "offsite" | "wfh"] ?? f.type,
+      label: FIELD_TYPE_LABELS_TH[f.type as "offsite" | "wfh" | "ot"] ?? f.type,
       detail: f.reason,
       time:
         f.planned_start && f.planned_end

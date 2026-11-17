@@ -274,7 +274,7 @@ export function FieldApprovalList({
               <div className="flex flex-col gap-0.5 text-sm">
                 <span className="font-medium text-foreground">{r.employee.full_name}</span>
                 <span className="text-muted-foreground">
-                  {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type}
+                  {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh" | "ot"] ?? r.type}
                   {r.location_name ? ` · ${r.location_name}` : ""} ·{" "}
                   {format(new Date(r.work_date), "d MMM yyyy")}
                   {r.planned_start && r.planned_end && (
@@ -372,7 +372,7 @@ export function FieldApprovalList({
           locations={locations}
           existing={{
             id: editing.id,
-            type: editing.type as "offsite" | "wfh",
+            type: editing.type as "offsite" | "wfh" | "ot",
             location_id: editing.location_id,
             work_date: editing.work_date,
             planned_start: editing.planned_start,

@@ -33,7 +33,7 @@ import {
 
 type ExistingRequest = {
   id: string;
-  type: "offsite" | "wfh";
+  type: "offsite" | "wfh" | "ot";
   location_id: string | null;
   work_date: string;
   planned_start: string | null;
@@ -86,7 +86,7 @@ export function FieldRequestSheet({
       setWfhConflict(false);
       return;
     }
-    if (type !== "offsite") {
+    if (type !== "offsite" && type !== "ot") {
       setWfhConflict(false);
       return;
     }
@@ -148,7 +148,7 @@ export function FieldRequestSheet({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <SheetHeader>
-          <SheetTitle>{existing ? "แก้ไขคำขอ" : "ยื่นคำขอนอกสถานที่ / WFH"}</SheetTitle>
+          <SheetTitle>{existing ? "แก้ไขคำขอ" : "ยื่นคำขอนอกสถานที่ / WFH / OT"}</SheetTitle>
         </SheetHeader>
 
         <div className="flex flex-col gap-4 px-4 pb-4">
@@ -196,15 +196,15 @@ export function FieldRequestSheet({
             </div>
           )}
 
-          {type === "offsite" && (
+          {(type === "offsite" || type === "ot") && (
             <>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <Label>เวลาเข้างาน</Label>
+                  <Label>เวลาเริ่ม</Label>
                   <Input type="time" {...form.register("plannedStart")} />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>เวลาออกงาน</Label>
+                  <Label>เวลาสิ้นสุด</Label>
                   <Input type="time" {...form.register("plannedEnd")} />
                 </div>
               </div>
@@ -215,7 +215,7 @@ export function FieldRequestSheet({
                 </p>
               )}
 
-              {otPreview && (
+              {type === "offsite" && otPreview && (
                 <div className="flex flex-col gap-1 rounded-xl bg-surface px-3 py-2 text-sm">
                   {otPreview.ot_hours > 0 ? (
                     <span className="text-foreground">

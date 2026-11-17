@@ -145,7 +145,7 @@ export default async function WorkLogPage({
   }
 
   for (const f of fieldRows ?? []) {
-    const typeLabel = f.type === "ot" ? "นอกเวลา (OT)" : FIELD_TYPE_LABELS_TH[f.type as "offsite" | "wfh"] ?? f.type;
+    const typeLabel = f.type === "ot" ? "นอกเวลา (OT)" : FIELD_TYPE_LABELS_TH[f.type as "offsite" | "wfh" | "ot"] ?? f.type;
     // Only count hours toward the monthly total once actually approved —
     // a still-pending/returned/rejected record shouldn't inflate it.
     if (f.type === "ot" && f.ot_hours && f.status === "approved") totalOtHours += f.ot_hours;

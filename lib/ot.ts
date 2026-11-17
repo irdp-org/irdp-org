@@ -7,7 +7,7 @@ const TZ = "Asia/Bangkok";
 
 export const fieldRequestSchema = z
   .object({
-    type: z.enum(["offsite", "wfh"]),
+    type: z.enum(["offsite", "wfh", "ot"]),
     locationId: z.string().optional(),
     workDate: z.string().min(1, "กรุณาเลือกวันที่"),
     plannedStart: z.string().optional(),
@@ -18,16 +18,16 @@ export const fieldRequestSchema = z
     message: "กรุณาเลือกสถานที่",
     path: ["locationId"],
   })
-  .refine((v) => v.type !== "offsite" || !!v.plannedStart, {
-    message: "กรุณากรอกเวลาเข้างาน",
+  .refine((v) => (v.type !== "offsite" && v.type !== "ot") || !!v.plannedStart, {
+    message: "กรุณากรอกเวลาเริ่ม",
     path: ["plannedStart"],
   })
-  .refine((v) => v.type !== "offsite" || !!v.plannedEnd, {
-    message: "กรุณากรอกเวลาออกงาน",
+  .refine((v) => (v.type !== "offsite" && v.type !== "ot") || !!v.plannedEnd, {
+    message: "กรุณากรอกเวลาสิ้นสุด",
     path: ["plannedEnd"],
   })
   .refine((v) => !v.plannedStart || !v.plannedEnd || v.plannedEnd > v.plannedStart, {
-    message: "เวลาออกงานต้องหลังเวลาเข้างาน",
+    message: "เวลาสิ้นสุดต้องหลังเวลาเริ่ม",
     path: ["plannedEnd"],
   });
 
@@ -92,9 +92,10 @@ export async function checkWfhConflict(
   return !!data;
 }
 
-export const FIELD_TYPE_LABELS_TH: Record<"offsite" | "wfh", string> = {
+export const FIELD_TYPE_LABELS_TH: Record<"offsite" | "wfh" | "ot", string> = {
   offsite: "นอกสถานที่",
   wfh: "Work from Anywhere (WFH)",
+  ot: "ปฏิบัติงานนอกเวลา",
 };
 
 export const FIELD_STATUS_LABELS_TH: Record<

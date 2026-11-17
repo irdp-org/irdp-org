@@ -217,7 +217,7 @@ export default async function ReportsPage({
     ...filteredFieldDetail.map((r) => ({
       id: r.id,
       category: "นอกสถานที่/OT/WFH" as const,
-      typeLabel: FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type,
+      typeLabel: FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh" | "ot"] ?? r.type,
       employeeName: nameOf(r.employee_id),
       deptName: deptOf(r.employee_id),
       date: r.work_date,

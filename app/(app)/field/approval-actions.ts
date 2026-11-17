@@ -58,7 +58,7 @@ export async function decideFieldRequest(id: string, action: ApprovalAction, not
       userId: row.employee_id,
       type: `field_${action}`,
       title: NOTIFY_TITLE[action],
-      body: `${FIELD_TYPE_LABELS_TH[row.type as "offsite" | "wfh"] ?? row.type}${
+      body: `${FIELD_TYPE_LABELS_TH[row.type as "offsite" | "wfh" | "ot"] ?? row.type}${
         row.ot_hours ? ` · OT ${row.ot_hours} ชม.` : ""
       }${note ? ` — ${note}` : ""}`,
       link: "/field",
@@ -73,7 +73,7 @@ export async function decideFieldRequest(id: string, action: ApprovalAction, not
           userId: e.id,
           type: "field_acknowledge_pending",
           title: "มีคำขอนอกสถานที่/WFH ที่อนุมัติแล้วรอรับทราบ",
-          body: FIELD_TYPE_LABELS_TH[row.type as "offsite" | "wfh"] ?? row.type,
+          body: FIELD_TYPE_LABELS_TH[row.type as "offsite" | "wfh" | "ot"] ?? row.type,
           link: "/field?tab=approvals",
         })
       )
@@ -121,7 +121,7 @@ export async function adminCancelApprovedField(id: string, reason: string) {
       userId: row.employee_id,
       type: "field_cancel",
       title: "คำขอที่อนุมัติแล้วถูกยกเลิก",
-      body: `${FIELD_TYPE_LABELS_TH[row.type as "offsite" | "wfh"] ?? row.type} — ${reason}`,
+      body: `${FIELD_TYPE_LABELS_TH[row.type as "offsite" | "wfh" | "ot"] ?? row.type} — ${reason}`,
       link: "/field",
     });
   }

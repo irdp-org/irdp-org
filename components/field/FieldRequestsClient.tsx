@@ -124,10 +124,10 @@ export function FieldRequestsClient({
             {
               key: "type",
               label: "ประเภท",
-              sortValue: (r) => FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type,
+              sortValue: (r) => FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh" | "ot"] ?? r.type,
               render: (r) => (
                 <span className="font-medium text-foreground">
-                  {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh"] ?? r.type}
+                  {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh" | "ot"] ?? r.type}
                 </span>
               ),
             },
@@ -406,7 +406,7 @@ export function FieldRequestsClient({
           editing && editing.type !== "ot"
             ? {
                 id: editing.id,
-                type: editing.type as "offsite" | "wfh",
+                type: editing.type as "offsite" | "wfh" | "ot",
                 location_id: editing.location_id,
                 work_date: editing.work_date,
                 planned_start: editing.planned_start,
