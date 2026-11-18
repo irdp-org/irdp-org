@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatThaiDate } from "@/lib/format-th";
+import { TimeInput } from "@/components/ui/time-input";
 import {
   Search,
   Plus,
@@ -109,8 +110,7 @@ function WorkLogForm({
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">เริ่มงาน</label>
-          <input
-            type="time"
+          <TimeInput
             name="startTime"
             defaultValue={existing?.start_time?.slice(0, 5) ?? nowHHMM()}
             className="rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -118,8 +118,7 @@ function WorkLogForm({
         </div>
         <div className="flex flex-col gap-1">
           <label className="text-xs font-medium text-muted-foreground">สิ้นสุดงาน</label>
-          <input
-            type="time"
+          <TimeInput
             name="endTime"
             defaultValue={existing?.end_time?.slice(0, 5) ?? ""}
             className="rounded-md border border-input bg-background px-3 py-2 text-sm"

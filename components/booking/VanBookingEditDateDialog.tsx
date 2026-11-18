@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/time-input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { updateVanBooking } from "@/app/(app)/booking/actions";
@@ -92,7 +93,7 @@ export function VanBookingEditDateDialog({ bookingId, vehicleId, destination, pu
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>เวลาเริ่ม</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <TimeInput value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -102,7 +103,7 @@ export function VanBookingEditDateDialog({ bookingId, vehicleId, destination, pu
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>เวลาสิ้นสุด</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <TimeInput value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
           </div>
           {error && <p className="text-sm text-danger">{error}</p>}

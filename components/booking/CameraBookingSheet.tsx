@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/time-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createCameraBooking, updateCameraBooking } from "@/app/(app)/booking/actions";
@@ -101,7 +102,7 @@ export function CameraBookingSheet({ open, onOpenChange, existing }: Props) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>เวลาเริ่ม</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <TimeInput value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             </div>
           </div>
 
@@ -112,7 +113,7 @@ export function CameraBookingSheet({ open, onOpenChange, existing }: Props) {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>เวลาสิ้นสุด</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <TimeInput value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
           </div>
 

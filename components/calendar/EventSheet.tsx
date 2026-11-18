@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/time-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createOrgEvent, updateOrgEvent, deleteOrgEvent } from "@/app/(app)/calendar/actions";
@@ -146,11 +147,11 @@ export function EventSheet({
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label>เวลาเริ่ม{type === "activity" && isTraining ? " (เปิดให้เช็คอินได้)" : ""}</Label>
-                <Input type="time" name="startTime" defaultValue={toTimeInput(existing?.start_at)} required={type === "activity" && isTraining} />
+                <TimeInput name="startTime" defaultValue={toTimeInput(existing?.start_at)} required={type === "activity" && isTraining} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>เวลาสิ้นสุด{type === "activity" && isTraining ? " (เปิดให้เช็คเอ้าท์ได้)" : ""}</Label>
-                <Input type="time" name="endTime" defaultValue={toTimeInput(existing?.end_at)} required={type === "activity" && isTraining} />
+                <TimeInput name="endTime" defaultValue={toTimeInput(existing?.end_at)} required={type === "activity" && isTraining} />
               </div>
             </div>
           )}

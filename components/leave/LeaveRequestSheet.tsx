@@ -16,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/time-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -204,11 +205,11 @@ export function LeaveRequestSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>เวลาเริ่ม{startDate !== endDate && startDate && endDate ? " (วันแรก)" : ""}</Label>
-              <Input type="time" min={WORK_START} max={WORK_END} {...form.register("startTime")} />
+              <TimeInput {...form.register("startTime")} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>เวลาสิ้นสุด{startDate !== endDate && startDate && endDate ? " (วันสุดท้าย)" : ""}</Label>
-              <Input type="time" min={WORK_START} max={WORK_END} {...form.register("endTime")} />
+              <TimeInput {...form.register("endTime")} />
             </div>
           </div>
           {startDate && endDate && startDate !== endDate && (

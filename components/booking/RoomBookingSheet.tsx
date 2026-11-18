@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/time-input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { createRoomBooking } from "@/app/(app)/booking/actions";
@@ -123,11 +124,11 @@ export function RoomBookingSheet({ open, onOpenChange, rooms, defaultRoomId }: P
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>เวลาเริ่ม</Label>
-              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+              <TimeInput value={startTime} onChange={(e) => setStartTime(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>เวลาสิ้นสุด</Label>
-              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+              <TimeInput value={endTime} onChange={(e) => setEndTime(e.target.value)} />
             </div>
           </div>
 

@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { TimeInput } from "@/components/ui/time-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -241,11 +242,11 @@ export function FieldRequestSheet({
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label>เวลาเริ่ม</Label>
-              <Input type="time" {...form.register("plannedStart")} />
+              <TimeInput {...form.register("plannedStart")} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>เวลาสิ้นสุด</Label>
-              <Input type="time" {...form.register("plannedEnd")} />
+              <TimeInput {...form.register("plannedEnd")} />
             </div>
           </div>
           {(form.formState.errors.plannedStart || form.formState.errors.plannedEnd) && (
