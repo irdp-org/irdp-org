@@ -3,6 +3,7 @@ export const revalidate = 300; // reports data: refresh every 5 min
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentEmployee } from "@/lib/auth";
+import { getSignedUrl, getSignedCheckinPhotoUrl } from "@/lib/storage";
 import { PageHeader } from "@/components/shell/PageHeader";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { FIELD_TYPE_LABELS_TH, FIELD_STATUS_LABELS_TH } from "@/lib/ot";
@@ -45,11 +46,11 @@ export default async function ReportsPage({
     { data: fieldRows },
     { count: vanCount },
     { count: roomCount },
-    { data: assetRows },
     { data: departments },
     { data: employees },
     { data: leaveDetailRows },
     { data: fieldDetailRows },
+    { data: workLocations },
   ] = await Promise.all([
     supabase
       .from("leave_requests")
@@ -76,21 +77,21 @@ export default async function ReportsPage({
       .eq("status", "booked")
       .gte("start_at", fromTs)
       .lte("start_at", toTs),
-    supabase.from("assets").select("status"),
     supabase.from("departments").select("id, name").order("name"),
     supabase.from("employee_directory").select("id, full_name, department_id").eq("status", "active").order("full_name"),
     // Row-level detail for the searchable table — unfiltered by status so
     // admin/hr can see draft/submitted/rejected items too, not just approved.
     supabase
       .from("leave_requests")
-      .select("id, employee_id, leave_code, start_at, end_at, hours, status, reason")
+      .select("id, employee_id, leave_code, start_at, end_at, hours, status, reason, cert_url")
       .gte("start_at", fromTs)
       .lte("end_at", toTs),
     supabase
       .from("field_requests")
-      .select("id, employee_id, type, work_date, planned_start, planned_end, ot_hours, status, reason")
+      .select("id, employee_id, type, location_id, location_text, work_date, planned_start, planned_end, ot_hours, status, reason, attachments")
       .gte("work_date", from)
       .lte("work_date", to),
+    supabase.from("work_locations").select("id, name"),
   ]);
 
   const empDeptMap = new Map<string, string>(
@@ -98,6 +99,9 @@ export default async function ReportsPage({
   );
   const deptNameMap = new Map<string, string>(
     (departments ?? []).map((d) => [d.id, d.name])
+  );
+  const locationNameMap = new Map<string, string>(
+    (workLocations ?? []).map((l) => [l.id, l.name])
   );
 
   // Apply dept/person filter to raw rows before aggregation
@@ -118,65 +122,30 @@ export default async function ReportsPage({
     ? (fieldRows ?? []).filter((r) => filterEmpIds.has(r.employee_id))
     : (fieldRows ?? []);
 
-  // ── Leave aggregation ─────────────────────────────────────────────────────
+  // ── Leave by type ─────────────────────────────────────────────────────────
   const leaveByTypeMap = new Map<string, number>();
-  const leaveByDeptMap = new Map<string, number>();
   let totalLeaveHours = 0;
 
   for (const r of filteredLeave) {
     const h = r.hours ?? 0;
     totalLeaveHours += h;
     leaveByTypeMap.set(r.leave_code, (leaveByTypeMap.get(r.leave_code) ?? 0) + h);
-    const deptId = empDeptMap.get(r.employee_id) ?? "";
-    const deptName = deptNameMap.get(deptId) ?? "ไม่ระบุ";
-    leaveByDeptMap.set(deptName, (leaveByDeptMap.get(deptName) ?? 0) + h);
   }
 
   const leaveByType = [...leaveByTypeMap.entries()]
     .map(([code, value]) => ({ name: LEAVE_LABELS_TH[code as keyof typeof LEAVE_LABELS_TH] ?? code, value }))
     .sort((a, b) => b.value - a.value);
 
-  const leaveByDept = [...leaveByDeptMap.entries()]
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value);
-
-  // ── OT aggregation ────────────────────────────────────────────────────────
-  const otDeptMap = new Map<string, { x1: number; x15: number; x3: number }>();
+  // ── OT total (just the headline number — no more by-department chart) ──────
   let totalOtHours = 0;
-  const otTotals = { x1: 0, x15: 0, x3: 0 };
-
   for (const r of filteredField) {
-    const x1 = r.pay_x1_hours ?? 0;
-    const x15 = r.pay_x15_hours ?? 0;
-    const x3 = r.pay_x3_hours ?? 0;
-    totalOtHours += x1 + x15 + x3;
-    otTotals.x1 += x1;
-    otTotals.x15 += x15;
-    otTotals.x3 += x3;
-    const deptId = empDeptMap.get(r.employee_id) ?? "";
-    const deptName = deptNameMap.get(deptId) ?? "ไม่ระบุ";
-    const prev = otDeptMap.get(deptName) ?? { x1: 0, x15: 0, x3: 0 };
-    otDeptMap.set(deptName, { x1: prev.x1 + x1, x15: prev.x15 + x15, x3: prev.x3 + x3 });
-  }
-
-  const otByDept = [...otDeptMap.entries()]
-    .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => b.x1 + b.x15 + b.x3 - (a.x1 + a.x15 + a.x3));
-
-  // ── Asset counts ──────────────────────────────────────────────────────────
-  const assets = { in_stock: 0, assigned: 0, broken: 0, disposed: 0 };
-  for (const a of assetRows ?? []) {
-    if (a.status in assets) assets[a.status as keyof typeof assets]++;
+    totalOtHours += (r.pay_x1_hours ?? 0) + (r.pay_x15_hours ?? 0) + (r.pay_x3_hours ?? 0);
   }
 
   const data: ReportData = {
     leaveByType,
-    leaveByDept,
-    otByDept,
-    otTotals,
     vanBookings: vanCount ?? 0,
     roomBookings: roomCount ?? 0,
-    assets,
     totalLeaveHours: Math.round(totalLeaveHours * 10) / 10,
     totalOtHours: Math.round(totalOtHours * 10) / 10,
   };
@@ -188,6 +157,11 @@ export default async function ReportsPage({
   }));
 
   const departmentList = (departments ?? []).map((d) => ({ id: d.id, name: d.name }));
+  const scopeLabel = personParam
+    ? (employeeList.find((e) => e.id === personParam)?.full_name ?? "ไม่พบพนักงาน")
+    : deptParam
+      ? (deptNameMap.get(deptParam) ?? "ไม่พบฝ่าย")
+      : "ทั้งองค์กร";
 
   // ── Row-level table (search + filter, admin/hr) ─────────────────────────
   const fullNameMap = new Map<string, string>((employees ?? []).map((e) => [e.id, e.full_name]));
@@ -201,31 +175,80 @@ export default async function ReportsPage({
     ? (fieldDetailRows ?? []).filter((r) => filterEmpIds.has(r.employee_id))
     : (fieldDetailRows ?? []);
 
+  // Check-ins (GPS radius + selfie/worksite photos) for the field rows in view
+  const fieldIds = filteredFieldDetail.map((r) => r.id);
+  const { data: checkins } = fieldIds.length
+    ? await supabase
+        .from("attendance_checkins")
+        .select("field_request_id, kind, happened_at, distance_m, within_radius, selfie_url, photo_url")
+        .in("field_request_id", fieldIds)
+    : { data: [] };
+
+  const checkinsSigned = await Promise.all(
+    (checkins ?? []).map(async (c) => ({
+      ...c,
+      selfie_url: await getSignedCheckinPhotoUrl(c.selfie_url),
+      photo_url: await getSignedCheckinPhotoUrl(c.photo_url),
+    }))
+  );
+
+  const leaveCertSigned = await Promise.all(
+    filteredLeaveDetail.map((r) => getSignedUrl("leave-certs", r.cert_url))
+  );
+
+  const timeLabel = (iso: string | null) => (iso ? iso.slice(11, 16) : null);
+
   const tableRows: ReportRow[] = [
-    ...filteredLeaveDetail.map((r) => ({
+    ...filteredLeaveDetail.map((r, i) => ({
       id: r.id,
       category: "ลา" as const,
       typeLabel: LEAVE_LABELS_TH[r.leave_code],
       employeeName: nameOf(r.employee_id),
       deptName: deptOf(r.employee_id),
       date: r.start_at.slice(0, 10),
+      startTime: timeLabel(r.start_at),
+      endTime: timeLabel(r.end_at),
       amountLabel: `${r.hours} ชม.`,
       status: r.status,
       statusLabel: LEAVE_STATUS_LABELS_TH[r.status],
       detail: r.reason,
+      locationLabel: null,
+      radiusLabel: null,
+      photos: leaveCertSigned[i] ? [{ url: leaveCertSigned[i]!, label: "ใบรับรองแพทย์/เอกสารแนบ" }] : [],
     })),
-    ...filteredFieldDetail.map((r) => ({
-      id: r.id,
-      category: "นอกสถานที่/OT/WFH" as const,
-      typeLabel: FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh" | "ot"] ?? r.type,
-      employeeName: nameOf(r.employee_id),
-      deptName: deptOf(r.employee_id),
-      date: r.work_date,
-      amountLabel: r.ot_hours ? `OT ${r.ot_hours} ชม.` : "—",
-      status: r.status,
-      statusLabel: FIELD_STATUS_LABELS_TH[r.status],
-      detail: r.reason,
-    })),
+    ...filteredFieldDetail.map((r) => {
+      const rowCheckins = checkinsSigned.filter((c) => c.field_request_id === r.id);
+      const radiusCheckin = rowCheckins.find((c) => c.within_radius != null);
+      const radiusLabel =
+        radiusCheckin?.within_radius != null
+          ? `${radiusCheckin.within_radius ? "ในรัศมี" : "นอกรัศมี"}${radiusCheckin.distance_m != null ? ` (${radiusCheckin.distance_m} ม.)` : ""}`
+          : null;
+      const photos = [
+        ...rowCheckins.flatMap((c) => [
+          c.selfie_url ? { url: c.selfie_url, label: "เซลฟี่" } : null,
+          c.photo_url ? { url: c.photo_url, label: "รูปหน้างาน" } : null,
+        ]),
+        ...(r.attachments ?? []).map((a) => ({ url: a.url, label: a.name })),
+      ].filter((p): p is { url: string; label: string } => p !== null);
+
+      return {
+        id: r.id,
+        category: "นอกสถานที่/OT/WFH" as const,
+        typeLabel: FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh" | "ot"] ?? r.type,
+        employeeName: nameOf(r.employee_id),
+        deptName: deptOf(r.employee_id),
+        date: r.work_date,
+        startTime: timeLabel(r.planned_start),
+        endTime: timeLabel(r.planned_end),
+        amountLabel: r.ot_hours ? `OT ${r.ot_hours} ชม.` : "—",
+        status: r.status,
+        statusLabel: FIELD_STATUS_LABELS_TH[r.status],
+        detail: r.reason,
+        locationLabel: r.location_id ? (locationNameMap.get(r.location_id) ?? null) : r.location_text,
+        radiusLabel,
+        photos,
+      };
+    }),
   ].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   return (
@@ -240,6 +263,7 @@ export default async function ReportsPage({
           employees={employeeList}
           currentDept={deptParam ?? ""}
           currentPerson={personParam ?? ""}
+          scopeLabel={scopeLabel}
         />
         <ReportTable rows={tableRows} />
       </div>

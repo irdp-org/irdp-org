@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Download, Search, CalendarClock } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -9,12 +10,8 @@ export type DeptStat = { name: string; value: number };
 
 export type ReportData = {
   leaveByType: DeptStat[];
-  leaveByDept: DeptStat[];
-  otByDept: { name: string; x1: number; x15: number; x3: number }[];
-  otTotals: { x1: number; x15: number; x3: number };
   vanBookings: number;
   roomBookings: number;
-  assets: { in_stock: number; assigned: number; broken: number; disposed: number };
   totalLeaveHours: number;
   totalOtHours: number;
 };
@@ -44,31 +41,6 @@ function BarChart({ items, unit = "" }: { items: DeptStat[]; unit?: string }) {
   );
 }
 
-function OtBarChart({ items }: { items: ReportData["otByDept"] }) {
-  const max = Math.max(...items.map((i) => i.x1 + i.x15 + i.x3), 1);
-  return (
-    <div className="flex flex-col gap-2">
-      {items.map((item) => {
-        const total = item.x1 + item.x15 + item.x3;
-        return (
-          <div key={item.name} className="flex items-center gap-3">
-            <span className="w-28 shrink-0 text-xs text-muted-foreground truncate">{item.name}</span>
-            <div className="flex-1 flex rounded-full bg-border h-2 overflow-hidden">
-              <div className="h-2 bg-primary/60" style={{ width: `${(item.x1 / max) * 100}%` }} />
-              <div className="h-2 bg-primary" style={{ width: `${(item.x15 / max) * 100}%` }} />
-              <div className="h-2 bg-accent" style={{ width: `${(item.x3 / max) * 100}%` }} />
-            </div>
-            <span className="w-14 text-right text-xs font-medium text-foreground">{total} ชม.</span>
-          </div>
-        );
-      })}
-      {items.length === 0 && (
-        <p className="text-xs text-muted-foreground">ไม่มีข้อมูลในช่วงเวลานี้</p>
-      )}
-    </div>
-  );
-}
-
 type Props = {
   from: string;
   to: string;
@@ -77,11 +49,26 @@ type Props = {
   employees?: { id: string; full_name: string; department_id: string }[];
   currentDept?: string;
   currentPerson?: string;
+  scopeLabel?: string;
 };
 
-export function ReportClient({ from, to, data, departments = [], employees = [], currentDept = "", currentPerson = "" }: Props) {
-  const assetTotal =
-    data.assets.in_stock + data.assets.assigned + data.assets.broken + data.assets.disposed;
+export function ReportClient({
+  from,
+  to,
+  data,
+  departments = [],
+  employees = [],
+  currentDept = "",
+  currentPerson = "",
+  scopeLabel = "ทั้งองค์กร",
+}: Props) {
+  // Picking a department narrows the person dropdown to just that
+  // department's people, instead of showing everyone regardless of scope.
+  const [deptChoice, setDeptChoice] = useState(currentDept);
+  const visibleEmployees = useMemo(
+    () => (deptChoice ? employees.filter((e) => e.department_id === deptChoice) : employees),
+    [employees, deptChoice]
+  );
 
   return (
     <div className="flex flex-col gap-5">
@@ -124,7 +111,8 @@ export function ReportClient({ from, to, data, departments = [], employees = [],
               <label className="text-xs font-medium text-muted-foreground">รายฝ่าย</label>
               <select
                 name="dept"
-                defaultValue={currentDept}
+                value={deptChoice}
+                onChange={(e) => setDeptChoice(e.target.value)}
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="">ทั้งองค์กร</option>
@@ -135,7 +123,7 @@ export function ReportClient({ from, to, data, departments = [], employees = [],
             </div>
           )}
 
-          {/* person filter */}
+          {/* person filter — narrowed to the chosen department above */}
           {employees.length > 0 && (
             <div className="flex flex-col gap-1">
               <label className="text-xs font-medium text-muted-foreground">รายคน</label>
@@ -145,7 +133,7 @@ export function ReportClient({ from, to, data, departments = [], employees = [],
                 className="rounded-md border border-input bg-background px-3 py-2 text-sm"
               >
                 <option value="">ทุกคน</option>
-                {employees.map((e) => (
+                {visibleEmployees.map((e) => (
                   <option key={e.id} value={e.id}>{e.full_name}</option>
                 ))}
               </select>
@@ -166,6 +154,10 @@ export function ReportClient({ from, to, data, departments = [], employees = [],
           </a>
         </div>
       </form>
+
+      <p className="text-sm text-muted-foreground">
+        กำลังดูข้อมูลของ: <span className="font-medium text-foreground">{scopeLabel}</span>
+      </p>
 
       {/* Summary row */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -188,65 +180,14 @@ export function ReportClient({ from, to, data, departments = [], employees = [],
         ))}
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {/* Leave by type */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">ชั่วโมงลาแยกตามประเภท</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart items={data.leaveByType} unit=" ชม." />
-          </CardContent>
-        </Card>
-
-        {/* Leave by dept */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">ชั่วโมงลาแยกตามฝ่าย</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart items={data.leaveByDept} unit=" ชม." />
-          </CardContent>
-        </Card>
-
-        {/* OT by dept */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">OT แยกตามฝ่าย</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              <span className="inline-block h-2 w-3 rounded-full bg-primary/60 mr-1" />x1
-              <span className="inline-block h-2 w-3 rounded-full bg-primary mx-1 ml-2" />x1.5
-              <span className="inline-block h-2 w-3 rounded-full bg-accent mx-1 ml-2" />x3
-            </p>
-          </CardHeader>
-          <CardContent>
-            <OtBarChart items={data.otByDept} />
-            <div className="mt-3 flex gap-4 text-xs text-muted-foreground">
-              <span>x1 = {data.otTotals.x1} ชม.</span>
-              <span>x1.5 = {data.otTotals.x15} ชม.</span>
-              <span>x3 = {data.otTotals.x3} ชม.</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Asset status */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">สถานะทรัพย์สิน ({assetTotal} รายการ)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <BarChart
-              items={[
-                { name: "ในคลัง", value: data.assets.in_stock },
-                { name: "มอบหมายแล้ว", value: data.assets.assigned },
-                { name: "ชำรุด", value: data.assets.broken },
-                { name: "จำหน่าย", value: data.assets.disposed },
-              ]}
-              unit=" ชิ้น"
-            />
-          </CardContent>
-        </Card>
-      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">ชั่วโมงลาแยกตามประเภท — {scopeLabel}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BarChart items={data.leaveByType} unit=" ชม." />
+        </CardContent>
+      </Card>
     </div>
   );
 }
