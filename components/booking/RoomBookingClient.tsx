@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { DoorOpen, Plus, X, Trash2, LayoutList, CalendarRange } from "lucide-react";
-import { format, isToday, isTomorrow } from "date-fns";
-import { th } from "date-fns/locale";
+import { isToday, isTomorrow } from "date-fns";
+import { formatThaiDate } from "@/lib/format-th";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -60,7 +60,7 @@ function dayLabel(iso: string) {
   const d = new Date(iso);
   if (isToday(d)) return "วันนี้";
   if (isTomorrow(d)) return "พรุ่งนี้";
-  return format(d, "d MMMM yyyy", { locale: th });
+  return formatThaiDate(d, { day: "numeric", month: "long", year: "numeric" });
 }
 
 function todayStr() {

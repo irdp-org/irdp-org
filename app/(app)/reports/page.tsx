@@ -44,8 +44,6 @@ export default async function ReportsPage({
   const [
     { data: leaveRows },
     { data: fieldRows },
-    { count: vanCount },
-    { count: roomCount },
     { data: departments },
     { data: employees },
     { data: leaveDetailRows },
@@ -65,18 +63,6 @@ export default async function ReportsPage({
       .not("ot_hours", "is", null)
       .gte("work_date", from)
       .lte("work_date", to),
-    supabase
-      .from("van_bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "booked")
-      .gte("start_at", fromTs)
-      .lte("start_at", toTs),
-    supabase
-      .from("room_bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "booked")
-      .gte("start_at", fromTs)
-      .lte("start_at", toTs),
     supabase.from("departments").select("id, name").order("name"),
     supabase.from("employee_directory").select("id, full_name, department_id").eq("status", "active").order("full_name"),
     // Row-level detail for the searchable table — unfiltered by status so
@@ -144,8 +130,6 @@ export default async function ReportsPage({
 
   const data: ReportData = {
     leaveByType,
-    vanBookings: vanCount ?? 0,
-    roomBookings: roomCount ?? 0,
     totalLeaveHours: Math.round(totalLeaveHours * 10) / 10,
     totalOtHours: Math.round(totalOtHours * 10) / 10,
   };

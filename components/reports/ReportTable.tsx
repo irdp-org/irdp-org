@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
-import { format } from "date-fns";
+import { formatThaiDate } from "@/lib/format-th";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -133,6 +133,7 @@ export function ReportTable({ rows }: { rows: ReportRow[] }) {
             <thead>
               <tr className="border-b border-border bg-surface text-left text-xs text-muted-foreground">
                 <th className="px-3 py-2 font-medium">วันที่</th>
+                <th className="px-3 py-2 font-medium">เวลา</th>
                 <th className="px-3 py-2 font-medium">ประเภท</th>
                 <th className="px-3 py-2 font-medium">ชื่อ</th>
                 <th className="px-3 py-2 font-medium">ฝ่าย</th>
@@ -148,7 +149,10 @@ export function ReportTable({ rows }: { rows: ReportRow[] }) {
                   className="cursor-pointer border-b border-border last:border-0 hover:bg-surface"
                 >
                   <td className="whitespace-nowrap px-3 py-2 text-foreground">
-                    {format(new Date(`${r.date}T00:00:00`), "d MMM yyyy")}
+                    {formatThaiDate(new Date(`${r.date}T00:00:00`))}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-foreground">
+                    {r.startTime && r.endTime ? `${r.startTime}–${r.endTime}` : "—"}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2 text-foreground">{r.typeLabel}</td>
                   <td className="whitespace-nowrap px-3 py-2 text-foreground">{r.employeeName}</td>
@@ -161,7 +165,7 @@ export function ReportTable({ rows }: { rows: ReportRow[] }) {
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-3 py-6 text-center text-sm text-muted-foreground">
                     ไม่พบรายการที่ตรงกับตัวกรอง
                   </td>
                 </tr>
@@ -184,7 +188,7 @@ export function ReportTable({ rows }: { rows: ReportRow[] }) {
               <DetailRow label="ฝ่าย" value={selected.deptName} />
               <DetailRow
                 label="วันที่"
-                value={format(new Date(`${selected.date}T00:00:00`), "d MMMM yyyy")}
+                value={formatThaiDate(new Date(`${selected.date}T00:00:00`), { day: "numeric", month: "long", year: "numeric" })}
               />
               <DetailRow
                 label="เวลา"

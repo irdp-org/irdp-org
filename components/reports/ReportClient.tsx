@@ -10,8 +10,6 @@ export type DeptStat = { name: string; value: number };
 
 export type ReportData = {
   leaveByType: DeptStat[];
-  vanBookings: number;
-  roomBookings: number;
   totalLeaveHours: number;
   totalOtHours: number;
 };
@@ -160,34 +158,34 @@ export function ReportClient({
       </p>
 
       {/* Summary row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "ชั่วโมงลา", value: data.totalLeaveHours, unit: " ชม." },
-          { label: "ชั่วโมง OT", value: data.totalOtHours, unit: " ชม." },
-          { label: "จองรถตู้", value: data.vanBookings, unit: " ครั้ง" },
-          { label: "จองห้องประชุม", value: data.roomBookings, unit: " ครั้ง" },
-        ].map(({ label, value, unit }) => (
-          <div
-            key={label}
-            className="flex flex-col gap-0.5 rounded-xl border border-border bg-surface px-4 py-3"
-          >
-            <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="text-2xl font-semibold text-foreground">
-              {value}
-              <span className="text-sm font-normal text-muted-foreground">{unit}</span>
-            </p>
-          </div>
-        ))}
-      </div>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex gap-3 sm:flex-col sm:w-40 sm:shrink-0">
+          {[
+            { label: "ชั่วโมงลา", value: data.totalLeaveHours, unit: " ชม." },
+            { label: "ชั่วโมง OT", value: data.totalOtHours, unit: " ชม." },
+          ].map(({ label, value, unit }) => (
+            <div
+              key={label}
+              className="flex flex-1 flex-col gap-0.5 rounded-xl border border-border bg-surface px-4 py-3"
+            >
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="text-2xl font-semibold text-foreground">
+                {value}
+                <span className="text-sm font-normal text-muted-foreground">{unit}</span>
+              </p>
+            </div>
+          ))}
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">ชั่วโมงลาแยกตามประเภท — {scopeLabel}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BarChart items={data.leaveByType} unit=" ชม." />
-        </CardContent>
-      </Card>
+        <Card className="flex-1">
+          <CardHeader>
+            <CardTitle className="text-sm">ชั่วโมงลาแยกตามประเภท — {scopeLabel}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <BarChart items={data.leaveByType} unit=" ชม." />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

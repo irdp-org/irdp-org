@@ -17,6 +17,7 @@ import { ChevronLeft, ChevronRight, Bus, DoorOpen, Camera } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { formatThaiDate } from "@/lib/format-th";
 
 export type BookingEvent = {
   id: string;
@@ -72,7 +73,7 @@ export function BookingCalendar({ events }: { events: BookingEvent[] }) {
         <Button variant="ghost" size="icon" onClick={() => setMonth(subMonths(month, 1))} aria-label="เดือนก่อนหน้า">
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <span className="text-base font-medium text-foreground">{format(month, "MMMM yyyy")}</span>
+        <span className="text-base font-medium text-foreground">{formatThaiDate(month, { month: "long", year: "numeric" })}</span>
         <Button variant="ghost" size="icon" onClick={() => setMonth(addMonths(month, 1))} aria-label="เดือนถัดไป">
           <ChevronRight className="h-4 w-4" />
         </Button>

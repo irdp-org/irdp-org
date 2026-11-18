@@ -19,6 +19,7 @@ import { ChevronLeft, ChevronRight, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { formatThaiDate } from "@/lib/format-th";
 import type { Database } from "@/lib/database.types";
 import { EventSheet, type ExistingOrgEvent } from "./EventSheet";
 import {
@@ -132,7 +133,7 @@ export function MonthView({
             <ChevronLeft className="h-4 w-4" />
           </Link>
         </Button>
-        <span className="text-base font-medium text-foreground">{format(month, "MMMM yyyy")}</span>
+        <span className="text-base font-medium text-foreground">{formatThaiDate(month, { month: "long", year: "numeric" })}</span>
         <Button asChild variant="ghost" size="icon" aria-label="เดือนถัดไป">
           <Link href={`?month=${ymKey(addMonths(month, 1))}`}>
             <ChevronRight className="h-4 w-4" />
@@ -201,7 +202,7 @@ export function MonthView({
                 className="flex flex-col gap-1 rounded-xl border border-border bg-surface px-3 py-2 text-left"
               >
                 <span className={cn("text-xs font-medium", isToday(day) ? "text-primary" : "text-muted-foreground")}>
-                  {format(day, "d MMMM")}{isToday(day) ? " (วันนี้)" : ""}
+                  {formatThaiDate(day, { day: "numeric", month: "long" })}{isToday(day) ? " (วันนี้)" : ""}
                 </span>
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5">
                   {dayEvents.map((ev) => (
@@ -222,7 +223,7 @@ export function MonthView({
       <Dialog open={!!selectedDay} onOpenChange={(open) => !open && setSelectedDay(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{selectedDay && format(selectedDay, "d MMMM yyyy")}</DialogTitle>
+            <DialogTitle>{selectedDay && formatThaiDate(selectedDay, { day: "numeric", month: "long", year: "numeric" })}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-2 py-1">
             {selectedEvents.length === 0 ? (

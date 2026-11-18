@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, X, MapPin, ChevronRight, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
+import { formatThaiDate } from "@/lib/format-th";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -137,7 +138,7 @@ export function FieldRequestsClient({
               key: "work_date",
               label: "วันที่",
               sortValue: (r) => r.work_date,
-              render: (r) => <span className="whitespace-nowrap text-foreground">{format(new Date(r.work_date), "d MMM yyyy")}</span>,
+              render: (r) => <span className="whitespace-nowrap text-foreground">{formatThaiDate(new Date(r.work_date))}</span>,
             },
             {
               key: "time",
@@ -287,7 +288,7 @@ export function FieldRequestsClient({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-muted-foreground">วันที่</span>
-                  <span className="text-foreground">{format(new Date(detailItem.work_date), "d MMM yyyy")}</span>
+                  <span className="text-foreground">{formatThaiDate(new Date(detailItem.work_date))}</span>
                 </div>
                 {detailItem.planned_start && detailItem.planned_end && (
                   <div className="flex items-center justify-between">

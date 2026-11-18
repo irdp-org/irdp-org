@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { formatThaiDate } from "@/lib/format-th";
 import {
   Check,
   Undo2,
@@ -148,7 +149,7 @@ function CancelApprovedDialog({
           <div className="flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2.5 text-sm text-foreground">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <span>
-              คำขอนี้ถูกส่งออกให้การเงินไปแล้วเมื่อ {format(new Date(exportedAt), "d MMM yyyy HH:mm")} —
+              คำขอนี้ถูกส่งออกให้การเงินไปแล้วเมื่อ {formatThaiDate(new Date(exportedAt))} {format(new Date(exportedAt), "HH:mm")} —
               การยกเลิกตอนนี้จะไม่แก้ไขข้อมูลที่ส่งไปแล้วโดยอัตโนมัติ ต้องแจ้งฝ่ายการเงินเอง
             </span>
           </div>
@@ -181,7 +182,7 @@ function CheckinSummary({ checkins, onEnlarge }: { checkins: FieldCheckinInfo[];
         <div key={i} className="flex flex-col gap-1 text-xs">
           <div className="flex items-center gap-2">
             <span className="font-medium text-foreground">{CHECKIN_KIND_LABELS_TH[c.kind]}</span>
-            <span className="text-muted-foreground">{format(new Date(c.happened_at), "d MMM HH:mm")}</span>
+            <span className="text-muted-foreground">{formatThaiDate(new Date(c.happened_at), { day: "numeric", month: "short" })} {format(new Date(c.happened_at), "HH:mm")}</span>
             {c.within_radius != null &&
               (c.within_radius ? (
                 <Badge className="gap-1 bg-success/10 text-success hover:bg-success/10">
@@ -279,7 +280,7 @@ export function FieldApprovalList({
                 <span className="text-muted-foreground">
                   {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh" | "ot"] ?? r.type}
                   {r.location_name ? ` · ${r.location_name}` : ""} ·{" "}
-                  {format(new Date(r.work_date), "d MMM yyyy")}
+                  {formatThaiDate(new Date(r.work_date))}
                   {r.planned_start && r.planned_end && (
                     <>
                       {" "}
@@ -373,7 +374,7 @@ export function FieldApprovalList({
                   <ul className="text-xs text-muted-foreground">
                     {r.acknowledgements.map((a, i) => (
                       <li key={i}>
-                        {a.actor_name} รับทราบเมื่อ {format(new Date(a.created_at), "d MMM yyyy HH:mm")}
+                        {a.actor_name} รับทราบเมื่อ {formatThaiDate(new Date(a.created_at))} {format(new Date(a.created_at), "HH:mm")}
                       </li>
                     ))}
                   </ul>

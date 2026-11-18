@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, X, ChevronRight, FileText, Search } from "lucide-react";
 import { format } from "date-fns";
+import { formatThaiDate } from "@/lib/format-th";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -240,7 +241,7 @@ export function LeaveRequestsClient({
               sortValue: (r) => r.start_at,
               render: (r) => (
                 <span className="whitespace-nowrap text-foreground">
-                  {format(new Date(r.start_at), "d MMM")} – {format(new Date(r.end_at), "d MMM yyyy")}
+                  {formatThaiDate(new Date(r.start_at), { day: "numeric", month: "short" })} – {formatThaiDate(new Date(r.end_at))}
                 </span>
               ),
             },
@@ -356,8 +357,8 @@ export function LeaveRequestsClient({
                 <div className="flex items-start justify-between gap-4">
                   <span className="text-muted-foreground shrink-0">ช่วงเวลา</span>
                   <span className="text-foreground text-right">
-                    {format(new Date(detailItem.start_at), "d MMM yyyy HH:mm")} –{" "}
-                    {format(new Date(detailItem.end_at), "d MMM yyyy HH:mm")}
+                    {formatThaiDate(new Date(detailItem.start_at))} {format(new Date(detailItem.start_at), "HH:mm")} –{" "}
+                    {formatThaiDate(new Date(detailItem.end_at))} {format(new Date(detailItem.end_at), "HH:mm")}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">

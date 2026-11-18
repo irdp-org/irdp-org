@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, Receipt, Pencil, ExternalLink, ArrowLeftRight, Route, Save } from "lucide-react";
-import { format } from "date-fns";
+import { formatThaiDate } from "@/lib/format-th";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -229,7 +229,7 @@ export function TravelExpenseClient({
       key: "created_at",
       label: "วันที่สร้าง",
       sortValue: (c) => c.created_at,
-      render: (c) => <span className="whitespace-nowrap text-foreground">{format(new Date(c.created_at), "d MMM yyyy")}</span>,
+      render: (c) => <span className="whitespace-nowrap text-foreground">{formatThaiDate(new Date(c.created_at))}</span>,
     },
   ];
 
@@ -336,7 +336,7 @@ export function TravelExpenseClient({
                 {detail.items.map((it) => (
                   <div key={it.id} className="flex flex-col gap-0.5 py-2 text-sm">
                     <div className="flex justify-between">
-                      <span className="font-medium text-foreground">{format(new Date(it.travel_date), "d MMM yyyy")}</span>
+                      <span className="font-medium text-foreground">{formatThaiDate(new Date(it.travel_date))}</span>
                       <span className="font-medium text-foreground">{formatBaht(it.amount)} บาท</span>
                     </div>
                     <span className="text-xs text-muted-foreground">

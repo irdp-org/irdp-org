@@ -1,7 +1,7 @@
 "use client";
 
 import { Search } from "lucide-react";
-import { format } from "date-fns";
+import { formatThaiDate } from "@/lib/format-th";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -70,7 +70,7 @@ export function TimelineClient({ month, person, employees, days }: Props) {
           {days.map((d) => (
             <li key={d.date} className="rounded-xl border border-border bg-surface px-4 py-3">
               <p className="mb-2 text-sm font-semibold text-foreground">
-                {format(new Date(`${d.date}T00:00:00`), "d MMM yyyy")}
+                {formatThaiDate(new Date(`${d.date}T00:00:00`))}
               </p>
               <ul className="flex flex-col gap-2">
                 {d.entries.map((e, i) => (

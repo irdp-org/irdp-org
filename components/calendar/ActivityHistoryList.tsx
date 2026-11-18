@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { format } from "date-fns";
-import { th } from "date-fns/locale";
+import { formatThaiDate } from "@/lib/format-th";
 import { History, GraduationCap, User, MapPin, Pencil, Users, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -111,7 +111,7 @@ export function ActivityHistoryList({
           {a.title}
         </span>
         <span className="text-xs text-muted-foreground">
-          {format(start, "d MMMM yyyy", { locale: th })}
+          {formatThaiDate(start, { day: "numeric", month: "long", year: "numeric" })}
           {!a.all_day && ` · ${format(start, "HH:mm")}${end ? `–${format(end, "HH:mm")}` : ""} น.`}
           {a.location && (
             <span className="inline-flex items-center gap-0.5">
@@ -229,7 +229,7 @@ export function ActivityHistoryList({
                           )}
                         </div>
                         <span className="text-xs text-muted-foreground">
-                          {format(new Date(r.checkedInAt), "d MMM HH:mm", { locale: th })} น.
+                          {formatThaiDate(new Date(r.checkedInAt), { day: "numeric", month: "short" })} {format(new Date(r.checkedInAt), "HH:mm")} น.
                           {r.checkedOutAt && ` – ${format(new Date(r.checkedOutAt), "HH:mm")} น.`}
                           {r.location && ` · ${r.location}`}
                           {r.distanceM != null && ` · ห่าง ${r.distanceM} ม.`}

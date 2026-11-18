@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
+import { formatThaiDate } from "@/lib/format-th";
 import { Check, Undo2, X, Ban, Pencil, ThumbsUp, AlertTriangle, Trash2, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -121,7 +122,7 @@ function CancelApprovedDialog({
           <div className="flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2.5 text-sm text-foreground">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
             <span>
-              คำขอนี้ถูกส่งออกให้การเงินไปแล้วเมื่อ {format(new Date(exportedAt), "d MMM yyyy HH:mm")} —
+              คำขอนี้ถูกส่งออกให้การเงินไปแล้วเมื่อ {formatThaiDate(new Date(exportedAt))} {format(new Date(exportedAt), "HH:mm")} —
               การยกเลิกตอนนี้จะไม่แก้ไขข้อมูลที่ส่งไปแล้วโดยอัตโนมัติ ต้องแจ้งฝ่ายการเงินเอง
             </span>
           </div>
@@ -287,8 +288,8 @@ export function ApprovalList({
               <div className="flex flex-col gap-0.5 text-sm">
                 <span className="font-medium text-foreground">{r.employee.full_name}</span>
                 <span className="text-muted-foreground">
-                  {LEAVE_LABELS_TH[r.leave_code]} · {format(new Date(r.start_at), "d MMM")} –{" "}
-                  {format(new Date(r.end_at), "d MMM yyyy")} · {r.hours} ชม.
+                  {LEAVE_LABELS_TH[r.leave_code]} · {formatThaiDate(new Date(r.start_at), { day: "numeric", month: "short" })} –{" "}
+                  {formatThaiDate(new Date(r.end_at))} · {r.hours} ชม.
                 </span>
                 {r.reason && <span className="text-muted-foreground">เหตุผล: {r.reason}</span>}
               </div>
@@ -356,7 +357,7 @@ export function ApprovalList({
                   <ul className="text-xs text-muted-foreground">
                     {r.acknowledgements.map((a, i) => (
                       <li key={i}>
-                        {a.actor_name} รับทราบเมื่อ {format(new Date(a.created_at), "d MMM yyyy HH:mm")}
+                        {a.actor_name} รับทราบเมื่อ {formatThaiDate(new Date(a.created_at))} {format(new Date(a.created_at), "HH:mm")}
                       </li>
                     ))}
                   </ul>

@@ -2,8 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
-import { th } from "date-fns/locale";
+import { formatThaiDate } from "@/lib/format-th";
 import {
   Search,
   Plus,
@@ -348,9 +347,9 @@ export function WorkDiaryClient({
               const faded = empty && (d.isWeekend || !!d.holidayName);
               const dateLabel = (
                 <>
-                  {format(new Date(`${d.date}T00:00:00`), "d MMM yyyy", { locale: th })}
+                  {formatThaiDate(new Date(`${d.date}T00:00:00`))}
                   <span className="block font-normal text-muted-foreground">
-                    {format(new Date(`${d.date}T00:00:00`), "EEEE", { locale: th })}
+                    {formatThaiDate(new Date(`${d.date}T00:00:00`), { weekday: "long" })}
                   </span>
                   {d.holidayName && (
                     <Badge variant="outline" className="mt-1 text-[10px]">{d.holidayName}</Badge>
