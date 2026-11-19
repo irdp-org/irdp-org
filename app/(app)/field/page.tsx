@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { FieldRequestsClient, type OwnFieldRequest } from "@/components/field/FieldRequestsClient";
 import { FieldApprovalList, type FieldApprovalQueueRow } from "@/components/field/FieldApprovalList";
 import { RequestTabs } from "@/components/shared/RequestTabs";
-import { loadMyActions, chunk } from "@/lib/my-approval-actions";
+import { loadMyActions, loadApprovalTrail, chunk } from "@/lib/my-approval-actions";
 
 const CAN_SEE_APPROVALS = ["dept_head", "hr", "admin", "exec"];
 
@@ -128,8 +128,14 @@ export default async function FieldPage({
         : Promise.resolve({ data: [] }),
     ]);
 
+    const trailById = await loadApprovalTrail(supabase, "field_requests", requestRows.map((r) => r.id));
+
     const employeeIds = Array.from(
-      new Set([...requestRows.map((r) => r.employee_id), ...(acks ?? []).map((a) => a.actor_id)])
+      new Set([
+        ...requestRows.map((r) => r.employee_id),
+        ...(acks ?? []).map((a) => a.actor_id),
+        ...[...trailById.values()].flat().map((t) => t.actor_id),
+      ])
     );
     const { data: people } = employeeIds.length
       ? await supabase
@@ -172,6 +178,12 @@ export default async function FieldPage({
           exported_at: r.exported_at,
           attachments: r.attachments,
           created_at: r.created_at,
+          trail: (trailById.get(r.id) ?? []).map((t) => ({
+            actor_name: peopleById.get(t.actor_id)?.full_name ?? "—",
+            action: t.action,
+            note: t.note,
+            created_at: t.created_at,
+          })),
           myAction: myActions.get(r.id) ?? null,
           employee: {
             id: r.employee_id,

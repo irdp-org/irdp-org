@@ -29,7 +29,10 @@ import {
 import { LeaveExportPanel } from "./LeaveExportPanel";
 import { RequestFilterBar } from "@/components/shared/RequestFilterBar";
 import { ApprovalSummary } from "@/components/shared/ApprovalSummary";
-import { MY_ACTION_LABELS_TH, type MyApprovalAction } from "@/lib/my-approval-actions";
+import { MY_ACTION_LABELS_TH, type MyApprovalAction, type TrailEntry } from "@/lib/my-approval-actions";
+import { ApprovalTrail } from "@/components/shared/ApprovalTrail";
+import { splitAttachment, isImageUrl } from "@/lib/attachment-link";
+import { FileText } from "lucide-react";
 import { ClipboardList } from "lucide-react";
 import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 import { generateLeaveDoc } from "@/app/(app)/leave/actions";
@@ -45,6 +48,10 @@ export type ApprovalQueueRow = {
   reason: string | null;
   exported_at: string | null;
   created_at: string;
+  /** Signed URL of the uploaded leave certificate, if any. */
+  cert_url: string | null;
+  /** Everyone's actions on this request, oldest first. */
+  trail: TrailEntry[];
   /** Latest thing the signed-in user did on this request (from approvals). */
   myAction: MyApprovalAction | null;
   employee: { id: string; full_name: string; department_id: string | null };
@@ -165,6 +172,7 @@ export function ApprovalList({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<ApprovalQueueRow | null>(null);
+  const [detail, setDetail] = useState<ApprovalQueueRow | null>(null);
   const [nameFilter, setNameFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -362,7 +370,14 @@ export function ApprovalList({
         return (
           <li key={r.id} className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-3">
             <div className="flex items-start justify-between gap-3">
-              <div className="flex flex-col gap-0.5 text-sm">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setDetail(r)}
+                onKeyDown={(e) => e.key === "Enter" && setDetail(r)}
+                className="flex min-w-0 cursor-pointer flex-col gap-0.5 rounded-lg text-sm hover:opacity-80"
+                title="กดเพื่อดูรายละเอียด"
+              >
                 <span className="font-medium text-foreground">{r.employee.full_name}</span>
                 <span className="text-muted-foreground">
                   {LEAVE_LABELS_TH[r.leave_code]} · {formatThaiDate(new Date(r.start_at), { day: "numeric", month: "short" })} –{" "}
@@ -474,6 +489,88 @@ export function ApprovalList({
           </li>
         );
       })}
+
+      <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          {detail && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {LEAVE_LABELS_TH[detail.leave_code]} — {detail.employee.full_name}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 py-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">สถานะ</span>
+                  <Badge variant={STATUS_VARIANT[detail.status]}>{LEAVE_STATUS_LABELS_TH[detail.status]}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">ฝ่าย</span>
+                  <span className="text-foreground">
+                    {departments.find((d) => d.id === detail.employee.department_id)?.name ?? "—"}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="shrink-0 text-muted-foreground">ช่วงเวลา</span>
+                  <span className="text-right text-foreground">
+                    {formatThaiDate(new Date(detail.start_at))} {format(new Date(detail.start_at), "HH:mm")} –{" "}
+                    {formatThaiDate(new Date(detail.end_at))} {format(new Date(detail.end_at), "HH:mm")}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">จำนวน</span>
+                  <span className="text-foreground">
+                    {detail.hours} ชม. ({(detail.hours / 7.5).toFixed(2)} วัน)
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">ยื่นเมื่อ</span>
+                  <span className="text-foreground">{formatThaiDateTime(detail.created_at)}</span>
+                </div>
+                {(() => {
+                  const { text: reasonText, url: embeddedUrl } = splitAttachment(detail.reason);
+                  const attachmentUrl = detail.cert_url || embeddedUrl;
+                  return (
+                    <>
+                      {reasonText && (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-muted-foreground">เหตุผล / เรื่องที่ลา</span>
+                          <span className="text-foreground">{reasonText}</span>
+                        </div>
+                      )}
+                      {attachmentUrl && (
+                        <div className="flex flex-col gap-2">
+                          <span className="text-muted-foreground">ไฟล์แนบ</span>
+                          {isImageUrl(attachmentUrl) ? (
+                            <a href={attachmentUrl} target="_blank" rel="noreferrer">
+                              {/* eslint-disable-next-line @next/next/no-img-element -- signed URL */}
+                              <img src={attachmentUrl} alt="เอกสารแนบ" className="max-h-64 w-full rounded-xl border border-border object-contain" />
+                            </a>
+                          ) : (
+                            <a
+                              href={attachmentUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-primary"
+                            >
+                              <FileText className="h-4 w-4 shrink-0" /> เปิดไฟล์แนบ
+                            </a>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
+                <ApprovalTrail entries={detail.trail} />
+                <div className="flex items-center justify-between border-t border-border pt-3">
+                  <span className="text-muted-foreground">ออกใบลา (Google Doc)</span>
+                  <GenerateDocButton id={detail.id} generate={generateLeaveDoc} label="ออกใบลา" />
+                </div>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {editing && (
         <LeaveRequestSheet

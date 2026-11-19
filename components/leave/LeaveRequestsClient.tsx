@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Pencil, X, ChevronRight, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { formatThaiDate, bkkYearMonth, bkkDateKey } from "@/lib/format-th";
+import { splitAttachment } from "@/lib/attachment-link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -55,17 +56,6 @@ export type OwnLeaveRequest = {
   cert_url?: string | null;
   returnNote?: string | null;
 };
-
-/** Legacy imports embed an attachment link in the reason text as
- * "(เอกสารแนบ: <url>)" — pull it out so it renders as a real link instead of
- * plain text, and return the reason with that suffix stripped. */
-function splitAttachment(reason: string | null): { text: string | null; url: string | null } {
-  if (!reason) return { text: null, url: null };
-  const m = reason.match(/\(เอกสารแนบ:\s*(https?:\/\/\S+)\)\s*$/);
-  if (!m) return { text: reason, url: null };
-  const text = reason.slice(0, m.index).trim();
-  return { text: text || null, url: m[1] };
-}
 
 const LEAVE_SERIES: BarSeries[] = [
   { key: "sick", label: "ลาป่วย", className: "bg-warning" },

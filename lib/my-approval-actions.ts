@@ -43,3 +43,47 @@ export function chunk<T>(arr: T[], size: number): T[][] {
   for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
 }
+
+export type TrailRow = {
+  entity_id: string;
+  actor_id: string;
+  action: MyApprovalAction["action"];
+  note: string | null;
+  created_at: string;
+};
+
+/** A trail row with the actor's name resolved, as shown in the detail dialog. */
+export type TrailEntry = {
+  actor_name: string;
+  action: MyApprovalAction["action"];
+  note: string | null;
+  created_at: string;
+};
+
+/** Full approvals trail (everyone's actions) for the given requests, oldest
+ * first per request. Chunked so 500 ids do not blow the URL length limit. */
+export async function loadApprovalTrail(
+  supabase: Supa,
+  entity: "leave_requests" | "field_requests",
+  ids: string[]
+): Promise<Map<string, TrailRow[]>> {
+  const results = await Promise.all(
+    chunk(ids, 100).map((part) =>
+      supabase
+        .from("approvals")
+        .select("entity_id, actor_id, action, note, created_at")
+        .eq("entity", entity)
+        .in("entity_id", part)
+        .order("created_at", { ascending: true })
+    )
+  );
+  const map = new Map<string, TrailRow[]>();
+  for (const { data } of results) {
+    for (const t of data ?? []) {
+      const list = map.get(t.entity_id) ?? [];
+      list.push(t);
+      map.set(t.entity_id, list);
+    }
+  }
+  return map;
+}

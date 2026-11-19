@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
+import { bkkDateKey } from "@/lib/format-th";
+import { cn } from "@/lib/utils";
 
 export type FilterOption = { value: string; label: string };
 
@@ -10,6 +12,29 @@ export type FilterSelect = {
   allLabel: string;
   options: FilterOption[];
 };
+
+const ymd = (d: Date) => d.toISOString().slice(0, 10);
+const atNoon = (key: string) => new Date(`${key}T12:00:00Z`);
+const addDays = (key: string, n: number) => {
+  const d = atNoon(key);
+  d.setUTCDate(d.getUTCDate() + n);
+  return ymd(d);
+};
+
+/** Quick period shortcuts, computed from today in Bangkok time. */
+function periodPresets(): { label: string; from: string; to: string }[] {
+  const today = bkkDateKey(new Date());
+  const [y, m] = today.split("-").map(Number);
+  const mondayOffset = (atNoon(today).getUTCDay() + 6) % 7; // week runs Mon-Sun
+  const weekStart = addDays(today, -mondayOffset);
+  return [
+    { label: "วันนี้", from: today, to: today },
+    { label: "สัปดาห์นี้", from: weekStart, to: addDays(weekStart, 6) },
+    { label: "เดือนนี้", from: ymd(new Date(Date.UTC(y, m - 1, 1))), to: ymd(new Date(Date.UTC(y, m, 0))) },
+    { label: "เดือนที่แล้ว", from: ymd(new Date(Date.UTC(y, m - 2, 1))), to: ymd(new Date(Date.UTC(y, m - 1, 0))) },
+    { label: "ปีนี้", from: `${y}-01-01`, to: `${y}-12-31` },
+  ];
+}
 
 const boxCls = "flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-sm";
 const selectCls = "bg-transparent text-sm text-foreground outline-none";
@@ -68,6 +93,28 @@ export function RequestFilterBar({
           </div>
         ))}
         {extra}
+      </div>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-xs text-muted-foreground">ช่วงเวลา:</span>
+        {periodPresets().map((p) => {
+          const on = from === p.from && to === p.to;
+          return (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => {
+                onFrom(p.from);
+                onTo(p.to);
+              }}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs transition-colors",
+                on ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-foreground hover:bg-surface"
+              )}
+            >
+              {p.label}
+            </button>
+          );
+        })}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <div className={boxCls}>

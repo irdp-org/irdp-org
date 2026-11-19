@@ -33,7 +33,9 @@ import { EmptyState } from "@/components/shell/EmptyState";
 import { FieldRequestSheet } from "./FieldRequestSheet";
 import { RequestFilterBar } from "@/components/shared/RequestFilterBar";
 import { ApprovalSummary } from "@/components/shared/ApprovalSummary";
-import { MY_ACTION_LABELS_TH, type MyApprovalAction } from "@/lib/my-approval-actions";
+import { MY_ACTION_LABELS_TH, type MyApprovalAction, type TrailEntry } from "@/lib/my-approval-actions";
+import { ApprovalTrail } from "@/components/shared/ApprovalTrail";
+import { AttachmentList } from "@/components/shared/AttachmentList";
 import { FIELD_TYPE_LABELS_TH, FIELD_STATUS_LABELS_TH } from "@/lib/ot";
 import {
   decideFieldRequest,
@@ -68,6 +70,8 @@ export type FieldApprovalQueueRow = {
   reason: string | null;
   exported_at: string | null;
   created_at: string;
+  /** Everyone's actions on this request, oldest first. */
+  trail: TrailEntry[];
   /** Latest thing the signed-in user did on this request (from approvals). */
   myAction: MyApprovalAction | null;
   employee: { id: string; full_name: string; department_id: string | null };
@@ -245,6 +249,7 @@ export function FieldApprovalList({
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<FieldApprovalQueueRow | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [detail, setDetail] = useState<FieldApprovalQueueRow | null>(null);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
@@ -394,7 +399,14 @@ export function FieldApprovalList({
         return (
           <li key={r.id} className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-3">
             <div className="flex items-start justify-between gap-3">
-              <div className="flex flex-col gap-0.5 text-sm">
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setDetail(r)}
+                onKeyDown={(e) => e.key === "Enter" && setDetail(r)}
+                className="flex min-w-0 cursor-pointer flex-col gap-0.5 rounded-lg text-sm hover:opacity-80"
+                title="กดเพื่อดูรายละเอียด"
+              >
                 <span className="font-medium text-foreground">{r.employee.full_name}</span>
                 <span className="text-muted-foreground">
                   {FIELD_TYPE_LABELS_TH[r.type as "offsite" | "wfh" | "ot"] ?? r.type}
@@ -509,6 +521,79 @@ export function FieldApprovalList({
           </li>
         );
       })}
+
+      <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+          {detail && (
+            <>
+              <DialogHeader>
+                <DialogTitle>
+                  {FIELD_TYPE_LABELS_TH[detail.type as "offsite" | "wfh" | "ot"] ?? detail.type} — {detail.employee.full_name}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-3 py-1 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">สถานะ</span>
+                  <Badge variant={STATUS_VARIANT[detail.status]}>{FIELD_STATUS_LABELS_TH[detail.status]}</Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">ฝ่าย</span>
+                  <span className="text-foreground">
+                    {departments.find((d) => d.id === detail.employee.department_id)?.name ?? "—"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">วันที่</span>
+                  <span className="text-foreground">{formatThaiDate(new Date(detail.work_date))}</span>
+                </div>
+                {detail.planned_start && detail.planned_end && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">เวลา</span>
+                    <span className="text-foreground">
+                      {format(new Date(detail.planned_start), "HH:mm")} – {format(new Date(detail.planned_end), "HH:mm")} น.
+                    </span>
+                  </div>
+                )}
+                {(detail.location_name || detail.location_text) && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="shrink-0 text-muted-foreground">สถานที่</span>
+                    <span className="text-right text-foreground">{detail.location_name ?? detail.location_text}</span>
+                  </div>
+                )}
+                {detail.ot_hours ? (
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">ชั่วโมง OT</span>
+                      <span className="font-medium text-foreground">{detail.ot_hours} ชม.</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      ×1: {detail.pay_x1_hours} · ×1.5: {detail.pay_x15_hours} · ×3: {detail.pay_x3_hours}
+                    </span>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">ยื่นเมื่อ</span>
+                  <span className="text-foreground">{formatThaiDateTime(detail.created_at)}</span>
+                </div>
+                {detail.reason && (
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-muted-foreground">เหตุผล / รายละเอียด</span>
+                    <span className="text-foreground">{detail.reason}</span>
+                  </div>
+                )}
+                <AttachmentList files={detail.attachments ?? []} />
+                {detail.checkins.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-muted-foreground">บันทึกเช็คอิน</span>
+                    <CheckinSummary checkins={detail.checkins} onEnlarge={setLightbox} />
+                  </div>
+                )}
+                <ApprovalTrail entries={detail.trail} />
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {editing && (
         <FieldRequestSheet

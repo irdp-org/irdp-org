@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { LeaveRequestsClient, type OwnLeaveRequest } from "@/components/leave/LeaveRequestsClient";
 import { ApprovalList, type ApprovalQueueRow } from "@/components/leave/ApprovalList";
 import { RequestTabs } from "@/components/shared/RequestTabs";
-import { loadMyActions, chunk } from "@/lib/my-approval-actions";
+import { loadMyActions, loadApprovalTrail, chunk } from "@/lib/my-approval-actions";
 
 const CAN_SEE_APPROVALS = ["dept_head", "hr", "admin", "exec"];
 
@@ -68,7 +68,7 @@ export default async function LeavePage({
 
     // RLS scopes: dept_head -> own department, hr/admin/exec -> everyone.
     // Limit 500 to avoid missing records in orgs with many requests.
-    const QUEUE_COLS = "id, employee_id, leave_code, start_at, end_at, hours, status, reason, exported_at, created_at";
+    const QUEUE_COLS = "id, employee_id, leave_code, start_at, end_at, hours, status, reason, exported_at, created_at, cert_url";
     const { data: queue } = await supabase
       .from("leave_requests")
       .select(QUEUE_COLS)
@@ -97,8 +97,19 @@ export default async function LeavePage({
           .in("entity_id", approvedIds)
       : { data: [] };
 
+    // Full who-did-what trail + signed attachment URLs for the detail dialog.
+    const [trailById, certUrls] = await Promise.all([
+      loadApprovalTrail(supabase, "leave_requests", requestRows.map((r) => r.id)),
+      Promise.all(requestRows.map((r) => getSignedUrl("leave-certs", r.cert_url))),
+    ]);
+    const certUrlById = new Map(requestRows.map((r, i) => [r.id, certUrls[i]]));
+
     const employeeIds = Array.from(
-      new Set([...requestRows.map((r) => r.employee_id), ...(acks ?? []).map((a) => a.actor_id)])
+      new Set([
+        ...requestRows.map((r) => r.employee_id),
+        ...(acks ?? []).map((a) => a.actor_id),
+        ...[...trailById.values()].flat().map((t) => t.actor_id),
+      ])
     );
     const { data: people } = employeeIds.length
       ? await supabase
@@ -118,6 +129,13 @@ export default async function LeavePage({
       reason: r.reason,
       exported_at: r.exported_at,
       created_at: r.created_at,
+      cert_url: certUrlById.get(r.id) ?? null,
+      trail: (trailById.get(r.id) ?? []).map((t) => ({
+        actor_name: peopleById.get(t.actor_id)?.full_name ?? "—",
+        action: t.action,
+        note: t.note,
+        created_at: t.created_at,
+      })),
       myAction: myActions.get(r.id) ?? null,
       employee: {
         id: r.employee_id,

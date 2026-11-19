@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Plus, Pencil, X, MapPin, ChevronRight, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 import { formatThaiDate, bkkYearMonth } from "@/lib/format-th";
+import { splitAttachment, isImageUrl } from "@/lib/attachment-link";
+import { AttachmentList } from "@/components/shared/AttachmentList";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RequestFilterBar } from "@/components/shared/RequestFilterBar";
 import { MonthlyBars, SummaryTile, YearSelect, type BarSeries } from "@/components/shared/summary";
@@ -77,22 +79,11 @@ const STATUS_VARIANT: Record<RequestStatusT, "default" | "secondary" | "destruct
   cancelled: "outline",
 };
 
-/** Legacy imports embed an attachment link in the reason text as
- * "(เอกสารแนบ: <url>)" — pull it out so it renders as a real link instead of
- * plain text, and return the reason with that suffix stripped. */
 const FIELD_SERIES: BarSeries[] = [
   { key: "offsite", label: "นอกสถานที่", className: "bg-primary" },
   { key: "ot", label: "ปฏิบัติงานนอกเวลา", className: "bg-warning" },
   { key: "wfh", label: "WFH", className: "bg-success" },
 ];
-
-function splitAttachment(reason: string | null): { text: string | null; url: string | null } {
-  if (!reason) return { text: null, url: null };
-  const m = reason.match(/\(เอกสารแนบ:\s*(https?:\/\/\S+)\)\s*$/);
-  if (!m) return { text: reason, url: null };
-  const text = reason.slice(0, m.index).trim();
-  return { text: text || null, url: m[1] };
-}
 
 export function FieldRequestsClient({
   requests,
@@ -399,15 +390,16 @@ export function FieldRequestsClient({
                     <span className="font-medium text-foreground">{detailItem.ot_hours} ชม.</span>
                   </div>
                 )}
-                {detailItem.location_name && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">สถานที่</span>
-                    <span className="text-foreground">{detailItem.location_name}</span>
+                {(detailItem.location_name || detailItem.location_text) && (
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="shrink-0 text-muted-foreground">สถานที่</span>
+                    <span className="text-right text-foreground">{detailItem.location_name ?? detailItem.location_text}</span>
                   </div>
                 )}
+                <AttachmentList files={detailItem.attachments ?? []} />
                 {(() => {
                   const { text: reasonText, url: attachmentUrl } = splitAttachment(detailItem.reason);
-                  const isImage = !!attachmentUrl && /\.(jpg|jpeg|png|webp|heic|heif)(\?|$)/i.test(attachmentUrl);
+                  const isImage = !!attachmentUrl && isImageUrl(attachmentUrl);
                   return (
                     <>
                       {reasonText && (
