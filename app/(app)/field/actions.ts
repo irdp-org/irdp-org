@@ -7,6 +7,7 @@ import { notify } from "@/lib/notify";
 import {
   fieldRequestSchema,
   fieldTimeToIso,
+  expandDateRange,
   previewOtHours,
   previewWeeklyOt,
   checkWfhConflict as checkWfhConflictForDate,
@@ -90,6 +91,7 @@ export async function checkWfhConflict(workDate: string) {
 }
 
 function buildRow(employeeId: string, parsed: FieldRequestInput, status: "draft" | "submitted") {
+  // One row per day: for a multi-day request the caller overrides workDate.
   const isOffsite = parsed.type === "offsite";
   return {
     employee_id: employeeId,
@@ -114,6 +116,8 @@ function parseForm(formData: FormData) {
     locationId: formData.get("locationId") || undefined,
     locationText: formData.get("locationText") || undefined,
     workDate: formData.get("workDate"),
+    endDate: formData.get("endDate") || undefined,
+    skipWeekends: formData.get("skipWeekends") === "true",
     plannedStart: formData.get("plannedStart") || undefined,
     plannedEnd: formData.get("plannedEnd") || undefined,
     reason: formData.get("reason") || undefined,
@@ -130,28 +134,35 @@ export async function createFieldRequest(formData: FormData) {
   const submit = formData.get("submit") === "true";
   const supabase = await createClient();
 
+  // A range becomes one request per day (each is approved, paid and reported
+  // per day); the same evidence files are shared by every day.
+  const days = expandDateRange(parsed.data.workDate, parsed.data.endDate, parsed.data.skipWeekends ?? false);
+  if (days.length === 0) return { error: "ช่วงวันที่เลือกไม่มีวันทำงาน (มีแต่เสาร์–อาทิตย์)" };
+
   const newFiles = formData.getAll("attachments").filter((f): f is File => f instanceof File && f.size > 0);
-  const attachments = await uploadFieldAttachments(employee.full_name, parsed.data.workDate, newFiles);
+  const attachments = await uploadFieldAttachments(employee.full_name, days[0], newFiles);
 
-  const { data: row, error } = await supabase
+  const status = submit ? "submitted" : "draft";
+  // A single insert is atomic: if any day is rejected (e.g. an approved WFH
+  // on that date), nothing is saved and the DB's message names the date.
+  const { data: rows, error } = await supabase
     .from("field_requests")
-    .insert({ ...buildRow(employee.id, parsed.data, submit ? "submitted" : "draft"), attachments })
-    .select("id")
-    .single();
+    .insert(days.map((d) => ({ ...buildRow(employee.id, { ...parsed.data, workDate: d }, status), attachments })))
+    .select("id");
 
-  if (error || !row) return { error: error?.message ?? "บันทึกคำขอไม่สำเร็จ" };
+  if (error || !rows?.length) return { error: error?.message ?? "บันทึกคำขอไม่สำเร็จ" };
 
   if (submit) {
     await notifySubmission(
       employee,
       "มีคำขอนอกสถานที่/WFH ใหม่รออนุมัติ",
-      `${employee.full_name} ยื่นขอ${FIELD_TYPE_LABELS_TH[parsed.data.type]}`,
+      `${employee.full_name} ยื่นขอ${FIELD_TYPE_LABELS_TH[parsed.data.type]}${days.length > 1 ? ` ${days.length} วัน` : ""}`,
       "/field?tab=approvals"
     );
   }
 
   revalidatePath("/field");
-  return { ok: true, id: row.id };
+  return { ok: true, id: rows[0].id, count: rows.length };
 }
 
 export async function updateFieldRequest(id: string, formData: FormData) {

@@ -5,12 +5,42 @@ import type { Database } from "@/lib/database.types";
 
 const TZ = "Asia/Bangkok";
 
+/** Longest range (in calendar days) one request may cover. */
+export const MAX_RANGE_DAYS = 31;
+
+const atNoonUtc = (key: string) => new Date(`${key}T12:00:00Z`);
+
+/** Inclusive number of calendar days between two YYYY-MM-DD keys. */
+export function dateSpanDays(start: string, end: string): number {
+  return Math.round((atNoonUtc(end).getTime() - atNoonUtc(start).getTime()) / 86_400_000) + 1;
+}
+
+/** Every YYYY-MM-DD from start to end inclusive, optionally without
+ * Saturdays/Sundays. A single day (no end / end == start) is always kept as
+ * is, even on a weekend. */
+export function expandDateRange(start: string, end: string | undefined, skipWeekends: boolean): string[] {
+  if (!end || end <= start) return [start];
+  const out: string[] = [];
+  const d = atNoonUtc(start);
+  const last = atNoonUtc(end);
+  while (d <= last && out.length <= MAX_RANGE_DAYS) {
+    const dow = d.getUTCDay();
+    if (!skipWeekends || (dow !== 0 && dow !== 6)) out.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return out;
+}
+
 export const fieldRequestSchema = z
   .object({
     type: z.enum(["offsite", "wfh", "ot"]),
     locationId: z.string().optional(),
     locationText: z.string().max(200).optional(),
     workDate: z.string().min(1, "กรุณาเลือกวันที่"),
+    /** Last day when one request covers several days (e.g. WFH 2 days). */
+    endDate: z.string().optional(),
+    /** For a multi-day range: skip Saturdays/Sundays. */
+    skipWeekends: z.boolean().optional(),
     plannedStart: z.string().optional(),
     plannedEnd: z.string().optional(),
     reason: z.string().max(500).optional(),
@@ -18,6 +48,14 @@ export const fieldRequestSchema = z
   .refine((v) => v.type !== "offsite" || !!v.locationId, {
     message: "กรุณาเลือกสถานที่",
     path: ["locationId"],
+  })
+  .refine((v) => !v.endDate || v.endDate >= v.workDate, {
+    message: "วันที่สิ้นสุดต้องไม่ก่อนวันที่เริ่ม",
+    path: ["endDate"],
+  })
+  .refine((v) => !v.endDate || dateSpanDays(v.workDate, v.endDate) <= MAX_RANGE_DAYS, {
+    message: `เลือกช่วงวันได้ไม่เกิน ${MAX_RANGE_DAYS} วันต่อครั้ง`,
+    path: ["endDate"],
   })
   .refine((v) => !!v.plannedStart, {
     message: "กรุณากรอกเวลาเริ่ม",

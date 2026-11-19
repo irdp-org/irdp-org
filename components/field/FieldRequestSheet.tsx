@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   fieldRequestSchema,
+  expandDateRange,
   FIELD_TYPE_LABELS_TH,
   type FieldRequestInput,
   type OtPreview,
@@ -88,6 +89,8 @@ export function FieldRequestSheet({
       locationId: existing?.location_id ?? locations[0]?.id ?? "",
       locationText: existing?.location_text ?? "",
       workDate: existing?.work_date ?? "",
+      endDate: "",
+      skipWeekends: true,
       plannedStart: toTimeInput(existing?.planned_start ?? null) || "08:30",
       plannedEnd: toTimeInput(existing?.planned_end ?? null) || "17:00",
       reason: existing?.reason ?? "",
@@ -111,6 +114,8 @@ export function FieldRequestSheet({
   const type = form.watch("type");
   const locationId = form.watch("locationId");
   const workDate = form.watch("workDate");
+  const endDate = form.watch("endDate");
+  const skipWeekends = form.watch("skipWeekends") ?? false;
   const plannedStart = form.watch("plannedStart");
   const plannedEnd = form.watch("plannedEnd");
 
@@ -152,6 +157,11 @@ export function FieldRequestSheet({
       formData.set("locationId", values.locationId ?? "");
       formData.set("locationText", values.locationText ?? "");
       formData.set("workDate", values.workDate);
+      // A range only makes sense when creating; editing stays one day.
+      if (!existing && values.endDate) {
+        formData.set("endDate", values.endDate);
+        formData.set("skipWeekends", String(values.skipWeekends ?? false));
+      }
       formData.set("plannedStart", values.plannedStart ?? "");
       formData.set("plannedEnd", values.plannedEnd ?? "");
       formData.set("reason", values.reason ?? "");
@@ -172,6 +182,10 @@ export function FieldRequestSheet({
       });
     })();
   }
+
+  // Days a multi-day request will actually create (create mode only).
+  const rangeDays =
+    !existing && workDate && endDate && endDate > workDate ? expandDateRange(workDate, endDate, skipWeekends) : null;
 
   const weeklyTotal = (weeklyPreview?.week_ot_hours ?? 0) + (otPreview?.ot_hours ?? 0);
 
@@ -227,10 +241,35 @@ export function FieldRequestSheet({
             </div>
           )}
 
-          <div className="flex flex-col gap-1.5">
-            <Label>วันที่</Label>
-            <Input type="date" {...form.register("workDate")} />
+          <div className={existing ? "flex flex-col gap-1.5" : "grid grid-cols-2 gap-3"}>
+            <div className="flex flex-col gap-1.5">
+              <Label>{existing ? "วันที่" : "วันที่เริ่ม"}</Label>
+              <Input type="date" {...form.register("workDate")} />
+            </div>
+            {!existing && (
+              <div className="flex flex-col gap-1.5">
+                <Label>ถึงวันที่ (ถ้าหลายวัน)</Label>
+                <Input type="date" min={workDate || undefined} {...form.register("endDate")} />
+              </div>
+            )}
           </div>
+          {form.formState.errors.endDate && (
+            <p className="text-sm text-danger">{form.formState.errors.endDate.message}</p>
+          )}
+
+          {rangeDays && (
+            <div className="flex flex-col gap-2 rounded-xl bg-surface px-3 py-2.5 text-sm">
+              <span className="text-foreground">
+                {rangeDays.length > 0
+                  ? `จะสร้างคำขอ ${rangeDays.length} วัน (แยกเป็นรายวัน ใช้เวลา/เหตุผล/เอกสารเดียวกัน)`
+                  : "ช่วงที่เลือกไม่มีวันทำงาน"}
+              </span>
+              <label className="flex cursor-pointer items-center gap-2 text-muted-foreground">
+                <input type="checkbox" className="h-4 w-4" {...form.register("skipWeekends")} />
+                ข้ามวันเสาร์–อาทิตย์
+              </label>
+            </div>
+          )}
 
           {wfhConflict && (
             <div className="flex items-start gap-2 rounded-xl bg-warning/10 px-3 py-2.5 text-sm text-foreground">
