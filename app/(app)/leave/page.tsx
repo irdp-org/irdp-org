@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { LeaveRequestsClient, type OwnLeaveRequest } from "@/components/leave/LeaveRequestsClient";
 import { ApprovalList, type ApprovalQueueRow } from "@/components/leave/ApprovalList";
 import { RequestTabs } from "@/components/shared/RequestTabs";
+import { loadMyActions, chunk } from "@/lib/my-approval-actions";
 
 const CAN_SEE_APPROVALS = ["dept_head", "hr", "admin", "exec"];
 
@@ -67,13 +68,24 @@ export default async function LeavePage({
 
     // RLS scopes: dept_head -> own department, hr/admin/exec -> everyone.
     // Limit 500 to avoid missing records in orgs with many requests.
+    const QUEUE_COLS = "id, employee_id, leave_code, start_at, end_at, hours, status, reason, exported_at, created_at";
     const { data: queue } = await supabase
       .from("leave_requests")
-      .select("id, employee_id, leave_code, start_at, end_at, hours, status, reason, exported_at")
+      .select(QUEUE_COLS)
       .order("created_at", { ascending: false })
       .limit(500);
 
+    // What this person already approved/rejected/returned, so the list can
+    // show "you approved on <date>". Older requests that fell outside the
+    // 500 most recent are pulled in too, otherwise their history would vanish.
+    const myActions = await loadMyActions(supabase, "leave_requests", employee.id);
     const requestRows = queue ?? [];
+    const haveIds = new Set(requestRows.map((r) => r.id));
+    const missingIds = [...myActions.keys()].filter((id) => !haveIds.has(id)).slice(0, 300);
+    for (const ids of chunk(missingIds, 100)) {
+      const { data: extra } = await supabase.from("leave_requests").select(QUEUE_COLS).in("id", ids);
+      requestRows.push(...(extra ?? []));
+    }
     const approvedIds = requestRows.filter((r) => r.status === "approved").map((r) => r.id);
 
     const { data: acks } = approvedIds.length
@@ -105,6 +117,8 @@ export default async function LeavePage({
       status: r.status,
       reason: r.reason,
       exported_at: r.exported_at,
+      created_at: r.created_at,
+      myAction: myActions.get(r.id) ?? null,
       employee: {
         id: r.employee_id,
         full_name: peopleById.get(r.employee_id)?.full_name ?? "—",

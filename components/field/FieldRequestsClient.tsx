@@ -1,10 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, X, MapPin, ChevronRight, FileText, CheckCircle2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
-import { formatThaiDate } from "@/lib/format-th";
+import { formatThaiDate, bkkYearMonth } from "@/lib/format-th";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RequestFilterBar } from "@/components/shared/RequestFilterBar";
+import { MonthlyBars, SummaryTile, YearSelect, type BarSeries } from "@/components/shared/summary";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -77,6 +80,12 @@ const STATUS_VARIANT: Record<RequestStatusT, "default" | "secondary" | "destruct
 /** Legacy imports embed an attachment link in the reason text as
  * "(เอกสารแนบ: <url>)" — pull it out so it renders as a real link instead of
  * plain text, and return the reason with that suffix stripped. */
+const FIELD_SERIES: BarSeries[] = [
+  { key: "offsite", label: "นอกสถานที่", className: "bg-primary" },
+  { key: "ot", label: "ปฏิบัติงานนอกเวลา", className: "bg-warning" },
+  { key: "wfh", label: "WFH", className: "bg-success" },
+];
+
 function splitAttachment(reason: string | null): { text: string | null; url: string | null } {
   if (!reason) return { text: null, url: null };
   const m = reason.match(/\(เอกสารแนบ:\s*(https?:\/\/\S+)\)\s*$/);
@@ -98,6 +107,45 @@ export function FieldRequestsClient({
   const [detailItem, setDetailItem] = useState<OwnFieldRequest | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [chartYear, setChartYear] = useState(() => bkkYearMonth(new Date()).y);
+
+  const filtered = requests.filter((r) => {
+    if (typeFilter !== "all" && r.type !== typeFilter) return false;
+    if (statusFilter !== "all" && r.status !== statusFilter) return false;
+    if (from && r.work_date < from) return false;
+    if (to && r.work_date > to) return false;
+    const needle = search.trim().toLowerCase();
+    if (
+      needle &&
+      !(splitAttachment(r.reason).text ?? "").toLowerCase().includes(needle) &&
+      !(r.location_name ?? r.location_text ?? "").toLowerCase().includes(needle)
+    )
+      return false;
+    return true;
+  });
+
+  // Monthly dashboard — approved requests per month by type for the chosen year.
+  const chartYears = useMemo(
+    () => Array.from(new Set([bkkYearMonth(new Date()).y, ...requests.map((r) => Number(r.work_date.slice(0, 4)))])).sort((a, b) => b - a),
+    [requests]
+  );
+  const yearRequests = requests.filter((r) => Number(r.work_date.slice(0, 4)) === chartYear);
+  const approvedYear = yearRequests.filter((r) => r.status === "approved");
+  const monthlyValues = Array.from({ length: 12 }, (_, m) => {
+    const v = { offsite: 0, ot: 0, wfh: 0 };
+    for (const r of approvedYear) {
+      if (Number(r.work_date.slice(5, 7)) - 1 === m && r.type in v) v[r.type as keyof typeof v] += 1;
+    }
+    return v;
+  });
+  const countType = (t: string) => approvedYear.filter((r) => r.type === t).length;
+  const otHoursYear = approvedYear.reduce((sum, r) => sum + (r.ot_hours ?? 0), 0);
+  const pendingYear = yearRequests.filter((r) => r.status === "submitted").length;
 
   function handleCancel(id: string) {
     startTransition(async () => {
@@ -119,8 +167,55 @@ export function FieldRequestsClient({
         <Plus className="h-4 w-4" /> ยื่นคำขอ
       </Button>
 
+      {/* Monthly summary */}
+      {requests.length > 0 && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-2">
+            <CardTitle className="text-sm">สรุปรายเดือน (อนุมัติแล้ว)</CardTitle>
+            <YearSelect value={chartYear} years={chartYears} onChange={setChartYear} />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <SummaryTile label="นอกสถานที่" value={countType("offsite")} unit="ครั้ง" />
+              <SummaryTile label="ปฏิบัติงานนอกเวลา" value={countType("ot")} unit="ครั้ง" hint={otHoursYear > 0 ? `OT รวม ${Math.round(otHoursYear * 10) / 10} ชม.` : undefined} />
+              <SummaryTile label="WFH" value={countType("wfh")} unit="ครั้ง" />
+              <SummaryTile label="รออนุมัติ" value={pendingYear} unit="รายการ" />
+            </div>
+            <MonthlyBars values={monthlyValues} series={FIELD_SERIES} unit=" ครั้ง" />
+          </CardContent>
+        </Card>
+      )}
+
+      {requests.length > 0 && (
+        <RequestFilterBar
+          search={search}
+          onSearch={setSearch}
+          searchPlaceholder="ค้นหาสถานที่ / เหตุผล..."
+          selects={[
+            { key: "type", value: typeFilter, onChange: setTypeFilter, allLabel: "ทุกประเภท", options: Object.entries(FIELD_TYPE_LABELS_TH).map(([value, label]) => ({ value, label })) },
+            { key: "status", value: statusFilter, onChange: setStatusFilter, allLabel: "ทุกสถานะ", options: Object.entries(FIELD_STATUS_LABELS_TH).map(([value, label]) => ({ value, label })) },
+          ]}
+          from={from}
+          to={to}
+          onFrom={setFrom}
+          onTo={setTo}
+          shown={filtered.length}
+          total={requests.length}
+          active={typeFilter !== "all" || statusFilter !== "all" || !!from || !!to || !!search}
+          onClear={() => {
+            setTypeFilter("all");
+            setStatusFilter("all");
+            setFrom("");
+            setTo("");
+            setSearch("");
+          }}
+        />
+      )}
+
       {requests.length === 0 ? (
         <EmptyState icon={MapPin} title="ยังไม่มีคำขอนอกสถานที่/WFH" />
+      ) : filtered.length === 0 ? (
+        <EmptyState icon={MapPin} title="ไม่พบรายการที่ตรงกับตัวกรอง" />
       ) : (
         (() => {
           const columns: Column<OwnFieldRequest>[] = [
@@ -263,7 +358,7 @@ export function FieldRequestsClient({
           return (
             <SortableTable
               columns={columns}
-              rows={requests}
+              rows={filtered}
               rowKey={(r) => r.id}
               onRowClick={(r) => setDetailItem(r)}
             />

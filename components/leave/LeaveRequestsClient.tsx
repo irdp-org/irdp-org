@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, X, ChevronRight, FileText, Search } from "lucide-react";
+import { Plus, Pencil, X, ChevronRight, FileText } from "lucide-react";
 import { format } from "date-fns";
-import { formatThaiDate } from "@/lib/format-th";
+import { formatThaiDate, bkkYearMonth, bkkDateKey } from "@/lib/format-th";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -26,7 +26,9 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { SortableTable, type Column } from "@/components/shared/SortableTable";
-import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RequestFilterBar } from "@/components/shared/RequestFilterBar";
+import { MonthlyBars, SummaryTile, YearSelect, type BarSeries } from "@/components/shared/summary";
 import { LeaveRequestSheet } from "./LeaveRequestSheet";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
 import { cancelLeaveRequest, generateLeaveDoc } from "@/app/(app)/leave/actions";
@@ -65,6 +67,12 @@ function splitAttachment(reason: string | null): { text: string | null; url: str
   return { text: text || null, url: m[1] };
 }
 
+const LEAVE_SERIES: BarSeries[] = [
+  { key: "sick", label: "ลาป่วย", className: "bg-warning" },
+  { key: "personal", label: "ลากิจ", className: "bg-primary" },
+  { key: "vacation", label: "ลาพักร้อน", className: "bg-success" },
+];
+
 const STATUS_VARIANT: Record<OwnLeaveRequest["status"], "default" | "secondary" | "destructive" | "outline"> = {
   draft: "outline",
   submitted: "secondary",
@@ -91,6 +99,8 @@ export function LeaveRequestsClient({
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterFrom, setFilterFrom] = useState<string>("");
   const [filterTo, setFilterTo] = useState<string>("");
+  const [filterSearch, setFilterSearch] = useState<string>("");
+  const [chartYear, setChartYear] = useState<number>(year);
   const [isPending, startTransition] = useTransition();
   const [cancelError, setCancelError] = useState<string | null>(null);
 
@@ -100,12 +110,31 @@ export function LeaveRequestsClient({
     // Overlap check, not strict containment — a multi-day leave that merely
     // crosses into the selected range should still show up, not just ones
     // that start and end fully inside it.
-    const startDate = r.start_at.slice(0, 10);
-    const endDate = r.end_at.slice(0, 10);
+    const startDate = bkkDateKey(r.start_at);
+    const endDate = bkkDateKey(r.end_at);
     if (filterFrom && endDate < filterFrom) return false;
     if (filterTo && startDate > filterTo) return false;
+    const needle = filterSearch.trim().toLowerCase();
+    if (needle && !(splitAttachment(r.reason).text ?? "").toLowerCase().includes(needle)) return false;
     return true;
   });
+
+  // Monthly dashboard — approved leave hours per month by type for the chosen
+  // year, attributed to the month the leave starts in (Bangkok time).
+  const chartYears = useMemo(
+    () => Array.from(new Set([year, ...requests.map((r) => bkkYearMonth(r.start_at).y)])).sort((a, b) => b - a),
+    [requests, year]
+  );
+  const chartYearRequests = requests.filter((r) => bkkYearMonth(r.start_at).y === chartYear);
+  const monthlyValues = Array.from({ length: 12 }, (_, m) => {
+    const v = { sick: 0, personal: 0, vacation: 0 };
+    for (const r of chartYearRequests) {
+      if (r.status === "approved" && bkkYearMonth(r.start_at).m === m) v[r.leave_code] += r.hours;
+    }
+    return v;
+  });
+  const countByStatus = (...statuses: OwnLeaveRequest["status"][]) =>
+    chartYearRequests.filter((r) => statuses.includes(r.status)).length;
 
   const balanceByCode = new Map(balances.map((b) => [b.leave_code, b]));
   const usedThisYearHours = requests
@@ -168,60 +197,49 @@ export function LeaveRequestsClient({
         </div>
       )}
 
+      {/* Monthly summary — hours per month by leave type + request status counts */}
+      {requests.length > 0 && (
+        <Card>
+          <CardHeader className="flex-row items-center justify-between gap-2">
+            <CardTitle className="text-sm">สรุปการลารายเดือน (อนุมัติแล้ว)</CardTitle>
+            <YearSelect value={chartYear} years={chartYears} onChange={setChartYear} />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3">
+            <div className="grid grid-cols-3 gap-2">
+              <SummaryTile label="รออนุมัติ" value={countByStatus("submitted")} unit="ใบ" />
+              <SummaryTile label="อนุมัติแล้ว" value={countByStatus("approved")} unit="ใบ" />
+              <SummaryTile label="ตีกลับ/ไม่อนุมัติ" value={countByStatus("returned", "rejected")} unit="ใบ" />
+            </div>
+            <MonthlyBars values={monthlyValues} series={LEAVE_SERIES} unit=" ชม." />
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filter row */}
       {requests.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-sm">
-            <Search className="h-3.5 w-3.5 text-muted-foreground" />
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="bg-transparent text-sm text-foreground outline-none"
-            >
-              <option value="all">ประเภทลาทั้งหมด</option>
-              {Object.entries(LEAVE_LABELS_TH).map(([code, label]) => (
-                <option key={code} value={code}>{label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-sm">
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-transparent text-sm text-foreground outline-none"
-            >
-              <option value="all">สถานะทั้งหมด</option>
-              {Object.entries(LEAVE_STATUS_LABELS_TH).map(([s, label]) => (
-                <option key={s} value={s}>{label}</option>
-              ))}
-            </select>
-          </div>
-          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3 py-1.5 text-sm">
-            <Input
-              type="date"
-              value={filterFrom}
-              onChange={(e) => setFilterFrom(e.target.value)}
-              className="h-auto border-none bg-transparent p-0 text-sm"
-            />
-            <span className="text-muted-foreground">ถึง</span>
-            <Input
-              type="date"
-              value={filterTo}
-              onChange={(e) => setFilterTo(e.target.value)}
-              className="h-auto border-none bg-transparent p-0 text-sm"
-            />
-            {(filterFrom || filterTo) && (
-              <button
-                type="button"
-                onClick={() => { setFilterFrom(""); setFilterTo(""); }}
-                className="text-muted-foreground hover:text-foreground"
-                aria-label="ล้างช่วงวันที่"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-        </div>
+        <RequestFilterBar
+          search={filterSearch}
+          onSearch={setFilterSearch}
+          searchPlaceholder="ค้นหาเหตุผล / เรื่องที่ลา..."
+          selects={[
+            { key: "type", value: filterType, onChange: setFilterType, allLabel: "ประเภทลาทั้งหมด", options: Object.entries(LEAVE_LABELS_TH).map(([value, label]) => ({ value, label })) },
+            { key: "status", value: filterStatus, onChange: setFilterStatus, allLabel: "สถานะทั้งหมด", options: Object.entries(LEAVE_STATUS_LABELS_TH).map(([value, label]) => ({ value, label })) },
+          ]}
+          from={filterFrom}
+          to={filterTo}
+          onFrom={setFilterFrom}
+          onTo={setFilterTo}
+          shown={filtered.length}
+          total={requests.length}
+          active={filterType !== "all" || filterStatus !== "all" || !!filterFrom || !!filterTo || !!filterSearch}
+          onClear={() => {
+            setFilterType("all");
+            setFilterStatus("all");
+            setFilterFrom("");
+            setFilterTo("");
+            setFilterSearch("");
+          }}
+        />
       )}
 
       {filtered.length === 0 ? (

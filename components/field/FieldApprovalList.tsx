@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { formatThaiDate } from "@/lib/format-th";
+import { formatThaiDate, formatThaiDateTime } from "@/lib/format-th";
 import {
   Check,
   Undo2,
@@ -31,6 +31,9 @@ import {
 } from "@/components/ui/dialog";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { FieldRequestSheet } from "./FieldRequestSheet";
+import { RequestFilterBar } from "@/components/shared/RequestFilterBar";
+import { ApprovalSummary } from "@/components/shared/ApprovalSummary";
+import { MY_ACTION_LABELS_TH, type MyApprovalAction } from "@/lib/my-approval-actions";
 import { FIELD_TYPE_LABELS_TH, FIELD_STATUS_LABELS_TH } from "@/lib/ot";
 import {
   decideFieldRequest,
@@ -64,6 +67,9 @@ export type FieldApprovalQueueRow = {
   status: RequestStatusT;
   reason: string | null;
   exported_at: string | null;
+  created_at: string;
+  /** Latest thing the signed-in user did on this request (from approvals). */
+  myAction: MyApprovalAction | null;
   employee: { id: string; full_name: string; department_id: string | null };
   acknowledgements: { actor_id: string; actor_name: string; created_at: string }[];
   checkins: FieldCheckinInfo[];
@@ -227,16 +233,26 @@ export function FieldApprovalList({
   role,
   currentEmployeeId,
   locations,
+  departments = [],
 }: {
   rows: FieldApprovalQueueRow[];
   role: RoleT;
   currentEmployeeId: string;
   locations: { id: string; name: string }[];
+  departments?: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<FieldApprovalQueueRow | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [deptFilter, setDeptFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [mineFilter, setMineFilter] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [sortBy, setSortBy] = useState<"created" | "mine" | "date">("created");
 
   function decide(id: string, action: "approve" | "reject" | "return" | "cancel", note?: string) {
     startTransition(async () => {
@@ -264,13 +280,116 @@ export function FieldApprovalList({
   const isExec = role === "exec";
   const canCancelApproved = role === "admin" || role === "hr";
 
+  /** Awaiting this person's own action: approve (dept_head/admin) or
+   * acknowledge (exec). Other roles only look, so nothing is theirs. */
+  const isWaitingForMe = (r: FieldApprovalQueueRow) =>
+    canApprove
+      ? r.status === "submitted"
+      : isExec
+        ? r.status === "approved" && !r.acknowledgements.some((a) => a.actor_id === currentEmployeeId)
+        : false;
+
+  const filtered = rows
+    .filter((r) => {
+      const needle = search.trim().toLowerCase();
+      if (
+        needle &&
+        !r.employee.full_name.toLowerCase().includes(needle) &&
+        !(r.reason ?? "").toLowerCase().includes(needle) &&
+        !(r.location_name ?? r.location_text ?? "").toLowerCase().includes(needle)
+      )
+        return false;
+      if (deptFilter !== "all" && r.employee.department_id !== deptFilter) return false;
+      if (typeFilter !== "all" && r.type !== typeFilter) return false;
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (mineFilter === "waiting" && !isWaitingForMe(r)) return false;
+      if (mineFilter === "done" && !r.myAction) return false;
+      if (mineFilter === "approved" && !(r.myAction && (r.myAction.action === "approve" || r.myAction.action === "acknowledge"))) return false;
+      if (mineFilter === "rejected" && !(r.myAction && ["reject", "return", "cancel"].includes(r.myAction.action))) return false;
+      if (from && r.work_date < from) return false;
+      if (to && r.work_date > to) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "mine") return (b.myAction?.created_at ?? "").localeCompare(a.myAction?.created_at ?? "");
+      if (sortBy === "date") return b.work_date.localeCompare(a.work_date);
+      return 0; // already newest-submitted first from the server
+    });
+
+  const filtersActive =
+    !!search || deptFilter !== "all" || typeFilter !== "all" || statusFilter !== "all" || mineFilter !== "all" || !!from || !!to || sortBy !== "created";
+  function clearFilters() {
+    setSearch("");
+    setDeptFilter("all");
+    setTypeFilter("all");
+    setStatusFilter("all");
+    setMineFilter("all");
+    setFrom("");
+    setTo("");
+    setSortBy("created");
+  }
+  const pendingForMe = rows.filter(isWaitingForMe).length;
+  const pendingLabel = canApprove ? "รอฉันอนุมัติ" : isExec ? "รอฉันรับทราบ" : "รออนุมัติ (ทั้งหมด)";
+  const pendingCount = canApprove || isExec ? pendingForMe : rows.filter((r) => r.status === "submitted").length;
+
   if (rows.length === 0) {
     return <EmptyState icon={ClipboardList} title="ไม่มีคำขอในรายการนี้" />;
   }
 
   return (
+    <div className="flex flex-col gap-3">
+    <ApprovalSummary
+      rows={rows.map((r) => ({ requester: r.employee.full_name, my: r.myAction }))}
+      pendingLabel={pendingLabel}
+      pendingCount={pendingCount}
+    />
+
+    <RequestFilterBar
+      search={search}
+      onSearch={setSearch}
+      searchPlaceholder="ค้นหาชื่อพนักงาน / สถานที่ / เหตุผล..."
+      selects={[
+        ...(departments.length > 0
+          ? [{ key: "dept", value: deptFilter, onChange: setDeptFilter, allLabel: "ทุกฝ่าย", options: departments.map((d) => ({ value: d.id, label: d.name })) }]
+          : []),
+        { key: "type", value: typeFilter, onChange: setTypeFilter, allLabel: "ทุกประเภท", options: Object.entries(FIELD_TYPE_LABELS_TH).map(([value, label]) => ({ value, label })) },
+        { key: "status", value: statusFilter, onChange: setStatusFilter, allLabel: "ทุกสถานะ", options: Object.entries(FIELD_STATUS_LABELS_TH).map(([value, label]) => ({ value, label })) },
+        {
+          key: "mine",
+          value: mineFilter,
+          onChange: setMineFilter,
+          allLabel: "ทุกรายการ",
+          options: [
+            ...(canApprove || isExec ? [{ value: "waiting", label: "รอฉันดำเนินการ" }] : []),
+            { value: "done", label: "ที่ฉันดำเนินการแล้ว" },
+            { value: "approved", label: "ที่ฉันอนุมัติ/รับทราบแล้ว" },
+            { value: "rejected", label: "ที่ฉันตีกลับ/ปฏิเสธ" },
+          ],
+        },
+      ]}
+      from={from}
+      to={to}
+      onFrom={setFrom}
+      onTo={setTo}
+      extra={
+        <div className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-sm">
+          <span className="text-xs text-muted-foreground">เรียง</span>
+          <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="bg-transparent text-sm text-foreground outline-none">
+            <option value="created">ยื่นล่าสุด</option>
+            <option value="mine">ที่ฉันดำเนินการล่าสุด</option>
+            <option value="date">วันที่ปฏิบัติงานล่าสุด</option>
+          </select>
+        </div>
+      }
+      shown={filtered.length}
+      total={rows.length}
+      onClear={clearFilters}
+      active={filtersActive}
+    />
+
+    {filtered.length === 0 && <EmptyState icon={ClipboardList} title="ไม่พบรายการที่ตรงกับตัวกรอง" />}
     <ul className="flex flex-col gap-2">
-      {rows.map((r) => {
+      {filtered.map((r) => {
         const iAcknowledged = r.acknowledgements.some((a) => a.actor_id === currentEmployeeId);
         return (
           <li key={r.id} className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-4 py-3">
@@ -294,6 +413,12 @@ export function FieldApprovalList({
                   </span>
                 ) : null}
                 {r.reason && <span className="text-muted-foreground">เหตุผล: {r.reason}</span>}
+                <span className="text-xs text-muted-foreground">ยื่นเมื่อ {formatThaiDateTime(r.created_at)}</span>
+                {r.myAction && (
+                  <span className="text-xs font-medium text-success">
+                    คุณ{MY_ACTION_LABELS_TH[r.myAction.action]}เมื่อ {formatThaiDateTime(r.myAction.created_at)}
+                  </span>
+                )}
                 {r.attachments && r.attachments.length > 0 && (
                   <div className="flex flex-col gap-0.5">
                     {r.attachments.map((a, i) => (
@@ -413,5 +538,6 @@ export function FieldApprovalList({
         </DialogContent>
       </Dialog>
     </ul>
+    </div>
   );
 }

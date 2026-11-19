@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
-import { formatThaiDate } from "@/lib/format-th";
+import { formatThaiDate, formatThaiDateTime, bkkDateKey } from "@/lib/format-th";
 import { Check, Undo2, X, Ban, Pencil, ThumbsUp, AlertTriangle, Trash2, Trash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,8 +17,6 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState } from "@/components/shell/EmptyState";
 import { LeaveRequestSheet } from "./LeaveRequestSheet";
 import { LEAVE_LABELS_TH, LEAVE_STATUS_LABELS_TH } from "@/lib/leave";
@@ -29,6 +27,9 @@ import {
   adminDeleteLeaveRequest,
 } from "@/app/(app)/leave/approval-actions";
 import { LeaveExportPanel } from "./LeaveExportPanel";
+import { RequestFilterBar } from "@/components/shared/RequestFilterBar";
+import { ApprovalSummary } from "@/components/shared/ApprovalSummary";
+import { MY_ACTION_LABELS_TH, type MyApprovalAction } from "@/lib/my-approval-actions";
 import { ClipboardList } from "lucide-react";
 import { GenerateDocButton } from "@/components/booking/GenerateDocButton";
 import { generateLeaveDoc } from "@/app/(app)/leave/actions";
@@ -43,6 +44,9 @@ export type ApprovalQueueRow = {
   status: RequestStatusT;
   reason: string | null;
   exported_at: string | null;
+  created_at: string;
+  /** Latest thing the signed-in user did on this request (from approvals). */
+  myAction: MyApprovalAction | null;
   employee: { id: string; full_name: string; department_id: string | null };
   acknowledgements: { actor_id: string; actor_name: string; created_at: string }[];
 };
@@ -163,6 +167,12 @@ export function ApprovalList({
   const [editing, setEditing] = useState<ApprovalQueueRow | null>(null);
   const [nameFilter, setNameFilter] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [mineFilter, setMineFilter] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [sortBy, setSortBy] = useState<"created" | "mine" | "date">("created");
 
   function decide(id: string, action: "approve" | "reject" | "return" | "cancel", note?: string) {
     startTransition(async () => {
@@ -218,11 +228,52 @@ export function ApprovalList({
   const canCancelApproved = role === "admin" || role === "hr";
   const canExport = role === "hr" || role === "admin";
 
-  const filtered = rows.filter((r) => {
-    const matchName = !nameFilter || r.employee.full_name.toLowerCase().includes(nameFilter.toLowerCase());
-    const matchDept = deptFilter === "all" || r.employee.department_id === deptFilter;
-    return matchName && matchDept;
-  });
+  /** Awaiting this person's own action: approve (dept_head/admin) or
+   * acknowledge (exec). Other roles only look, so nothing is theirs. */
+  const isWaitingForMe = (r: ApprovalQueueRow) =>
+    canApprove
+      ? r.status === "submitted"
+      : isExec
+        ? r.status === "approved" && !r.acknowledgements.some((a) => a.actor_id === currentEmployeeId)
+        : false;
+
+  const filtered = rows
+    .filter((r) => {
+      const needle = nameFilter.trim().toLowerCase();
+      if (needle && !r.employee.full_name.toLowerCase().includes(needle) && !(r.reason ?? "").toLowerCase().includes(needle)) return false;
+      if (deptFilter !== "all" && r.employee.department_id !== deptFilter) return false;
+      if (typeFilter !== "all" && r.leave_code !== typeFilter) return false;
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (mineFilter === "waiting" && !isWaitingForMe(r)) return false;
+      if (mineFilter === "done" && !r.myAction) return false;
+      if (mineFilter === "approved" && !(r.myAction && (r.myAction.action === "approve" || r.myAction.action === "acknowledge"))) return false;
+      if (mineFilter === "rejected" && !(r.myAction && ["reject", "return", "cancel"].includes(r.myAction.action))) return false;
+      // Overlap, not containment: a multi-day leave that merely crosses the range still shows.
+      if (from && bkkDateKey(r.end_at) < from) return false;
+      if (to && bkkDateKey(r.start_at) > to) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === "mine") return (b.myAction?.created_at ?? "").localeCompare(a.myAction?.created_at ?? "");
+      if (sortBy === "date") return b.start_at.localeCompare(a.start_at);
+      return 0; // already newest-submitted first from the server
+    });
+
+  const filtersActive =
+    !!nameFilter || deptFilter !== "all" || typeFilter !== "all" || statusFilter !== "all" || mineFilter !== "all" || !!from || !!to || sortBy !== "created";
+  function clearFilters() {
+    setNameFilter("");
+    setDeptFilter("all");
+    setTypeFilter("all");
+    setStatusFilter("all");
+    setMineFilter("all");
+    setFrom("");
+    setTo("");
+    setSortBy("created");
+  }
+  const pendingForMe = rows.filter(isWaitingForMe).length;
+  const pendingLabel = canApprove ? "รอฉันอนุมัติ" : isExec ? "รอฉันรับทราบ" : "รออนุมัติ (ทั้งหมด)";
+  const pendingCount = canApprove || isExec ? pendingForMe : rows.filter((r) => r.status === "submitted").length;
 
   if (rows.length === 0) {
     return <EmptyState icon={ClipboardList} title="ไม่มีคำขอในรายการนี้" />;
@@ -230,28 +281,54 @@ export function ApprovalList({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Filter bar */}
-      <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface px-3 py-3 sm:flex-row sm:items-center">
-        <Input
-          placeholder="ค้นหาชื่อพนักงาน..."
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
-          className="h-9 text-sm"
-        />
-        {departments.length > 0 && (
-          <Select value={deptFilter} onValueChange={setDeptFilter}>
-            <SelectTrigger className="h-9 w-full sm:w-44 text-sm">
-              <SelectValue placeholder="ทุกฝ่าย" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">ทุกฝ่าย</SelectItem>
-              {departments.map((d) => (
-                <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-      </div>
+      <ApprovalSummary
+        rows={rows.map((r) => ({ requester: r.employee.full_name, my: r.myAction }))}
+        pendingLabel={pendingLabel}
+        pendingCount={pendingCount}
+      />
+
+      <RequestFilterBar
+        search={nameFilter}
+        onSearch={setNameFilter}
+        searchPlaceholder="ค้นหาชื่อพนักงาน / เหตุผล..."
+        selects={[
+          ...(departments.length > 0
+            ? [{ key: "dept", value: deptFilter, onChange: setDeptFilter, allLabel: "ทุกฝ่าย", options: departments.map((d) => ({ value: d.id, label: d.name })) }]
+            : []),
+          { key: "type", value: typeFilter, onChange: setTypeFilter, allLabel: "ทุกประเภทลา", options: Object.entries(LEAVE_LABELS_TH).map(([value, label]) => ({ value, label })) },
+          { key: "status", value: statusFilter, onChange: setStatusFilter, allLabel: "ทุกสถานะ", options: Object.entries(LEAVE_STATUS_LABELS_TH).map(([value, label]) => ({ value, label })) },
+          {
+            key: "mine",
+            value: mineFilter,
+            onChange: setMineFilter,
+            allLabel: "ทุกรายการ",
+            options: [
+              ...(canApprove || isExec ? [{ value: "waiting", label: "รอฉันดำเนินการ" }] : []),
+              { value: "done", label: "ที่ฉันดำเนินการแล้ว" },
+              { value: "approved", label: "ที่ฉันอนุมัติ/รับทราบแล้ว" },
+              { value: "rejected", label: "ที่ฉันตีกลับ/ปฏิเสธ" },
+            ],
+          },
+        ]}
+        from={from}
+        to={to}
+        onFrom={setFrom}
+        onTo={setTo}
+        extra={
+          <div className="flex items-center gap-1.5 rounded-xl border border-border bg-background px-3 py-1.5 text-sm">
+            <span className="text-xs text-muted-foreground">เรียง</span>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as typeof sortBy)} className="bg-transparent text-sm text-foreground outline-none">
+              <option value="created">ยื่นล่าสุด</option>
+              <option value="mine">ที่ฉันดำเนินการล่าสุด</option>
+              <option value="date">วันที่ลาล่าสุด</option>
+            </select>
+          </div>
+        }
+        shown={filtered.length}
+        total={rows.length}
+        onClear={clearFilters}
+        active={filtersActive}
+      />
       {canExport && <LeaveExportPanel rows={filtered} />}
 
       {(() => {
@@ -292,6 +369,12 @@ export function ApprovalList({
                   {formatThaiDate(new Date(r.end_at))} · {r.hours} ชม.
                 </span>
                 {r.reason && <span className="text-muted-foreground">เหตุผล: {r.reason}</span>}
+                <span className="text-xs text-muted-foreground">ยื่นเมื่อ {formatThaiDateTime(r.created_at)}</span>
+                {r.myAction && (
+                  <span className="text-xs font-medium text-success">
+                    คุณ{MY_ACTION_LABELS_TH[r.myAction.action]}เมื่อ {formatThaiDateTime(r.myAction.created_at)}
+                  </span>
+                )}
               </div>
               <div className="flex shrink-0 items-center gap-1">
                 <Badge variant={STATUS_VARIANT[r.status]}>{LEAVE_STATUS_LABELS_TH[r.status]}</Badge>

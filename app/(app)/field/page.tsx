@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shell/PageHeader";
 import { FieldRequestsClient, type OwnFieldRequest } from "@/components/field/FieldRequestsClient";
 import { FieldApprovalList, type FieldApprovalQueueRow } from "@/components/field/FieldApprovalList";
 import { RequestTabs } from "@/components/shared/RequestTabs";
+import { loadMyActions, chunk } from "@/lib/my-approval-actions";
 
 const CAN_SEE_APPROVALS = ["dept_head", "hr", "admin", "exec"];
 
@@ -79,19 +80,32 @@ export default async function FieldPage({
 
   const showApprovals = CAN_SEE_APPROVALS.includes(employee.role);
   let approvalRows: FieldApprovalQueueRow[] = [];
+  let departments: { id: string; name: string }[] = [];
 
   if (showApprovals) {
+    const { data: depts } = await supabase.from("departments").select("id, name").order("name");
+    departments = depts ?? [];
+
     // RLS scopes: dept_head -> own department, hr/admin/exec -> everyone.
     // Limit 500 to avoid missing records in orgs with many requests.
+    const QUEUE_COLS =
+      "id, employee_id, type, location_id, location_text, work_date, planned_start, planned_end, ot_hours, pay_x1_hours, pay_x15_hours, pay_x3_hours, status, reason, exported_at, attachments, created_at";
     const { data: queue } = await supabase
       .from("field_requests")
-      .select(
-        "id, employee_id, type, location_id, location_text, work_date, planned_start, planned_end, ot_hours, pay_x1_hours, pay_x15_hours, pay_x3_hours, status, reason, exported_at, attachments"
-      )
+      .select(QUEUE_COLS)
       .order("created_at", { ascending: false })
       .limit(500);
 
+    // Same as the leave page: pull in older requests this person acted on so
+    // their approval history is complete, not just the 500 most recent.
+    const myActions = await loadMyActions(supabase, "field_requests", employee.id);
     const requestRows = queue ?? [];
+    const haveIds = new Set(requestRows.map((r) => r.id));
+    const missingIds = [...myActions.keys()].filter((id) => !haveIds.has(id)).slice(0, 300);
+    for (const ids of chunk(missingIds, 100)) {
+      const { data: extra } = await supabase.from("field_requests").select(QUEUE_COLS).in("id", ids);
+      requestRows.push(...(extra ?? []));
+    }
     const approvedIds = requestRows.filter((r) => r.status === "approved").map((r) => r.id);
 
     const [{ data: acks }, { data: queueCheckins }] = await Promise.all([
@@ -157,6 +171,8 @@ export default async function FieldPage({
           reason: r.reason,
           exported_at: r.exported_at,
           attachments: r.attachments,
+          created_at: r.created_at,
+          myAction: myActions.get(r.id) ?? null,
           employee: {
             id: r.employee_id,
             full_name: peopleById.get(r.employee_id)?.full_name ?? "—",
@@ -193,6 +209,7 @@ export default async function FieldPage({
                   role={employee.role}
                   currentEmployeeId={employee.id}
                   locations={locationOptions}
+                  departments={departments}
                 />
               </div>
             ) : null
