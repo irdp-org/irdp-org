@@ -36,7 +36,11 @@ export function RoomBookingSheet({ open, onOpenChange, rooms, defaultRoomId }: P
 
   const today = new Date().toISOString().slice(0, 10);
 
-  const [roomId, setRoomId] = useState(defaultRoomId ?? rooms[0]?.id ?? "");
+  const [pickedRoomId, setRoomId] = useState(rooms[0]?.id ?? "");
+  // This sheet is one persistent instance, so useState's initial value would
+  // keep the room from the *first* open. When a room's own "จอง" button opened
+  // it, that room always wins over whatever the state last held.
+  const roomId = defaultRoomId ?? pickedRoomId;
   const [date, setDate] = useState(today);
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
@@ -48,7 +52,7 @@ export function RoomBookingSheet({ open, onOpenChange, rooms, defaultRoomId }: P
   }
 
   function reset() {
-    setRoomId(defaultRoomId ?? rooms[0]?.id ?? "");
+    setRoomId(rooms[0]?.id ?? "");
     setDate(today);
     setStartTime("09:00");
     setEndTime("10:00");
