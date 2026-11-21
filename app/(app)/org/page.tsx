@@ -25,6 +25,22 @@ function formatFileSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+/** Small "ประกาศฉบับเต็ม" link shown in a section header. */
+function SourceLink({ doc }: { doc: { google_view_url: string | null; title: string } | undefined }) {
+  if (!doc?.google_view_url) return null;
+  return (
+    <a
+      href={doc.google_view_url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={doc.title}
+      className="flex shrink-0 items-center gap-1 text-xs font-normal text-primary"
+    >
+      <ExternalLink className="h-3 w-3" /> ประกาศฉบับเต็ม
+    </a>
+  );
+}
+
 export default async function OrgPage() {
   const employee = await getCurrentEmployee();
   if (!employee) redirect("/");
@@ -36,6 +52,10 @@ export default async function OrgPage() {
     .order("category")
     .order("sort_order")
     .order("title");
+
+  // The signed announcements that these on-page sections are quoted from.
+  const visionDoc = docs?.find((d) => d.title.includes("ที่ 5/2569"));
+  const policyDoc = docs?.find((d) => d.title.includes("ที่ 6/2569"));
 
   // Group by category
   type DocRow = NonNullable<typeof docs>[number];
@@ -168,8 +188,9 @@ export default async function OrgPage() {
 
         {/* วิสัยทัศน์ */}
         <div className="rounded-2xl border border-border bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-border bg-surface">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-surface">
             <p className="text-sm font-semibold text-foreground">วิสัยทัศน์ (Vision)</p>
+            <SourceLink doc={visionDoc} />
           </div>
           <div className="px-4 py-4 flex flex-col gap-2 text-sm leading-relaxed">
             <p className="font-semibold text-foreground">
@@ -184,8 +205,9 @@ export default async function OrgPage() {
 
         {/* พันธกิจ */}
         <div className="rounded-2xl border border-border bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-border bg-surface">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-surface">
             <p className="text-sm font-semibold text-foreground">พันธกิจ (Mission)</p>
+            <SourceLink doc={visionDoc} />
           </div>
           <div className="px-4 py-4 flex flex-col gap-3 text-sm leading-relaxed">
             <p className="font-semibold text-foreground">
@@ -198,16 +220,19 @@ export default async function OrgPage() {
           </div>
           <ul className="divide-y divide-border border-t border-border">
             {[
-              { no: "M1", text: "พัฒนาระบบและดำเนินการประเมินผลการดำเนินงานของรัฐวิสาหกิจและองค์กรภาครัฐ อย่างเป็นธรรม น่าเชื่อถือ และเป็นมาตรฐาน" },
-              { no: "M2", text: "ศึกษา วิจัย วิเคราะห์ และให้คำปรึกษาด้านการบริหารจัดการองค์กร เพื่อสนับสนุนการกำหนดนโยบายและเพิ่มประสิทธิภาพ-ประสิทธิผล" },
-              { no: "M3", text: "พัฒนาหลักสูตรและจัดการฝึกอบรม เพื่อเสริมสร้างความรู้ ทักษะ และขีดความสามารถของกรรมการ ผู้บริหาร และบุคลากรองค์กรภาครัฐ" },
-              { no: "M4", text: "รวบรวม บูรณาการ และต่อยอดองค์ความรู้จากงานประเมินผล วิจัย ที่ปรึกษา และฝึกอบรม สู่แนวปฏิบัติที่ดีและนวัตกรรม" },
-            ].map(({ no, text }) => (
+              { no: "M1", name: "พัฒนาระบบและดำเนินการประเมินผล", text: "พัฒนาและดำเนินการประเมินผลการดำเนินงานของรัฐวิสาหกิจและองค์กรภาครัฐให้มีความเป็นธรรม น่าเชื่อถือ เป็นมาตรฐาน และใช้ข้อมูลเชิงประจักษ์ในการสนับสนุนการยกระดับผลการดำเนินงาน" },
+              { no: "M2", name: "วิจัย พัฒนา และให้คำปรึกษา", text: "ศึกษา วิจัย วิเคราะห์ และให้คำปรึกษาด้านการบริหารจัดการองค์กร เพื่อสนับสนุนการกำหนดนโยบาย การพัฒนาองค์กร และการเพิ่มประสิทธิภาพและประสิทธิผลขององค์กรภาครัฐ" },
+              { no: "M3", name: "พัฒนาศักยภาพบุคลากรและองค์กร", text: "พัฒนาหลักสูตรและจัดการฝึกอบรมเพื่อเสริมสร้างความรู้ ทักษะ และขีดความสามารถของกรรมการ ผู้บริหาร และบุคลากรขององค์กรภาครัฐและหน่วยงานที่เกี่ยวข้อง" },
+              { no: "M4", name: "สร้างและต่อยอดองค์ความรู้และนวัตกรรม", text: "รวบรวม บูรณาการ และต่อยอดองค์ความรู้จากการประเมินผล การวิจัย การให้คำปรึกษา และการฝึกอบรม เพื่อนำไปสู่แนวปฏิบัติที่ดี นวัตกรรม และการพัฒนาองค์กรภาครัฐอย่างต่อเนื่อง" },
+            ].map(({ no, name, text }) => (
               <li key={no} className="flex items-start gap-3 px-4 py-3">
                 <span className="flex h-6 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
                   {no}
                 </span>
-                <p className="text-sm text-muted-foreground leading-relaxed">{text}</p>
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-sm font-semibold text-foreground">{name}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{text}</p>
+                </div>
               </li>
             ))}
           </ul>
@@ -215,15 +240,27 @@ export default async function OrgPage() {
 
         {/* ค่านิยมองค์กร */}
         <div className="rounded-2xl border border-border bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-border bg-surface">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-surface">
             <p className="text-sm font-semibold text-foreground">ค่านิยมองค์กร (Core Values) — Reaching New Boundaries</p>
+            <SourceLink doc={visionDoc} />
+          </div>
+          <div className="flex flex-col gap-2 border-b border-border px-4 py-4 text-sm leading-relaxed">
+            <p className="font-semibold text-foreground">
+              “การก้าวสู่ขอบเขตใหม่ของการประเมินผล การวิจัยและพัฒนา และการเสริมสร้างศักยภาพองค์กรภาครัฐ
+              โดยยึดมั่นในความซื่อสัตย์และเที่ยงธรรม พร้อมรับและปรับตัวต่อการเปลี่ยนแปลง เรียนรู้และพัฒนาอย่างต่อเนื่อง
+              ด้วยความเป็นมืออาชีพเพื่อมุ่งสู่ความเป็นเลิศ”
+            </p>
+            <p className="text-xs italic text-muted-foreground">
+              Integrity as our foundation. Resilience to move forward. Development to explore new possibilities.
+              Professionalism to deliver trusted values.
+            </p>
           </div>
           <ul className="divide-y divide-border">
             {[
-              { letter: "I", name: "Integrity", th: "ยึดมั่นความซื่อสัตย์และความเที่ยงธรรม", desc: "ปฏิบัติงานด้วยความซื่อสัตย์ โปร่งใส เป็นธรรม รับผิดชอบ และยึดมั่นในจริยธรรม มาตรฐานวิชาชีพ และประโยชน์ส่วนรวม" },
-              { letter: "R", name: "Resilience", th: "พร้อมรับและปรับตัวต่อการเปลี่ยนแปลง", desc: "มีความยืดหยุ่น เข้มแข็ง พร้อมรับมือความไม่แน่นอน ปรับวิธีทำงาน และฟื้นตัวจากอุปสรรคเพื่อรักษาความต่อเนื่องและบรรลุเป้าหมาย" },
-              { letter: "D", name: "Development", th: "เรียนรู้ พัฒนา และสร้างสรรค์สิ่งใหม่", desc: "พัฒนาตนเอง ทีมงาน กระบวนการ และองค์ความรู้อย่างต่อเนื่อง พร้อมต่อยอดความรู้จากทุกภารกิจไปสู่แนวปฏิบัติที่ดีและนวัตกรรม" },
-              { letter: "P", name: "Professionalism", th: "ปฏิบัติงานอย่างมืออาชีพ มุ่งมั่นสู่ความเป็นเลิศ", desc: "มีความรู้และความเชี่ยวชาญ รับผิดชอบต่อผลลัพธ์ ส่งมอบงานที่มีคุณภาพ ตรงเวลา สร้างคุณค่าแก่ผู้รับบริการ และรักษามาตรฐานวิชาชีพ" },
+              { letter: "I", name: "Integrity", th: "ยึดมั่นความซื่อสัตย์และความเที่ยงธรรม", desc: "ปฏิบัติงานด้วยความซื่อสัตย์ โปร่งใส เป็นธรรม และรับผิดชอบ ยึดมั่นในจริยธรรม มาตรฐานวิชาชีพ และประโยชน์ส่วนรวม เพื่อสร้างความเชื่อมั่นแก่ผู้รับบริการและผู้มีส่วนได้ส่วนเสีย" },
+              { letter: "R", name: "Resilience", th: "พร้อมรับและปรับตัวต่อการเปลี่ยนแปลง", desc: "มีความยืดหยุ่น เข้มแข็ง และพร้อมรับมือกับการเปลี่ยนแปลง ความไม่แน่นอน และความท้าทาย สามารถปรับวิธีการทำงานและฟื้นตัวจากอุปสรรค เพื่อให้องค์กรดำเนินงานได้อย่างต่อเนื่องและบรรลุเป้าหมาย" },
+              { letter: "D", name: "Development", th: "เรียนรู้ พัฒนา และสร้างสรรค์สิ่งใหม่", desc: "มุ่งพัฒนาตนเอง ทีมงาน กระบวนการทำงาน และองค์ความรู้อย่างต่อเนื่อง พร้อมต่อยอดความรู้จากการประเมินผล การวิจัย การให้คำปรึกษา และการฝึกอบรม ไปสู่แนวปฏิบัติที่ดีและนวัตกรรมที่สร้างคุณค่า" },
+              { letter: "P", name: "Professionalism", th: "ปฏิบัติงานอย่างมืออาชีพ มุ่งมั่นสู่ความเป็นเลิศ", desc: "ปฏิบัติงานอย่างมืออาชีพ มุ่งมั่นสู่ความเป็นเลิศ มีความรู้และความเชี่ยวชาญ รับผิดชอบต่อผลลัพธ์ ส่งมอบงานที่มีคุณภาพ ตรงเวลา สร้างคุณค่าแก่ผู้รับบริการ และรักษามาตรฐานวิชาชีพ" },
             ].map(({ letter, name, th, desc }) => (
               <li key={letter} className="flex items-start gap-3 px-4 py-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent/15 text-sm font-bold text-accent">
@@ -270,8 +307,9 @@ export default async function OrgPage() {
 
         {/* นโยบายคุณภาพ */}
         <div className="rounded-2xl border border-border bg-white overflow-hidden">
-          <div className="px-4 py-3 border-b border-border bg-surface">
+          <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-border bg-surface">
             <p className="text-sm font-semibold text-foreground">นโยบายคุณภาพ (Quality Policy) — ISO 9001:2026</p>
+            <SourceLink doc={policyDoc} />
           </div>
           <div className="px-4 py-4 text-sm text-muted-foreground leading-relaxed">
             <p>
