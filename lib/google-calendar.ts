@@ -44,13 +44,32 @@ export type GoogleEventInput = {
   allDay: boolean;
 };
 
+/** YYYY-MM-DD of an instant as seen in Bangkok. All-day rows are stored as
+ * Bangkok midnight (= 17:00 UTC the day before), so slicing the UTC ISO
+ * string lands one day early. */
+function bkkDateKey(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: TZ });
+}
+
+function addDaysToKey(key: string, n: number): string {
+  const d = new Date(`${key}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Google all-day events: `end.date` is EXCLUSIVE (a one-day event on the
+ * 16th is start=16, end=17). Our rows keep an inclusive last day (end_at is
+ * 23:59:59 Bangkok), so +1 going out and -1 coming back (see
+ * allDayRangeFromGoogle). */
 function toGoogleEvent(input: GoogleEventInput): calendar_v3.Schema$Event {
   if (input.allDay) {
+    const startKey = bkkDateKey(input.startAt);
+    const lastKey = bkkDateKey(input.endAt);
     return {
       summary: input.title,
       description: input.description ?? undefined,
-      start: { date: input.startAt.slice(0, 10) },
-      end: { date: input.endAt.slice(0, 10) },
+      start: { date: startKey },
+      end: { date: addDaysToKey(lastKey < startKey ? startKey : lastKey, 1) },
     };
   }
   return {
@@ -58,6 +77,19 @@ function toGoogleEvent(input: GoogleEventInput): calendar_v3.Schema$Event {
     description: input.description ?? undefined,
     start: { dateTime: input.startAt, timeZone: TZ },
     end: { dateTime: input.endAt, timeZone: TZ },
+  };
+}
+
+/** Inverse of the all-day branch of toGoogleEvent: a Google all-day
+ * start/end (end exclusive) -> our start_at (Bangkok midnight) / end_at
+ * (23:59:59 Bangkok on the last day). Legacy imported events where
+ * end.date == start.date are treated as a single day. */
+export function allDayRangeFromGoogle(startDate: string, endDate?: string | null) {
+  let lastKey = endDate ? addDaysToKey(endDate, -1) : startDate;
+  if (lastKey < startDate) lastKey = startDate;
+  return {
+    startAt: new Date(`${startDate}T00:00:00+07:00`).toISOString(),
+    endAt: new Date(`${lastKey}T23:59:59+07:00`).toISOString(),
   };
 }
 

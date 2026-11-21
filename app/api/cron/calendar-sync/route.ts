@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { listEventsUpdatedSince, type CalendarKey } from "@/lib/google-calendar";
+import { listEventsUpdatedSince, allDayRangeFromGoogle, type CalendarKey } from "@/lib/google-calendar";
 import type { calendar_v3 } from "googleapis";
 import type { Database } from "@/lib/database.types";
 
@@ -34,14 +34,12 @@ function isAuthorized(request: NextRequest) {
 }
 
 function parseGoogleEventTimes(event: calendar_v3.Schema$Event) {
-  const allDay = !!event.start?.date;
-  const startAt = allDay
-    ? `${event.start?.date}T00:00:00.000Z`
-    : (event.start?.dateTime ?? new Date().toISOString());
-  const endAt = allDay
-    ? `${event.end?.date ?? event.start?.date}T23:59:59.000Z`
-    : (event.end?.dateTime ?? startAt);
-  return { startAt, endAt, allDay };
+  if (event.start?.date) {
+    return { ...allDayRangeFromGoogle(event.start.date, event.end?.date), allDay: true };
+  }
+  const startAt = event.start?.dateTime ?? new Date().toISOString();
+  const endAt = event.end?.dateTime ?? startAt;
+  return { startAt, endAt, allDay: false };
 }
 
 export async function GET(request: NextRequest) {
